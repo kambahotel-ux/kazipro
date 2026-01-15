@@ -1,0 +1,69 @@
+================================================================================
+                    CRÉER UN PRESTATAIRE - RÉSUMÉ FINAL
+================================================================================
+
+✅ ERREUR RÉSOLUE
+❌ Avant: column "city" does not exist
+✅ Après: Script corrigé et fonctionnel
+
+================================================================================
+                              SCRIPT FINAL
+================================================================================
+
+Copier-coller dans Supabase SQL Editor:
+
+WITH new_user AS (
+  INSERT INTO auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, is_super_admin, is_sso_user)
+  VALUES ('00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', 'authenticated', 'test.provider@example.com', crypt('Provider@123456', gen_salt('bf')), now(), now(), now(), '{"provider":"email","providers":["email"]}', '{}', false, false)
+  ON CONFLICT (email) DO UPDATE SET updated_at = now()
+  RETURNING id
+)
+INSERT INTO prestataires (user_id, full_name, profession, bio, rating, verified, documents_verified, created_at)
+SELECT new_user.id, 'Test Provider', 'Electrician', 'Professional service provider', 4.5, true, false, now()
+FROM new_user
+ON CONFLICT (user_id) DO UPDATE SET updated_at = now();
+
+SELECT u.id as user_id, u.email, p.full_name, p.profession, p.verified, p.created_at FROM auth.users u LEFT JOIN prestataires p ON u.id = p.user_id WHERE u.email = 'test.provider@example.com';
+
+================================================================================
+                              ÉTAPES
+================================================================================
+
+1. Ouvrir: https://supabase.com → SQL Editor
+2. Copier le script ci-dessus
+3. Coller dans l'éditeur
+4. Cliquer sur "Run"
+5. Se connecter avec:
+   Email: test.provider@example.com
+   Mot de passe: Provider@123456
+
+================================================================================
+                              RÉSULTAT
+================================================================================
+
+✅ Prestataire créé
+✅ Email: test.provider@example.com
+✅ Mot de passe: Provider@123456
+✅ Prêt à se connecter
+
+================================================================================
+                              GUIDES
+================================================================================
+
+Guides Rapides:
+- PROVIDER_CREATION_FINAL.md (2 min)
+- PROVIDER_CREATION_WORKING.md (2 min)
+- PROVIDER_CREATION_CORRECTED.txt (1 min)
+
+Guides Détaillés:
+- FIX_PROVIDER_CREATION.md (5 min)
+- PROVIDER_CREATION_FIXED.md (5 min)
+- PROVIDER_CREATION_README.md (10 min)
+
+================================================================================
+
+Status: ✅ Corrigé et Fonctionnel
+Créé: December 24, 2025
+Durée: 2 minutes
+
+================================================================================

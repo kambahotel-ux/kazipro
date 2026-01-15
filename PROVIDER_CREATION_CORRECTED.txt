@@ -1,0 +1,88 @@
+================================================================================
+                    CRÉER UN PRESTATAIRE - SCRIPT CORRIGÉ
+================================================================================
+
+ERREUR RÉSOLUE: column "city" does not exist
+
+================================================================================
+                              SCRIPT CORRIGÉ
+================================================================================
+
+Copier-coller ce script dans Supabase SQL Editor:
+
+---
+
+WITH new_user AS (
+  INSERT INTO auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, is_super_admin, is_sso_user)
+  VALUES ('00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', 'authenticated', 'test.provider@example.com', crypt('Provider@123456', gen_salt('bf')), now(), now(), now(), '{"provider":"email","providers":["email"]}', '{}', false, false)
+  ON CONFLICT (email) DO UPDATE SET updated_at = now()
+  RETURNING id
+)
+INSERT INTO prestataires (user_id, full_name, profession, bio, rating, verified, documents_verified, created_at)
+SELECT new_user.id, 'Test Provider', 'Electrician', 'Professional service provider', 4.5, true, false, now()
+FROM new_user
+ON CONFLICT (user_id) DO UPDATE SET updated_at = now();
+
+SELECT u.id as user_id, u.email, p.full_name, p.profession, p.verified, p.created_at FROM auth.users u LEFT JOIN prestataires p ON u.id = p.user_id WHERE u.email = 'test.provider@example.com';
+
+---
+
+Cliquer sur "Run" (ou Ctrl+Enter)
+
+================================================================================
+                              SE CONNECTER
+================================================================================
+
+URL: http://localhost:5173/connexion
+
+Email: test.provider@example.com
+Mot de passe: Provider@123456
+
+Cliquer sur "Se connecter"
+
+================================================================================
+                              RÉSULTAT ATTENDU
+================================================================================
+
+✅ Redirigé vers /dashboard/prestataire
+✅ Nom "Test Provider" affiché
+✅ Tableau de bord visible
+
+================================================================================
+                              COLONNES CORRECTES
+================================================================================
+
+La table prestataires a ces colonnes:
+
+✅ id
+✅ user_id
+✅ full_name
+✅ profession
+✅ bio
+✅ rating
+✅ verified
+✅ documents_verified
+✅ created_at
+✅ updated_at
+
+❌ city (n'existe pas)
+❌ localisation (n'existe pas)
+❌ experience (n'existe pas)
+❌ missions_completed (n'existe pas)
+
+================================================================================
+                              DÉTAILS DU COMPTE
+================================================================================
+
+Email: test.provider@example.com
+Mot de passe: Provider@123456
+Nom: Test Provider
+Profession: Electrician
+Vérifié: ✅ Oui
+
+================================================================================
+
+Status: ✅ Corrigé et Prêt
+Créé: December 24, 2025
+
+================================================================================

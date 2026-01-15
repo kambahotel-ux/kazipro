@@ -1,0 +1,121 @@
+================================================================================
+                    CRÉER UN PRESTATAIRE - RÉFÉRENCE RAPIDE
+================================================================================
+
+MÉTHODE LA PLUS RAPIDE: 2 MINUTES
+
+================================================================================
+                              ÉTAPE 1: SQL SCRIPT
+================================================================================
+
+Ouvrir: https://supabase.com → SQL Editor → New Query
+
+Copier-coller ce script:
+
+---
+
+WITH new_user AS (
+  INSERT INTO auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, is_super_admin, is_sso_user)
+  VALUES ('00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', 'authenticated', 'test.provider@example.com', crypt('Provider@123456', gen_salt('bf')), now(), now(), now(), '{"provider":"email","providers":["email"]}', '{}', false, false)
+  ON CONFLICT (email) DO UPDATE SET updated_at = now()
+  RETURNING id
+)
+INSERT INTO prestataires (user_id, full_name, profession, city, localisation, experience, bio, rating, verified, documents_verified, missions_completed, created_at)
+SELECT new_user.id, 'Test Provider', 'Electrician', 'Kinshasa', 'Gombe', 5, 'Professional service provider', 4.5, true, false, 0, now()
+FROM new_user
+ON CONFLICT (user_id) DO UPDATE SET updated_at = now();
+
+SELECT u.id, u.email, p.full_name, p.profession, p.verified FROM auth.users u LEFT JOIN prestataires p ON u.id = p.user_id WHERE u.email = 'test.provider@example.com';
+
+---
+
+Cliquer sur "Run" (ou Ctrl+Enter)
+
+================================================================================
+                              ÉTAPE 2: SE CONNECTER
+================================================================================
+
+Ouvrir: http://localhost:5173/connexion
+
+Email: test.provider@example.com
+Mot de passe: Provider@123456
+
+Cliquer sur "Se connecter"
+
+================================================================================
+                              RÉSULTAT ATTENDU
+================================================================================
+
+✅ Redirigé vers /dashboard/prestataire
+✅ Nom "Test Provider" affiché en haut
+✅ Tableau de bord du prestataire visible
+✅ Toutes les pages se chargent
+
+================================================================================
+                              DÉTAILS DU COMPTE
+================================================================================
+
+Email: test.provider@example.com
+Mot de passe: Provider@123456
+Nom: Test Provider
+Profession: Electrician
+Ville: Kinshasa
+Expérience: 5 ans
+Vérifié: ✅ Oui
+
+================================================================================
+                              PAGES DISPONIBLES
+================================================================================
+
+/dashboard/prestataire                  - Tableau de bord
+/dashboard/prestataire/missions         - Missions
+/dashboard/prestataire/devis            - Devis
+/dashboard/prestataire/calendrier       - Calendrier
+/dashboard/prestataire/revenus          - Revenus
+/dashboard/prestataire/messages         - Messages
+/dashboard/prestataire/profil           - Profil
+/dashboard/prestataire/parametres       - Paramètres
+
+================================================================================
+                              DÉPANNAGE RAPIDE
+================================================================================
+
+ERREUR: "Email already exists"
+→ Utilisez un email différent dans le script
+
+ERREUR: "Relation does not exist"
+→ Exécutez d'abord sql/init_tables.sql
+
+IMPOSSIBLE DE SE CONNECTER
+→ Vérifiez l'email et le mot de passe exactement
+
+REDIRIGÉ VERS "EN ATTENTE"
+→ Connectez-vous en tant qu'admin et approuvez le prestataire
+
+================================================================================
+                              AUTRES COMPTES
+================================================================================
+
+ADMIN:
+Email: admin@kazipro.com
+Mot de passe: Admin@123456
+
+CLIENT:
+Email: marie@example.com
+Mot de passe: Test@123456
+
+================================================================================
+                              GUIDES COMPLETS
+================================================================================
+
+STEP_BY_STEP_PROVIDER.md          - Guide étape par étape
+PROVIDER_CREATION_GUIDE.md        - Guide complet
+QUICK_CREATE_PROVIDER.md          - Méthode rapide
+CREATE_TEST_PROVIDER.md           - Guide détaillé
+
+================================================================================
+
+Status: ✅ Prêt à utiliser
+Créé: December 24, 2025
+
+================================================================================

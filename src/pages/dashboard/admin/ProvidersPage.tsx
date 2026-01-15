@@ -1,0 +1,663 @@
+import { useState, useEffect, useMemo } from "react";
+import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CheckCircle, XCircle, Eye, Loader2, Star, Award, MapPin, FileText, Search, X } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
+import { DateRangeFilter } from "@/components/filters/DateRangeFilter";
+
+interface Provider {
+  id: string;
+  user_id: string;
+  full_name: string;
+  profession: string;
+  bio?: string;
+  localisation?: string;
+  verified: boolean;
+  documents_verified: boolean;
+  rating: number;
+  missions_completed?: number;
+  created_at: string;
+  id_document_url?: string;
+  qualification_url?: string;
+  // Données jointes
+  email?: string;
+}
+
+export default function ProvidersPage() {
+  const { user } = useAuth();
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Filters
+  const [filters, setFilters] = useState({
+    search: '',
+    profession: 'all',
+    verified: 'all',
+    city: '',
+    startDate: '',
+    endDate: '',
+  });
+
+  useEffect(() => {
+    if (user) {
+      fetchProviders();
+    }
+  }, [user]);
+
+  const fetchProviders = async () => {
+    if (!user) return;
+    try {
+      setLoading(true);
+      
+      // Récupérer les prestataires
+      const { data: prestatairesData, error: prestatairesError } = await supabase
+        .from("prestataires")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (prestatairesError) throw prestatairesError;
+
+      // Mapper les données avec valeurs par défaut
+      const providersWithDefaults = (prestatairesData || []).map((prestataire: any) => ({
+        ...prestataire,
+        email: prestataire.email || "Email non disponible",
+        missions_completed: prestataire.missions_completed || 0,
+        localisation: prestataire.localisation || "Non spécifié",
+      }));
+
+      setProviders(providersWithDefaults);
+    } catch (error: any) {
+      console.error("Erreur:", error);
+      toast.error("Erreur lors du chargement des prestataires");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify = async (providerId: string) => {
+    try {
+      console.log("🔄 Tentative de vérification du prestataire:", providerId);
+      
+      const { data, error } = await supabase
+        .from("prestataires")
+        .update({ 
+          verified: true,
+          documents_verified: true 
+        })
+        .eq("id", providerId)
+        .select();
+
+      if (error) {
+        console.error("❌ Erreur vérification:", error);
+        throw error;
+      }
+      
+      console.log("✅ Prestataire vérifié:", data);
+      toast.success("Prestataire vérifié avec succès");
+      await fetchProviders();
+    } catch (error: any) {
+      console.error("❌ Erreur complète:", error);
+      toast.error(`Erreur: ${error.message || "Erreur lors de la vérification"}`);
+    }
+  };
+
+  const handleReject = async (providerId: string) => {
+    if (!confirm("Êtes-vous sûr de vouloir rejeter ce prestataire? Cette action est irréversible.")) return;
+    
+    try {
+      console.log("🔄 Tentative de rejet du prestataire:", providerId);
+      
+      // Marquer comme non vérifié au lieu de supprimer
+      const { data, error } = await supabase
+        .from("prestataires")
+        .update({ 
+          verified: false,
+          documents_verified: false 
+        })
+        .eq("id", providerId)
+        .select();
+
+      if (error) {
+        console.error("❌ Erreur rejet:", error);
+        throw error;
+      }
+      
+      console.log("✅ Prestataire rejeté:", data);
+      toast.success("Prestataire rejeté");
+      await fetchProviders();
+    } catch (error: any) {
+      console.error("❌ Erreur complète:", error);
+      toast.error(`Erreur: ${error.message || "Erreur lors du rejet"}`);
+    }
+  };
+
+  // Filtered providers with useMemo for performance
+  const filteredProviders = useMemo(() => {
+    return providers.filter(provider => {
+      // Search filter
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        if (!provider.full_name?.toLowerCase().includes(searchLower) &&
+            !provider.email?.toLowerCase().includes(searchLower)) {
+          return false;
+        }
+      }
+      
+      // Profession filter
+      if (filters.profession !== 'all' && provider.profession !== filters.profession) {
+        return false;
+      }
+      
+      // Verified filter
+      if (filters.verified !== 'all') {
+        if (filters.verified === 'verified' && !provider.verified) return false;
+        if (filters.verified === 'unverified' && provider.verified) return false;
+      }
+      
+      // City filter
+      if (filters.city && !provider.localisation?.toLowerCase().includes(filters.city.toLowerCase())) {
+        return false;
+      }
+      
+      // Date range filter
+      if (filters.startDate) {
+        const providerDate = new Date(provider.created_at);
+        const startDate = new Date(filters.startDate);
+        if (providerDate < startDate) return false;
+      }
+      
+      if (filters.endDate) {
+        const providerDate = new Date(provider.created_at);
+        const endDate = new Date(filters.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        if (providerDate > endDate) return false;
+      }
+      
+      return true;
+    });
+  }, [providers, filters]);
+
+  const pendingProviders = filteredProviders.filter(p => !p.verified);
+  const verifiedProviders = filteredProviders.filter(p => p.verified);
+  
+  // Get unique professions for filter dropdown
+  const professions = useMemo(() => {
+    const uniqueProfessions = [...new Set(providers.map(p => p.profession).filter(Boolean))];
+    return uniqueProfessions.sort();
+  }, [providers]);
+  
+  // Check if any filters are active
+  const hasActiveFilters = filters.search || filters.profession !== 'all' || 
+    filters.verified !== 'all' || filters.city || filters.startDate || filters.endDate;
+  
+  const resetFilters = () => {
+    setFilters({
+      search: '',
+      profession: 'all',
+      verified: 'all',
+      city: '',
+      startDate: '',
+      endDate: '',
+    });
+  };
+
+  const ProviderCard = ({ provider, isPending }: { provider: Provider; isPending: boolean }) => (
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardContent className="pt-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4 flex-1">
+            <Avatar className="w-12 h-12">
+              <AvatarFallback>{provider.full_name.split(" ").map(n => n[0]).join("")}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold">{provider.full_name}</h3>
+                {provider.verified && (
+                  <Badge className="flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    Vérifié
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">{provider.profession}</p>
+              <p className="text-xs text-muted-foreground mt-1">📧 {provider.email}</p>
+              <div className="flex flex-wrap gap-3 mt-2 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />
+                  {provider.localisation || "Non spécifié"}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Star className="w-3 h-3 text-yellow-500" />
+                  {provider.rating?.toFixed(1) || "0.0"}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Award className="w-3 h-3" />
+                  {provider.missions_completed || 0} missions
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSelectedProvider(provider);
+                setShowDetailsModal(true);
+              }}
+            >
+              <Eye className="w-4 h-4 mr-2" />
+              Détails
+            </Button>
+            {isPending && (
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => handleVerify(provider.id)}
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Vérifier
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleReject(provider.id)}
+                >
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Rejeter
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <DashboardLayout role="admin" userName="Admin" userRole="Administrateur">
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-display font-bold">Gestion des Prestataires</h1>
+          <p className="text-muted-foreground">Vérifiez et gérez les prestataires</p>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-3xl font-bold">{filteredProviders.length}</p>
+                <p className="text-sm text-muted-foreground">
+                  {hasActiveFilters ? 'Résultats filtrés' : 'Total prestataires'}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-3xl font-bold text-yellow-600">{pendingProviders.length}</p>
+                <p className="text-sm text-muted-foreground">En attente de vérification</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-3xl font-bold text-green-600">{verifiedProviders.length}</p>
+                <p className="text-sm text-muted-foreground">Vérifiés</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filters Toggle Button */}
+        <div className="flex items-center justify-between">
+          <Button
+            variant="outline"
+            onClick={() => setShowFilters(!showFilters)}
+            className="gap-2"
+          >
+            <Search className="w-4 h-4" />
+            {showFilters ? 'Masquer les filtres' : 'Afficher les filtres'}
+          </Button>
+          
+          {hasActiveFilters && !showFilters && (
+            <Badge variant="secondary">
+              Filtres actifs: {filteredProviders.length} résultat(s)
+            </Badge>
+          )}
+        </div>
+
+        {/* Filters */}
+        {showFilters && (
+          <Card>
+            <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Nom ou email..."
+                  value={filters.search}
+                  onChange={(e) => setFilters({...filters, search: e.target.value})}
+                  className="pl-10"
+                />
+              </div>
+              
+              {/* Profession */}
+              <Select value={filters.profession} onValueChange={(v) => setFilters({...filters, profession: v})}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Profession" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les professions</SelectItem>
+                  {professions.map(prof => (
+                    <SelectItem key={prof} value={prof}>{prof}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              {/* Verified Status */}
+              <Select value={filters.verified} onValueChange={(v) => setFilters({...filters, verified: v})}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Statut" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous</SelectItem>
+                  <SelectItem value="verified">✓ Vérifié</SelectItem>
+                  <SelectItem value="unverified">⏳ Non vérifié</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              {/* City */}
+              <Input
+                placeholder="Ville..."
+                value={filters.city}
+                onChange={(e) => setFilters({...filters, city: e.target.value})}
+              />
+            </div>
+            
+            {/* Date Range */}
+            <div className="mb-4">
+              <DateRangeFilter
+                startDate={filters.startDate}
+                endDate={filters.endDate}
+                onStartDateChange={(d) => setFilters({...filters, startDate: d})}
+                onEndDateChange={(d) => setFilters({...filters, endDate: d})}
+                label="Période d'inscription"
+              />
+            </div>
+            
+            {/* Results bar */}
+            <div className="flex items-center justify-between">
+              <Badge variant="secondary">
+                {filteredProviders.length} résultat(s)
+              </Badge>
+              
+              {hasActiveFilters && (
+                <Button variant="ghost" size="sm" onClick={resetFilters}>
+                  <X className="w-4 h-4 mr-2" />
+                  Réinitialiser les filtres
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        )}
+
+        {/* Tabs */}
+        <Tabs defaultValue="pending" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="pending">
+              En attente ({pendingProviders.length})
+            </TabsTrigger>
+            <TabsTrigger value="verified">
+              Vérifiés ({verifiedProviders.length})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="pending" className="space-y-4">
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : pendingProviders.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center text-muted-foreground">
+                  Aucun prestataire en attente de vérification
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {pendingProviders.map((provider) => (
+                  <ProviderCard key={provider.id} provider={provider} isPending={true} />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="verified" className="space-y-4">
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : verifiedProviders.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center text-muted-foreground">
+                  Aucun prestataire vérifié
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {verifiedProviders.map((provider) => (
+                  <ProviderCard key={provider.id} provider={provider} isPending={false} />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+
+        {/* Details Modal */}
+        {showDetailsModal && selectedProvider && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-auto">
+            <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+              <CardHeader>
+                <CardTitle>{selectedProvider.full_name}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Nom complet</p>
+                    <p className="font-medium">{selectedProvider.full_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Email</p>
+                    <p className="font-medium">{selectedProvider.email}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Profession</p>
+                    <p className="font-medium">{selectedProvider.profession}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Localisation</p>
+                    <p className="font-medium">{selectedProvider.localisation || "Non spécifié"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Note moyenne</p>
+                    <p className="font-medium flex items-center gap-1">
+                      <Star className="w-4 h-4 text-yellow-500" />
+                      {selectedProvider.rating?.toFixed(1) || "0.0"}/5
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Missions complétées</p>
+                    <p className="font-medium">{selectedProvider.missions_completed || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Statut vérification</p>
+                    <div className="flex gap-2">
+                      <Badge variant={selectedProvider.verified ? "default" : "secondary"}>
+                        {selectedProvider.verified ? "✅ Vérifié" : "⏳ En attente"}
+                      </Badge>
+                      <Badge variant={selectedProvider.documents_verified ? "default" : "secondary"}>
+                        {selectedProvider.documents_verified ? "📄 Docs OK" : "📄 Docs à vérifier"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Inscrit le</p>
+                    <p className="font-medium">
+                      {new Date(selectedProvider.created_at).toLocaleDateString("fr-FR")}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedProvider.bio && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Biographie</p>
+                    <p className="text-sm bg-muted p-3 rounded-lg">{selectedProvider.bio}</p>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-sm text-muted-foreground mb-3">Documents soumis</p>
+                  {(selectedProvider.id_document_url || selectedProvider.qualification_url) ? (
+                    <div className="space-y-4">
+                      {selectedProvider.id_document_url && (
+                        <div className="bg-muted p-4 rounded-lg">
+                          <p className="text-sm font-medium mb-3 flex items-center gap-2">
+                            📄 Carte d'électeur / Passeport
+                          </p>
+                          {selectedProvider.id_document_url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                            <div className="space-y-2">
+                              <img
+                                src={selectedProvider.id_document_url}
+                                alt="Document d'identité"
+                                className="w-full h-auto rounded border border-border max-h-96 object-contain bg-white"
+                              />
+                              <a
+                                href={selectedProvider.id_document_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-secondary hover:underline inline-flex items-center gap-1"
+                              >
+                                Ouvrir en plein écran →
+                              </a>
+                            </div>
+                          ) : (
+                            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
+                              <FileText className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
+                              <p className="text-sm text-muted-foreground mb-2">Document PDF</p>
+                              <a
+                                href={selectedProvider.id_document_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-secondary hover:underline inline-flex items-center gap-1"
+                              >
+                                Ouvrir le PDF →
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {selectedProvider.qualification_url && (
+                        <div className="bg-muted p-4 rounded-lg">
+                          <p className="text-sm font-medium mb-3 flex items-center gap-2">
+                            🎓 Document de qualification
+                          </p>
+                          {selectedProvider.qualification_url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                            <div className="space-y-2">
+                              <img
+                                src={selectedProvider.qualification_url}
+                                alt="Document de qualification"
+                                className="w-full h-auto rounded border border-border max-h-96 object-contain bg-white"
+                              />
+                              <a
+                                href={selectedProvider.qualification_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-secondary hover:underline inline-flex items-center gap-1"
+                              >
+                                Ouvrir en plein écran →
+                              </a>
+                            </div>
+                          ) : (
+                            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
+                              <FileText className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
+                              <p className="text-sm text-muted-foreground mb-2">Document PDF</p>
+                              <a
+                                href={selectedProvider.qualification_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-secondary hover:underline inline-flex items-center gap-1"
+                              >
+                                Ouvrir le PDF →
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-muted p-4 rounded-lg text-center text-sm text-muted-foreground">
+                      <p>📎 Aucun document soumis</p>
+                      <p className="text-xs mt-1">Le prestataire n'a pas encore uploadé ses documents</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 pt-4 border-t border-border">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setShowDetailsModal(false)}
+                  >
+                    Fermer
+                  </Button>
+                  {!selectedProvider.verified && (
+                    <>
+                      <Button
+                        className="flex-1"
+                        onClick={async () => {
+                          await handleVerify(selectedProvider.id);
+                          setShowDetailsModal(false);
+                        }}
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Vérifier
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        className="flex-1"
+                        onClick={async () => {
+                          await handleReject(selectedProvider.id);
+                          setShowDetailsModal(false);
+                        }}
+                      >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Rejeter
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+    </DashboardLayout>
+  );
+}

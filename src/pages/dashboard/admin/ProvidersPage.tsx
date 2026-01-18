@@ -27,8 +27,26 @@ interface Provider {
   created_at: string;
   id_document_url?: string;
   qualification_url?: string;
-  // Données jointes
   email?: string;
+  // Champs personne physique/morale
+  type_prestataire?: 'physique' | 'morale';
+  // Personne physique
+  nom?: string;
+  prenom?: string;
+  date_naissance?: string;
+  numero_cni?: string;
+  // Personne morale
+  raison_sociale?: string;
+  forme_juridique?: string;
+  numero_rccm?: string;
+  numero_impot?: string;
+  numero_id_nat?: string;
+  representant_legal_nom?: string;
+  representant_legal_prenom?: string;
+  representant_legal_fonction?: string;
+  adresse_siege?: string;
+  ville_siege?: string;
+  pays_siege?: string;
 }
 
 export default function ProvidersPage() {
@@ -478,50 +496,204 @@ export default function ProvidersPage() {
                 <CardTitle>{selectedProvider.full_name}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Nom complet</p>
-                    <p className="font-medium">{selectedProvider.full_name}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Email</p>
-                    <p className="font-medium">{selectedProvider.email}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Profession</p>
-                    <p className="font-medium">{selectedProvider.profession}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Localisation</p>
-                    <p className="font-medium">{selectedProvider.localisation || "Non spécifié"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Note moyenne</p>
-                    <p className="font-medium flex items-center gap-1">
-                      <Star className="w-4 h-4 text-yellow-500" />
-                      {selectedProvider.rating?.toFixed(1) || "0.0"}/5
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Missions complétées</p>
-                    <p className="font-medium">{selectedProvider.missions_completed || 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Statut vérification</p>
-                    <div className="flex gap-2">
-                      <Badge variant={selectedProvider.verified ? "default" : "secondary"}>
-                        {selectedProvider.verified ? "✅ Vérifié" : "⏳ En attente"}
-                      </Badge>
-                      <Badge variant={selectedProvider.documents_verified ? "default" : "secondary"}>
-                        {selectedProvider.documents_verified ? "📄 Docs OK" : "📄 Docs à vérifier"}
-                      </Badge>
+                {/* Type de prestataire */}
+                {selectedProvider.type_prestataire && (
+                  <div className="bg-muted p-4 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">
+                        {selectedProvider.type_prestataire === 'physique' ? '👤' : '🏢'}
+                      </span>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Type de prestataire</p>
+                        <p className="font-semibold">
+                          {selectedProvider.type_prestataire === 'physique' 
+                            ? 'Personne Physique (Individu)' 
+                            : 'Personne Morale (Entreprise)'}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Inscrit le</p>
-                    <p className="font-medium">
-                      {new Date(selectedProvider.created_at).toLocaleDateString("fr-FR")}
-                    </p>
+                )}
+
+                {/* Informations selon le type */}
+                {selectedProvider.type_prestataire === 'physique' ? (
+                  // PERSONNE PHYSIQUE
+                  <div className="bg-blue-50/50 dark:bg-blue-950/20 p-4 rounded-lg border-2 border-blue-200 dark:border-blue-800 space-y-4">
+                    <h3 className="font-semibold text-blue-900 dark:text-blue-100">
+                      Informations personnelles
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      {selectedProvider.prenom && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">Prénom</p>
+                          <p className="font-medium">{selectedProvider.prenom}</p>
+                        </div>
+                      )}
+                      {selectedProvider.nom && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">Nom</p>
+                          <p className="font-medium">{selectedProvider.nom}</p>
+                        </div>
+                      )}
+                      {selectedProvider.date_naissance && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">Date de naissance</p>
+                          <p className="font-medium">
+                            {new Date(selectedProvider.date_naissance).toLocaleDateString('fr-FR')}
+                          </p>
+                        </div>
+                      )}
+                      {selectedProvider.numero_cni && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">Numéro CNI / Passeport</p>
+                          <p className="font-medium">{selectedProvider.numero_cni}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : selectedProvider.type_prestataire === 'morale' ? (
+                  // PERSONNE MORALE
+                  <div className="bg-green-50/50 dark:bg-green-950/20 p-4 rounded-lg border-2 border-green-200 dark:border-green-800 space-y-4">
+                    <div>
+                      <h3 className="font-semibold text-green-900 dark:text-green-100 mb-3">
+                        Informations de l'entreprise
+                      </h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        {selectedProvider.raison_sociale && (
+                          <div>
+                            <p className="text-sm text-muted-foreground">Raison sociale</p>
+                            <p className="font-medium">{selectedProvider.raison_sociale}</p>
+                          </div>
+                        )}
+                        {selectedProvider.forme_juridique && (
+                          <div>
+                            <p className="text-sm text-muted-foreground">Forme juridique</p>
+                            <p className="font-medium">{selectedProvider.forme_juridique}</p>
+                          </div>
+                        )}
+                        {selectedProvider.numero_rccm && (
+                          <div>
+                            <p className="text-sm text-muted-foreground">Numéro RCCM</p>
+                            <p className="font-medium">{selectedProvider.numero_rccm}</p>
+                          </div>
+                        )}
+                        {selectedProvider.numero_impot && (
+                          <div>
+                            <p className="text-sm text-muted-foreground">Numéro fiscal</p>
+                            <p className="font-medium">{selectedProvider.numero_impot}</p>
+                          </div>
+                        )}
+                        {selectedProvider.numero_id_nat && (
+                          <div>
+                            <p className="text-sm text-muted-foreground">Numéro ID Nationale</p>
+                            <p className="font-medium">{selectedProvider.numero_id_nat}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {(selectedProvider.representant_legal_nom || selectedProvider.representant_legal_prenom) && (
+                      <div>
+                        <h3 className="font-semibold text-green-900 dark:text-green-100 mb-3">
+                          Représentant légal
+                        </h3>
+                        <div className="grid grid-cols-2 gap-4">
+                          {selectedProvider.representant_legal_nom && (
+                            <div>
+                              <p className="text-sm text-muted-foreground">Nom</p>
+                              <p className="font-medium">{selectedProvider.representant_legal_nom}</p>
+                            </div>
+                          )}
+                          {selectedProvider.representant_legal_prenom && (
+                            <div>
+                              <p className="text-sm text-muted-foreground">Prénom</p>
+                              <p className="font-medium">{selectedProvider.representant_legal_prenom}</p>
+                            </div>
+                          )}
+                          {selectedProvider.representant_legal_fonction && (
+                            <div>
+                              <p className="text-sm text-muted-foreground">Fonction</p>
+                              <p className="font-medium">{selectedProvider.representant_legal_fonction}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {(selectedProvider.adresse_siege || selectedProvider.ville_siege) && (
+                      <div>
+                        <h3 className="font-semibold text-green-900 dark:text-green-100 mb-3">
+                          Siège social
+                        </h3>
+                        <div className="grid grid-cols-2 gap-4">
+                          {selectedProvider.adresse_siege && (
+                            <div>
+                              <p className="text-sm text-muted-foreground">Adresse</p>
+                              <p className="font-medium">{selectedProvider.adresse_siege}</p>
+                            </div>
+                          )}
+                          {selectedProvider.ville_siege && (
+                            <div>
+                              <p className="text-sm text-muted-foreground">Ville</p>
+                              <p className="font-medium">{selectedProvider.ville_siege}</p>
+                            </div>
+                          )}
+                          {selectedProvider.pays_siege && (
+                            <div>
+                              <p className="text-sm text-muted-foreground">Pays</p>
+                              <p className="font-medium">{selectedProvider.pays_siege}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {/* Informations professionnelles */}
+                <div className="bg-muted p-4 rounded-lg">
+                  <h3 className="font-semibold mb-3">Informations professionnelles</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Email</p>
+                      <p className="font-medium">{selectedProvider.email}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Profession</p>
+                      <p className="font-medium">{selectedProvider.profession}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Localisation</p>
+                      <p className="font-medium">{selectedProvider.localisation || "Non spécifié"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Note moyenne</p>
+                      <p className="font-medium flex items-center gap-1">
+                        <Star className="w-4 h-4 text-yellow-500" />
+                        {selectedProvider.rating?.toFixed(1) || "0.0"}/5
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Missions complétées</p>
+                      <p className="font-medium">{selectedProvider.missions_completed || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Statut vérification</p>
+                      <div className="flex gap-2">
+                        <Badge variant={selectedProvider.verified ? "default" : "secondary"}>
+                          {selectedProvider.verified ? "✅ Vérifié" : "⏳ En attente"}
+                        </Badge>
+                        <Badge variant={selectedProvider.documents_verified ? "default" : "secondary"}>
+                          {selectedProvider.documents_verified ? "📄 Docs OK" : "📄 Docs à vérifier"}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Inscrit le</p>
+                      <p className="font-medium">
+                        {new Date(selectedProvider.created_at).toLocaleDateString("fr-FR")}
+                      </p>
+                    </div>
                   </div>
                 </div>
 

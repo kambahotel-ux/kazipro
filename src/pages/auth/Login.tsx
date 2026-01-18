@@ -150,30 +150,6 @@ const Login = () => {
               Créer un compte
             </Link>
           </p>
-
-          {/* Quick Access for Testing */}
-          <div className="mt-8 pt-6 border-t border-border">
-            <p className="text-sm text-muted-foreground text-center mb-4">
-              Accès rapide (démo)
-            </p>
-            <div className="flex flex-col gap-2">
-              <Link to="/dashboard/client">
-                <Button variant="outline" size="sm" className="w-full">
-                  Dashboard Client
-                </Button>
-              </Link>
-              <Link to="/dashboard/prestataire">
-                <Button variant="outline" size="sm" className="w-full">
-                  Dashboard Prestataire
-                </Button>
-              </Link>
-              <Link to="/dashboard/admin">
-                <Button variant="outline" size="sm" className="w-full">
-                  Dashboard Admin
-                </Button>
-              </Link>
-            </div>
-          </div>
         </div>
       </div>
 

@@ -1,367 +1,328 @@
-# ✅ Page Profil Prestataire - Complète et Fonctionnelle
+# 📋 Page de Profil Prestataire - Récapitulatif Complet
 
-## 🎯 Mise à Jour Effectuée
+## ✅ Ce qui a été fait
 
-La page de profil du prestataire est maintenant **complète** avec toutes les fonctionnalités d'affichage et d'édition.
+La page de profil du prestataire a été complètement mise à jour avec toutes les fonctionnalités nécessaires.
 
----
+## 🎯 Onglets disponibles
 
-## 📋 Fonctionnalités Implémentées
+### 1. À propos
+**Contenu:**
+- Description/Bio (modifiable)
+- Disponibilité (modifiable)
 
-### 1. En-tête du Profil
+**Fonctionnalités:**
+- ✅ Affichage de la bio
+- ✅ Modification de la bio en mode édition
+- ✅ Sélection de la disponibilité (Disponible/Occupé/Indisponible)
 
-#### Affichage
-- **Avatar**: Initiales du nom (ex: "JM" pour Jean Mukeba)
-- **Bouton photo**: Pour changer la photo de profil (à venir)
-- **Nom complet**: Affiché en grand
-- **Badge vérifié**: Si le compte est vérifié par l'admin
-- **Profession**: Sous le nom
-- **Boutons d'action**:
-  - Mode lecture: "Partager" et "Modifier"
-  - Mode édition: "Annuler" et "Enregistrer"
+### 2. Services
+**Contenu:**
+- Liste des services proposés
+- Niveau de compétence par service
+- Années d'expérience par service
+- Tarif horaire par service
+- Service principal marqué
 
-#### Informations de Contact
-- Commune/Ville
+**Fonctionnalités:**
+- ✅ Affichage de tous les services
+- ✅ Ajout de nouveaux services
+- ✅ Définir un service comme principal
+- ✅ Supprimer un service (sauf le principal)
+- ✅ Badge "Principal" sur le service principal
+
+### 3. Informations
+**Contenu:**
+- Badge de type (👤 Personne Physique / 🏢 Personne Morale)
+- Informations selon le type (lecture seule)
+- Informations professionnelles (modifiables)
+
+**Sections:**
+
+#### A. Type de prestataire (lecture seule)
+- Badge avec icône
+- Description du type
+
+#### B. Informations personnelles/entreprise (lecture seule)
+**Si Personne Physique:**
+- Prénom
+- Nom
+- Date de naissance
+- Numéro CNI/Passeport
+
+**Si Personne Morale:**
+- Raison sociale
+- Forme juridique
+- Numéro RCCM
+- Numéro fiscal
+- Numéro ID Nationale
+- Représentant légal (nom, prénom, fonction)
+- Siège social (adresse, ville, pays)
+
+#### C. Informations professionnelles (modifiables)
+- Nom complet
+- Profession
 - Téléphone
 - Email
-- Date d'inscription (Membre depuis...)
-
-#### Statistiques
-- **Note moyenne**: Calculée depuis les avis (ex: 4.8/5)
-- **Missions**: Nombre de missions complétées
-- **Satisfaction**: Pourcentage basé sur la note moyenne
-- **Expérience**: Années d'expérience
-
----
-
-### 2. Onglet "À propos"
-
-#### Description
-- **Mode lecture**: Affiche la bio du prestataire
-- **Mode édition**: Textarea pour modifier la bio
-- **Placeholder**: "Décrivez votre expérience, vos compétences..."
-
-#### Disponibilité
-- **Mode lecture**: Badge coloré (Disponible/Occupé/Indisponible)
-- **Mode édition**: Select pour changer le statut
-- **Options**:
-  - Disponible (vert)
-  - Occupé (gris)
-  - Indisponible (outline)
-
----
-
-### 3. Onglet "Informations"
-
-#### Formulaire Complet
-
-**Informations personnelles**:
-- Nom complet * (requis)
-- Profession * (requis) - Select avec liste
-- Téléphone * (requis)
-- Email
-- Commune - Select avec toutes les communes de Kinshasa
+- Commune
 - Adresse
-- Années d'expérience (nombre)
-- Tarif horaire (FC)
+- Années d'expérience
+- Tarif horaire
 
-**Mode lecture**: Affiche les valeurs
-**Mode édition**: Champs modifiables
+### 4. Documents ✨ NOUVEAU
+**Contenu:**
+- Carte d'électeur / Passeport
+- Document de qualification
 
-#### Liste des Professions
-- Électricien
-- Plombier
-- Menuisier
-- Maçon
-- Peintre
-- Mécanicien
-- Informaticien
-- Jardinier
-- Couturier/Couturière
-- Coiffeur/Coiffeuse
+**Fonctionnalités:**
+- ✅ Affichage des images (JPG, PNG)
+- ✅ Lien de téléchargement pour les PDF
+- ✅ Bouton "Télécharger" pour tous les documents
+- ✅ Message si aucun document
 
-#### Liste des Communes (24)
-Toutes les communes de Kinshasa:
-- Bandalungwa, Barumbu, Bumbu, Gombe, Kalamu
-- Kasa-Vubu, Kimbanseke, Kinshasa, Kintambo, Kisenso
-- Lemba, Limete, Lingwala, Makala, Maluku
-- Masina, Matete, Mont-Ngafula, Ndjili, Ngaba
-- Ngaliema, Ngiri-Ngiri, Nsele, Selembao
-
----
-
-### 4. Onglet "Avis"
-
-#### Affichage des Avis Clients
-
-**Pour chaque avis**:
-- Avatar du client (initiales)
-- Nom du client
-- Titre de la mission
-- Note (étoiles de 1 à 5)
-- Date de l'avis
+### 5. Avis
+**Contenu:**
+- Liste des avis clients
+- Note (étoiles)
 - Commentaire
+- Date
 
-**Si aucun avis**:
-- Icône d'étoile
-- Message: "Aucun avis pour le moment"
-- Sous-message: "Les avis de vos clients apparaîtront ici"
+**Fonctionnalités:**
+- ✅ Affichage des 10 derniers avis
+- ✅ Note en étoiles (1-5)
+- ✅ Commentaire du client
+- ✅ Date de l'avis
+- ✅ Message si aucun avis
 
-**Source des données**:
-- Table `avis`
-- Jointure avec `clients` (nom du client)
-- Jointure avec `demandes` (titre de la mission)
-- Triés par date (plus récents en premier)
-- Limite: 10 avis
+## 🎨 Header du profil
 
----
+**Affichage:**
+- Avatar avec initiales
+- Nom complet
+- Badge "Vérifié" (si vérifié)
+- Profession
+- Localisation
+- Téléphone
+- Email
+- Date d'inscription
 
-## 🔄 Fonctionnement
+**Statistiques:**
+- Note moyenne (⭐)
+- Nombre de missions
+- Taux de satisfaction (%)
+- Années d'expérience
 
-### Chargement des Données
+**Boutons:**
+- Partager (mode lecture)
+- Modifier (mode lecture)
+- Annuler (mode édition)
+- Enregistrer (mode édition)
 
-1. **Récupération du profil**
-   ```sql
-   SELECT * FROM prestataires
-   WHERE user_id = 'USER_ID'
-   ```
+## 🔧 Mode édition
 
-2. **Calcul des statistiques**
-   - Note moyenne depuis `avis`
-   - Nombre d'avis
-   - Missions complétées depuis `missions` (statut = 'terminee')
-   - Taux de satisfaction = (note moyenne / 5) × 100
+### Ce qui est modifiable:
+- ✅ Bio/Description
+- ✅ Disponibilité
+- ✅ Nom complet
+- ✅ Profession
+- ✅ Téléphone
+- ✅ Email
+- ✅ Commune
+- ✅ Adresse
+- ✅ Années d'expérience
+- ✅ Tarif horaire
 
-3. **Récupération des avis**
-   ```sql
-   SELECT a.*, c.full_name, d.titre
-   FROM avis a
-   LEFT JOIN clients c ON a.client_id = c.id
-   LEFT JOIN demandes d ON a.demande_id = d.id
-   WHERE a.prestataire_id = 'PROVIDER_ID'
-   ORDER BY a.created_at DESC
-   LIMIT 10
-   ```
+### Ce qui n'est PAS modifiable:
+- ❌ Type de prestataire (physique/morale)
+- ❌ Informations personne physique (nom, prénom, CNI, date de naissance)
+- ❌ Informations personne morale (raison sociale, RCCM, représentant, siège)
+- ❌ Documents
+- ❌ Avis
+- ❌ Services (gestion séparée)
 
-### Mode Édition
+**Raison:** Ces informations sont définies à l'inscription et nécessitent une vérification admin pour être modifiées.
 
-**Activation**:
-- Cliquer sur "Modifier"
-- Les champs deviennent éditables
-- Boutons changent: "Annuler" et "Enregistrer"
+## 🐛 Corrections appliquées
 
-**Modification**:
-- Tous les champs sont modifiables
-- Validation en temps réel
-- Données stockées dans le state `formData`
+### 1. missions.statut → missions.status
+**Problème:** Colonne inexistante
+**Solution:** Utilisation de `status` au lieu de `statut`
 
-**Enregistrement**:
-- Cliquer sur "Enregistrer"
-- Affiche un spinner pendant la sauvegarde
-- Mise à jour dans Supabase
-- Toast de succès
-- Rechargement des données
-- Retour en mode lecture
+### 2. Relation avis/clients
+**Problème:** Foreign key inexistante
+**Solution:** Suppression du JOIN, affichage simplifié
 
-**Annulation**:
-- Cliquer sur "Annuler"
-- Restaure les valeurs originales
-- Retour en mode lecture
+### 3. avis.note → avis.rating
+**Problème:** Colonne inexistante
+**Solution:** Utilisation de `rating` au lieu de `note`
 
----
+### 4. Ajout des champs personne physique/morale
+**Problème:** Champs manquants dans l'interface
+**Solution:** Ajout de tous les champs dans l'interface TypeScript
 
-## 📊 Tables Utilisées
+### 5. Ajout des documents
+**Problème:** Documents non affichés
+**Solution:** Création d'un onglet "Documents" dédié
 
-### prestataires
-```sql
-SELECT 
-  id,
-  user_id,
-  full_name,
-  profession,
-  bio,
-  phone,
-  email,
-  address,
-  city,
-  verified,
-  created_at,
-  experience_years,
-  hourly_rate,
-  availability
-FROM prestataires
-WHERE user_id = 'USER_ID';
-```
+## 📊 Statistiques calculées
 
-### avis (avec jointures)
-```sql
-SELECT 
-  a.id,
-  a.note,
-  a.commentaire,
-  a.created_at,
-  c.full_name as client_name,
-  d.titre as mission_title
-FROM avis a
-LEFT JOIN clients c ON a.client_id = c.id
-LEFT JOIN demandes d ON a.demande_id = d.id
-WHERE a.prestataire_id = 'PROVIDER_ID'
-ORDER BY a.created_at DESC
-LIMIT 10;
-```
-
-### missions
-```sql
-SELECT COUNT(*) as completed
-FROM missions
-WHERE prestataire_id = 'PROVIDER_ID'
-  AND statut = 'terminee';
-```
-
----
-
-## 🔧 Fichiers Modifiés
-
-### src/pages/dashboard/prestataire/ProfilPage.tsx
-
-**Changements majeurs**:
-- ✅ Remplacement des données statiques par des données réelles
-- ✅ Ajout du mode édition complet
-- ✅ Formulaire avec tous les champs
-- ✅ Sauvegarde dans Supabase
-- ✅ Gestion des états (loading, saving, editing)
-- ✅ Calcul des statistiques réelles
-- ✅ Affichage des avis réels
-- ✅ Gestion d'erreurs avec toasts
-- ✅ Utilisation de `.maybeSingle()` pour éviter les erreurs
-
-**Interfaces TypeScript**:
+### Note moyenne
 ```typescript
-interface ProviderProfile {
-  id: string;
-  user_id: string;
-  full_name: string;
-  profession: string;
-  bio?: string;
-  phone: string;
-  email: string;
-  address?: string;
-  city?: string;
-  verified: boolean;
-  created_at: string;
-  experience_years?: number;
-  hourly_rate?: number;
-  availability?: string;
-}
-
-interface Avis {
-  id: string;
-  note: number;
-  commentaire: string;
-  created_at: string;
-  client_id: string;
-  clients?: { full_name: string };
-  demandes?: { titre: string };
-}
+// Calculée à partir des avis
+const avgRating = avisData.reduce((sum, a) => sum + a.rating, 0) / avisData.length;
 ```
 
----
-
-## 🐛 Corrections Appliquées
-
-### Erreur "Cannot coerce the result to a single JSON object"
-
-**Problème**: `.single()` échoue quand aucune ligne n'est trouvée
-
-**Solution**: Utiliser `.maybeSingle()` à la place
-
-**Fichiers corrigés**:
-- `src/pages/dashboard/prestataire/ProfilPage.tsx`
-- `src/pages/dashboard/prestataire/PrestataireDashboard.tsx`
-
-**Code avant**:
+### Missions complétées
 ```typescript
-const { data, error } = await supabase
-  .from("prestataires")
-  .select("*")
-  .eq("user_id", user.id)
-  .single(); // ❌ Erreur si aucune ligne
+// Comptées depuis la table missions
+.eq("status", "terminee")
 ```
 
-**Code après**:
+### Taux de satisfaction
 ```typescript
-const { data, error } = await supabase
-  .from("prestataires")
-  .select("*")
-  .eq("user_id", user.id)
-  .maybeSingle(); // ✅ Retourne null si aucune ligne
-
-if (!data) {
-  toast.error("Profil non trouvé");
-  return;
-}
+// Calculé à partir de la note moyenne
+const satisfaction = (avgRating / 5) * 100;
 ```
 
----
+## 🎯 Flux utilisateur
 
-## 🎨 Interface Utilisateur
+### Consultation du profil
+```
+1. Prestataire se connecte
+2. Va sur "Profil" dans le menu
+3. Voit son profil complet
+4. Peut naviguer entre les onglets
+```
 
-### États Visuels
+### Modification du profil
+```
+1. Clic sur "Modifier"
+2. Les champs modifiables deviennent éditables
+3. Modification des informations
+4. Clic sur "Enregistrer"
+5. Mise à jour dans la base de données
+6. Retour en mode lecture
+```
 
-**Chargement**:
-- Spinner centré
-- Message: "Chargement..."
+### Gestion des services
+```
+1. Onglet "Services"
+2. Clic sur "Ajouter un service"
+3. Sélection du service, niveau, expérience, tarif
+4. Clic sur "Ajouter"
+5. Service ajouté à la liste
+6. Possibilité de définir comme principal
+7. Possibilité de supprimer (sauf principal)
+```
 
-**Profil non trouvé**:
-- Card avec message
-- "Profil non trouvé"
+### Consultation des documents
+```
+1. Onglet "Documents"
+2. Voir les documents uploadés
+3. Clic sur "Télécharger" pour télécharger
+4. Ouverture dans un nouvel onglet
+```
 
-**Mode lecture**:
-- Affichage des informations
-- Boutons: "Partager" et "Modifier"
+## 🔒 Sécurité
 
-**Mode édition**:
-- Champs modifiables
-- Boutons: "Annuler" et "Enregistrer"
-- Spinner sur "Enregistrer" pendant la sauvegarde
+### Données protégées
+- Type de prestataire (défini à l'inscription)
+- Informations d'identité (CNI, RCCM, etc.)
+- Documents (uploadés à l'inscription)
+- Avis (créés par les clients)
 
-**Aucun avis**:
-- Icône d'étoile
-- Message informatif
-- État vide élégant
+### Données modifiables
+- Informations de contact
+- Description professionnelle
+- Disponibilité
+- Services proposés
 
----
+## 📱 Responsive
 
-## ✅ Résultat Final
+- ✅ Fonctionne sur mobile
+- ✅ Fonctionne sur tablette
+- ✅ Fonctionne sur desktop
+- ✅ Grilles adaptatives (1 colonne sur mobile, 2 sur desktop)
 
-La page de profil prestataire offre maintenant:
+## 🎨 Design
 
-- ✅ **Affichage complet** du profil avec données réelles
-- ✅ **Édition en ligne** de toutes les informations
-- ✅ **Statistiques calculées** (note, missions, satisfaction)
-- ✅ **Avis clients** avec détails complets
-- ✅ **Gestion de disponibilité** (disponible/occupé/indisponible)
-- ✅ **Formulaire validé** avec selects pour profession et commune
-- ✅ **Sauvegarde automatique** dans Supabase
-- ✅ **Gestion d'erreurs** robuste
-- ✅ **États vides** élégants
-- ✅ **Interface responsive** et moderne
+### Couleurs
+- Bleu pour personne physique
+- Vert pour personne morale
+- Jaune pour les étoiles
+- Gris pour les informations secondaires
 
----
+### Icônes
+- 👤 Personne Physique
+- 🏢 Personne Morale
+- 📄 Document d'identité
+- 🎓 Document de qualification
+- ⭐ Note/Avis
+- 📥 Télécharger
 
-## 🚀 Prochaines Améliorations Possibles
+## 🚀 Améliorations possibles
 
-- [ ] Upload de photo de profil
-- [ ] Galerie de réalisations (portfolio)
-- [ ] Certifications et diplômes
-- [ ] Zones d'intervention multiples
-- [ ] Compétences avec niveaux
-- [ ] Services proposés personnalisables
-- [ ] Partage du profil (lien public)
-- [ ] Statistiques détaillées (graphiques)
-- [ ] Historique des modifications
-- [ ] Validation des champs (téléphone, email)
+### Court terme
+1. **Permettre la modification des infos personne physique/morale**
+   - Avec validation admin requise
+   - Historique des modifications
 
----
+2. **Upload de nouveaux documents**
+   - Remplacer les documents existants
+   - Ajouter d'autres types de documents
 
-**Page de profil prestataire complète et fonctionnelle!** 🎉
+3. **Répondre aux avis**
+   - Permettre au prestataire de répondre
+   - Afficher les réponses sous les avis
+
+### Long terme
+1. **Portfolio**
+   - Ajouter des photos de réalisations
+   - Galerie de projets
+
+2. **Certifications**
+   - Ajouter des certifications
+   - Badges de compétences
+
+3. **Statistiques avancées**
+   - Graphiques de performance
+   - Évolution de la note
+   - Revenus par mois
+
+## 📁 Fichier
+
+**Chemin:** `src/pages/dashboard/prestataire/ProfilPage.tsx`
+
+**Lignes de code:** ~1250 lignes
+
+**Dépendances:**
+- React hooks (useState, useEffect)
+- Supabase client
+- UI components (shadcn/ui)
+- Contexte d'authentification
+
+## ✅ Checklist de fonctionnalités
+
+- [x] Affichage du profil complet
+- [x] Badge de type (physique/morale)
+- [x] Informations selon le type
+- [x] Mode édition des infos professionnelles
+- [x] Gestion des services
+- [x] Affichage des documents
+- [x] Affichage des avis
+- [x] Statistiques (note, missions, satisfaction)
+- [x] Design responsive
+- [x] Gestion des erreurs
+- [x] Messages de succès/erreur
+
+## 🎉 Résultat
+
+Le profil prestataire est maintenant **complet et fonctionnel** avec:
+- ✅ 5 onglets organisés
+- ✅ Affichage selon le type (physique/morale)
+- ✅ Mode édition pour les infos modifiables
+- ✅ Gestion des services
+- ✅ Affichage des documents
+- ✅ Affichage des avis
+- ✅ Statistiques en temps réel
+- ✅ Design professionnel et responsive

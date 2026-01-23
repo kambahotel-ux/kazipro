@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
   ArrowLeft, MapPin, Calendar, FileText, Eye, CheckCircle, 
-  XCircle, Clock, Loader, AlertCircle, Image as ImageIcon
+  XCircle, Clock, Loader, AlertCircle, Image as ImageIcon, User
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -382,7 +382,13 @@ export default function ClientDemandeDetailPage() {
                           </div>
 
                           <div>
-                            <p className="text-sm font-medium">{devis.prestataire?.full_name || 'N/A'}</p>
+                            <Link 
+                              to={`/dashboard/client/prestataire/${devis.prestataire_id}`}
+                              className="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1"
+                            >
+                              <User className="w-3 h-3" />
+                              {devis.prestataire?.full_name || 'N/A'}
+                            </Link>
                             {devis.prestataire?.profession && (
                               <p className="text-sm text-muted-foreground">{devis.prestataire.profession}</p>
                             )}
@@ -424,6 +430,17 @@ export default function ClientDemandeDetailPage() {
                             <Eye className="w-4 h-4 mr-1" />
                             Voir détails
                           </Button>
+
+                          <Link to={`/dashboard/client/prestataire/${devis.prestataire_id}`}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                            >
+                              <User className="w-4 h-4 mr-1" />
+                              Voir le profil
+                            </Button>
+                          </Link>
 
                           {devis.statut === 'envoye' || devis.statut === 'en_attente' ? (
                             <>
@@ -485,7 +502,13 @@ export default function ClientDemandeDetailPage() {
                   <div className="grid grid-cols-2 gap-6">
                     <div>
                       <h3 className="font-semibold mb-2">Prestataire</h3>
-                      <p className="text-sm">{selectedDevis.prestataire?.full_name || 'N/A'}</p>
+                      <Link 
+                        to={`/dashboard/client/prestataire/${selectedDevis.prestataire_id}`}
+                        className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+                      >
+                        <User className="w-3 h-3" />
+                        {selectedDevis.prestataire?.full_name || 'N/A'}
+                      </Link>
                       {selectedDevis.prestataire?.profession && (
                         <p className="text-sm text-muted-foreground">{selectedDevis.prestataire.profession}</p>
                       )}

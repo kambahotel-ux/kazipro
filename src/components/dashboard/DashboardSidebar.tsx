@@ -29,6 +29,8 @@ interface SidebarLink {
 interface DashboardSidebarProps {
   role: "client" | "prestataire" | "admin";
   isMobile?: boolean;
+  isVerified?: boolean; // Pour les prestataires
+  isProfileComplete?: boolean; // Pour les prestataires
 }
 
 const clientLinks: SidebarLink[] = [
@@ -76,9 +78,24 @@ const roleLabels = {
   admin: "Administration",
 };
 
-export function DashboardSidebar({ role, isMobile = false }: DashboardSidebarProps) {
+export function DashboardSidebar({ role, isMobile = false, isVerified = true, isProfileComplete = true }: DashboardSidebarProps) {
   const location = useLocation();
   const links = linksByRole[role];
+
+  // Pour les prestataires non validés, seuls certains liens sont accessibles
+  const isProviderNotVerified = role === "prestataire" && (!isVerified || !isProfileComplete);
+  const allowedLinksForUnverified = [
+    "/dashboard/prestataire",
+    "/dashboard/prestataire/profil",
+    "/dashboard/prestataire/parametres"
+  ];
+
+  // Lien du logo selon le rôle
+  const dashboardLink = role === "client" 
+    ? "/dashboard/client" 
+    : role === "prestataire" 
+    ? "/dashboard/prestataire" 
+    : "/dashboard/admin";
 
   const sidebarClasses = isMobile 
     ? "flex flex-col w-full bg-card min-h-screen"
@@ -87,7 +104,7 @@ export function DashboardSidebar({ role, isMobile = false }: DashboardSidebarPro
   return (
     <aside className={sidebarClasses}>
       <div className="p-4 sm:p-6 border-b border-border">
-        <Link to="/" className="flex items-center gap-2">
+        <Link to={dashboardLink} className="flex items-center gap-2">
           <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-glow rounded-lg flex items-center justify-center flex-shrink-0">
             <span className="text-primary-foreground font-bold text-sm">K</span>
           </div>
@@ -99,6 +116,22 @@ export function DashboardSidebar({ role, isMobile = false }: DashboardSidebarPro
       <nav className="flex-1 p-3 sm:p-4 space-y-1 overflow-y-auto">
         {links.map((link) => {
           const isActive = location.pathname === link.href;
+          const isDisabled = isProviderNotVerified && !allowedLinksForUnverified.includes(link.href);
+          
+          if (isDisabled) {
+            return (
+              <div
+                key={link.href}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground/40 cursor-not-allowed opacity-50"
+                title="Disponible après validation de votre profil"
+              >
+                <link.icon className="w-5 h-5 flex-shrink-0" />
+                <span className="truncate">{link.label}</span>
+                <span className="ml-auto text-xs">🔒</span>
+              </div>
+            );
+          }
+
           return (
             <Link
               key={link.href}

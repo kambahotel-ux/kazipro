@@ -9,6 +9,7 @@ import { Wrench, Mail, Lock, ArrowRight, Eye, EyeOff, User, Briefcase, MapPin, B
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
 import type { TypePrestataire, FormeJuridique } from "@/types/prestataire";
 
 const RegisterProvider = () => {
@@ -640,6 +641,19 @@ const RegisterProvider = () => {
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Button>
           </form>
+
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-background text-muted-foreground">Ou continuer avec</span>
+            </div>
+          </div>
+
+          {/* Google Auth Button */}
+          <GoogleAuthButton mode="signup-provider" />
 
           {/* Login Link */}
           <p className="mt-6 text-center text-muted-foreground">

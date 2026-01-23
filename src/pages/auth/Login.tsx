@@ -7,6 +7,7 @@ import { Wrench, Phone, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -45,11 +46,7 @@ const Login = () => {
         .maybeSingle();
 
       if (providerData) {
-        if (!providerData.verified) {
-          toast.error("Votre compte est en attente d'approbation par l'administrateur");
-          navigate("/prestataire/en-attente");
-          return;
-        }
+        // Rediriger vers le dashboard, l'alerte s'affichera si nécessaire
         toast.success("Connexion réussie !");
         navigate("/dashboard/prestataire");
         return;
@@ -142,6 +139,19 @@ const Login = () => {
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Button>
           </form>
+
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-background text-muted-foreground">Ou continuer avec</span>
+            </div>
+          </div>
+
+          {/* Google Auth Button */}
+          <GoogleAuthButton mode="signin" />
 
           {/* Sign Up Link */}
           <p className="mt-8 text-center text-muted-foreground">

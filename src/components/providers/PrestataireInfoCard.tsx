@@ -2,16 +2,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Prestataire, getPrestataireDisplayName, isPersonnePhysique, isPersonneMorale } from '@/types/prestataire';
 import PrestataireTypeBadge from './PrestataireTypeBadge';
+import PrestatairePortfolio from './PrestatairePortfolio';
 import { Star, Phone, Mail, MapPin, Building2, User, FileText } from 'lucide-react';
 
 interface PrestataireInfoCardProps {
   prestataire: Prestataire;
   showDetails?: boolean;
+  showPortfolio?: boolean;
 }
 
 export default function PrestataireInfoCard({ 
   prestataire, 
-  showDetails = false 
+  showDetails = false,
+  showPortfolio = false
 }: PrestataireInfoCardProps) {
   const displayName = getPrestataireDisplayName(prestataire);
   
@@ -169,6 +172,13 @@ export default function PrestataireInfoCard({
           </>
         )}
       </CardContent>
+      
+      {/* Portfolio - Visible pour les clients */}
+      {showPortfolio && (
+        <div className="px-6 pb-6">
+          <PrestatairePortfolio prestataireId={prestataire.id} />
+        </div>
+      )}
     </Card>
   );
 }

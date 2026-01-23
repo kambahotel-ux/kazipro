@@ -10,23 +10,25 @@ interface DashboardLayoutProps {
   role: "client" | "prestataire" | "admin";
   userName: string;
   userRole: string;
+  isVerified?: boolean;
+  isProfileComplete?: boolean;
 }
 
-export function DashboardLayout({ children, role, userName, userRole }: DashboardLayoutProps) {
+export function DashboardLayout({ children, role, userName, userRole, isVerified = true, isProfileComplete = true }: DashboardLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-background">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block">
-        <DashboardSidebar role={role} />
+        <DashboardSidebar role={role} isVerified={isVerified} isProfileComplete={isProfileComplete} />
       </div>
       
       {/* Mobile sidebar - using Sheet */}
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
         <SheetContent side="left" className="p-0 w-64 bg-card">
           <div className="flex flex-col h-full">
-            <DashboardSidebar role={role} isMobile={true} />
+            <DashboardSidebar role={role} isMobile={true} isVerified={isVerified} isProfileComplete={isProfileComplete} />
           </div>
         </SheetContent>
       </Sheet>

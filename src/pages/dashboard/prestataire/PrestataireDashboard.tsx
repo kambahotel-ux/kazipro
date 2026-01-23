@@ -11,6 +11,9 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { AvailabilityToggle } from "@/components/dashboard/AvailabilityToggle";
+import ProfileIncompleteAlert from "@/components/dashboard/ProfileIncompleteAlert";
+import ProfilePendingAlert from "@/components/dashboard/ProfilePendingAlert";
+import { useProfileComplete } from "@/hooks/useProfileComplete";
 
 interface Demande {
   id: string;
@@ -52,9 +55,11 @@ interface Devis {
 
 export default function PrestataireDashboard() {
   const { user } = useAuth();
+  const { isProfileComplete } = useProfileComplete(); // Déplacé ici
   const [providerName, setProviderName] = useState("Prestataire");
   const [providerProfession, setProviderProfession] = useState("");
   const [providerId, setProviderId] = useState<string | null>(null);
+  const [providerVerified, setProviderVerified] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   
   // Hook pour gérer le statut en ligne automatiquement
@@ -86,7 +91,7 @@ export default function PrestataireDashboard() {
       // 1. Récupérer les infos du prestataire
       const { data: providerData, error: providerError } = await supabase
         .from("prestataires")
-        .select("id, full_name, profession")
+        .select("id, full_name, profession, verified")
         .eq("user_id", user.id)
         .maybeSingle();
 
@@ -102,6 +107,7 @@ export default function PrestataireDashboard() {
         setProviderName(providerData.full_name);
         setProviderProfession(providerData.profession || "Prestataire");
         setProviderId(providerData.id);
+        setProviderVerified(providerData.verified || false);
 
         // 2. Récupérer les stats
         await fetchStats(providerData.id);
@@ -270,8 +276,18 @@ export default function PrestataireDashboard() {
   }
 
   return (
-    <DashboardLayout role="prestataire" userName={providerName} userRole={providerProfession}>
+    <DashboardLayout 
+      role="prestataire" 
+      userName={providerName} 
+      userRole={providerProfession}
+      isVerified={providerVerified}
+      isProfileComplete={isProfileComplete}
+    >
       <div className="space-y-6">
+        {/* Profile Status Alerts */}
+        {isProfileComplete === false && <ProfileIncompleteAlert />}
+        {isProfileComplete === true && !providerVerified && <ProfilePendingAlert />}
+
         <div>
           <h1 className="text-2xl font-bold">Bonjour, {providerName.split(' ')[0]} 👋</h1>
           <p className="text-muted-foreground">Voici vos opportunités et missions du jour</p>

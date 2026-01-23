@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Briefcase, MapPin, DollarSign, Clock, Search, Filter, Target, Users } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ProfileRequiredGuard from '@/components/dashboard/ProfileRequiredGuard';
 
 interface Demande {
   id: string;
@@ -252,11 +253,12 @@ export default function OpportunitesPage() {
       userName={prestataire?.full_name || "Prestataire"} 
       userRole={prestataire?.profession || "Prestataire"}
     >
-      <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold">Opportunités</h1>
-          <p className="text-muted-foreground">
+      <ProfileRequiredGuard>
+        <div className="space-y-6">
+          {/* Header */}
+          <div>
+            <h1 className="text-3xl font-bold">Opportunités</h1>
+            <p className="text-muted-foreground">
             Découvrez les demandes de services correspondant à votre profil
           </p>
         </div>
@@ -475,6 +477,7 @@ export default function OpportunitesPage() {
         </TabsContent>
       </Tabs>
       </div>
+      </ProfileRequiredGuard>
     </DashboardLayout>
   );
 }

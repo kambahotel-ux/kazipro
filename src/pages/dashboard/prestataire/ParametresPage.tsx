@@ -43,13 +43,70 @@ interface EntrepriseInfo {
   conditions_generales: string;
 }
 
+interface ProviderProfile {
+  id: string;
+  disponible: boolean;
+  verified: boolean;
+  profile_completed: boolean;
+}
+
+interface Horaire {
+  id?: string;
+  jour_semaine: string;
+  actif: boolean;
+  heure_debut: string;
+  heure_fin: string;
+}
+
+interface Settings {
+  notif_nouvelles_missions: boolean;
+  notif_messages_clients: boolean;
+  notif_maj_missions: boolean;
+  notif_rappels_rdv: boolean;
+  notif_promotions: boolean;
+  email_resume_hebdo: boolean;
+  email_nouvelles_missions: boolean;
+  email_paiements: boolean;
+  sms_missions_urgentes: boolean;
+  sms_codes_verification: boolean;
+  langue: string;
+  fuseau_horaire: string;
+  mode_vacances: boolean;
+  accepter_urgences: boolean;
+}
+
 export default function ParametresPage() {
   const { user } = useAuth();
   const [providerName, setProviderName] = useState("Prestataire");
   const [providerId, setProviderId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<ProviderProfile | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-  const [showSaveAlert, setShowSaveAlert] = useState(false);
+  const [updatingDisponibilite, setUpdatingDisponibilite] = useState(false);
+  
+  // Settings state
+  const [settings, setSettings] = useState<Settings>({
+    notif_nouvelles_missions: true,
+    notif_messages_clients: true,
+    notif_maj_missions: true,
+    notif_rappels_rdv: false,
+    notif_promotions: false,
+    email_resume_hebdo: true,
+    email_nouvelles_missions: false,
+    email_paiements: true,
+    sms_missions_urgentes: true,
+    sms_codes_verification: true,
+    langue: 'fr',
+    fuseau_horaire: 'Africa/Kinshasa',
+    mode_vacances: false,
+    accepter_urgences: true
+  });
+  const [loadingSettings, setLoadingSettings] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  
+  // Password change
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
   
   // Company info state
   const [entrepriseInfo, setEntrepriseInfo] = useState<EntrepriseInfo>({
@@ -67,26 +124,53 @@ export default function ParametresPage() {
   const [savingCompanyInfo, setSavingCompanyInfo] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingSignature, setUploadingSignature] = useState(false);
+  
+  // Horaires state
+  const [horaires, setHoraires] = useState<Horaire[]>([]);
+  const [loadingHoraires, setLoadingHoraires] = useState(false);
+
+  const joursMap: Record<string, string> = {
+    'lundi': 'Lundi',
+    'mardi': 'Mardi',
+    'mercredi': 'Mercredi',
+    'jeudi': 'Jeudi',
+    'vendredi': 'Vendredi',
+    'samedi': 'Samedi',
+    'dimanche': 'Dimanche'
+  };
 
   useEffect(() => {
     if (user) {
       fetchProviderName();
       fetchEntrepriseInfo();
+      fetchHoraires();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (user && providerId) {
+      fetchSettings();
+    }
+  }, [user, providerId]);
 
   const fetchProviderName = async () => {
     if (!user) return;
     try {
       const { data } = await supabase
         .from("prestataires")
-        .select("id, full_name")
+        .select("id, full_name, disponible, verified, profile_completed")
         .eq("user_id", user.id)
         .maybeSingle();
 
       if (data) {
         setProviderName(data.full_name || "Prestataire");
         setProviderId(data.id);
+        setProfile({ 
+          id: data.id, 
+          disponible: data.disponible || false,
+          verified: data.verified || false,
+          profile_completed: data.profile_completed || false
+        });
       }
     } catch (error) {
       console.error("Error fetching provider name:", error);
@@ -99,10 +183,10 @@ export default function ParametresPage() {
     try {
       setLoadingCompanyInfo(true);
       
-      // Get prestataire ID first
+      // Get prestataire data with all fields
       const { data: prestataireData } = await supabase
         .from("prestataires")
-        .select("id")
+        .select("*")
         .eq("user_id", user.id)
         .maybeSingle();
 
@@ -119,6 +203,7 @@ export default function ParametresPage() {
         throw error;
       }
 
+      // Pre-fill with profile data if entreprise_info doesn't exist
       if (data) {
         setEntrepriseInfo({
           nom_entreprise: data.nom_entreprise || "",
@@ -130,6 +215,19 @@ export default function ParametresPage() {
           email_professionnel: data.email_professionnel || "",
           numero_fiscal: data.numero_fiscal || "",
           conditions_generales: data.conditions_generales || ""
+        });
+      } else {
+        // Pre-fill from prestataire profile (for personne morale)
+        setEntrepriseInfo({
+          nom_entreprise: prestataireData.raison_sociale || prestataireData.full_name || "",
+          logo_url: "",
+          signature_url: "",
+          adresse: prestataireData.adresse_siege || prestataireData.address || "",
+          ville: prestataireData.ville_siege || prestataireData.city || "",
+          telephone: (prestataireData as any).telephone || prestataireData.phone || "",
+          email_professionnel: prestataireData.email || "",
+          numero_fiscal: prestataireData.numero_rccm || prestataireData.numero_impot || prestataireData.numero_id_nat || "",
+          conditions_generales: ""
         });
       }
     } catch (error: any) {
@@ -163,7 +261,28 @@ export default function ParametresPage() {
         .from('company-logos')
         .getPublicUrl(filePath);
 
+      // Update local state
       setEntrepriseInfo(prev => ({ ...prev, logo_url: publicUrl }));
+
+      // Save to database
+      const { error: updateError } = await supabase
+        .from('entreprise_info')
+        .upsert({
+          prestataire_id: providerId,
+          logo_url: publicUrl,
+          nom_entreprise: entrepriseInfo.nom_entreprise,
+          adresse: entrepriseInfo.adresse,
+          ville: entrepriseInfo.ville,
+          telephone: entrepriseInfo.telephone,
+          email_professionnel: entrepriseInfo.email_professionnel,
+          numero_fiscal: entrepriseInfo.numero_fiscal,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'prestataire_id'
+        });
+
+      if (updateError) throw updateError;
+
       toast.success("Logo téléchargé avec succès");
     } catch (error: any) {
       console.error("Error uploading logo:", error);
@@ -196,7 +315,28 @@ export default function ParametresPage() {
         .from('signatures')
         .getPublicUrl(filePath);
 
+      // Update local state
       setEntrepriseInfo(prev => ({ ...prev, signature_url: publicUrl }));
+
+      // Save to database
+      const { error: updateError } = await supabase
+        .from('entreprise_info')
+        .upsert({
+          prestataire_id: providerId,
+          signature_url: publicUrl,
+          nom_entreprise: entrepriseInfo.nom_entreprise,
+          adresse: entrepriseInfo.adresse,
+          ville: entrepriseInfo.ville,
+          telephone: entrepriseInfo.telephone,
+          email_professionnel: entrepriseInfo.email_professionnel,
+          numero_fiscal: entrepriseInfo.numero_fiscal,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'prestataire_id'
+        });
+
+      if (updateError) throw updateError;
+
       toast.success("Signature téléchargée avec succès");
     } catch (error: any) {
       console.error("Error uploading signature:", error);
@@ -251,8 +391,298 @@ export default function ParametresPage() {
     }
   };
 
+  const handleToggleDisponibilite = async (checked: boolean) => {
+    if (!providerId) return;
+
+    try {
+      setUpdatingDisponibilite(true);
+
+      const { error } = await supabase
+        .from("prestataires")
+        .update({ disponible: checked })
+        .eq("id", providerId);
+
+      if (error) throw error;
+
+      setProfile(prev => prev ? { ...prev, disponible: checked } : null);
+      toast.success(checked ? "Vous êtes maintenant disponible" : "Vous êtes maintenant indisponible");
+    } catch (error: any) {
+      console.error("Error updating disponibilite:", error);
+      toast.error("Erreur lors de la mise à jour");
+    } finally {
+      setUpdatingDisponibilite(false);
+    }
+  };
+
+  const fetchHoraires = async () => {
+    if (!user) return;
+
+    try {
+      setLoadingHoraires(true);
+
+      // Get prestataire ID
+      const { data: prestataireData } = await supabase
+        .from("prestataires")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!prestataireData) return;
+
+      // Fetch horaires
+      const { data, error } = await supabase
+        .from("horaires_travail")
+        .select("*")
+        .eq("prestataire_id", prestataireData.id)
+        .order("jour_semaine");
+
+      if (error) throw error;
+
+      // Si pas d'horaires, initialiser avec les valeurs par défaut
+      if (!data || data.length === 0) {
+        await initDefaultHoraires(prestataireData.id);
+        await fetchHoraires(); // Recharger après initialisation
+        return;
+      }
+
+      // Normaliser le format des heures (enlever les secondes)
+      const normalizedData = data.map(h => ({
+        ...h,
+        heure_debut: h.heure_debut.substring(0, 5), // "08:00:00" -> "08:00"
+        heure_fin: h.heure_fin.substring(0, 5)
+      }));
+
+      setHoraires(normalizedData);
+    } catch (error: any) {
+      console.error("Error fetching horaires:", error);
+      toast.error("Erreur lors du chargement des horaires");
+    } finally {
+      setLoadingHoraires(false);
+    }
+  };
+
+  const initDefaultHoraires = async (prestataireId: string) => {
+    const defaultHoraires = [
+      { jour_semaine: 'lundi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
+      { jour_semaine: 'mardi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
+      { jour_semaine: 'mercredi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
+      { jour_semaine: 'jeudi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
+      { jour_semaine: 'vendredi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
+      { jour_semaine: 'samedi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
+      { jour_semaine: 'dimanche', actif: false, heure_debut: '08:00', heure_fin: '18:00' }
+    ];
+
+    const horairesWithId = defaultHoraires.map(h => ({
+      ...h,
+      prestataire_id: prestataireId
+    }));
+
+    const { error } = await supabase
+      .from("horaires_travail")
+      .insert(horairesWithId);
+
+    if (error) throw error;
+  };
+
+  const handleUpdateHoraire = async (jour: string, field: 'actif' | 'heure_debut' | 'heure_fin', value: any) => {
+    if (!providerId) return;
+
+    try {
+      const horaireIndex = horaires.findIndex(h => h.jour_semaine === jour);
+      if (horaireIndex === -1) return;
+
+      const updatedHoraire = { ...horaires[horaireIndex], [field]: value };
+
+      // Update in database
+      const { error } = await supabase
+        .from("horaires_travail")
+        .update({ [field]: value })
+        .eq("prestataire_id", providerId)
+        .eq("jour_semaine", jour);
+
+      if (error) throw error;
+
+      // Update local state
+      const newHoraires = [...horaires];
+      newHoraires[horaireIndex] = updatedHoraire;
+      setHoraires(newHoraires);
+
+      toast.success("Horaire mis à jour");
+    } catch (error: any) {
+      console.error("Error updating horaire:", error);
+      toast.error("Erreur lors de la mise à jour");
+    }
+  };
+
+  const fetchSettings = async () => {
+    if (!providerId) return;
+
+    try {
+      setLoadingSettings(true);
+
+      const { data, error } = await supabase
+        .from("prestataire_settings")
+        .select("*")
+        .eq("prestataire_id", providerId)
+        .maybeSingle();
+
+      if (error && error.code !== "PGRST116") throw error;
+
+      if (data) {
+        setSettings({
+          notif_nouvelles_missions: data.notif_nouvelles_missions,
+          notif_messages_clients: data.notif_messages_clients,
+          notif_maj_missions: data.notif_maj_missions,
+          notif_rappels_rdv: data.notif_rappels_rdv,
+          notif_promotions: data.notif_promotions,
+          email_resume_hebdo: data.email_resume_hebdo,
+          email_nouvelles_missions: data.email_nouvelles_missions,
+          email_paiements: data.email_paiements,
+          sms_missions_urgentes: data.sms_missions_urgentes,
+          sms_codes_verification: data.sms_codes_verification,
+          langue: data.langue,
+          fuseau_horaire: data.fuseau_horaire,
+          mode_vacances: data.mode_vacances,
+          accepter_urgences: data.accepter_urgences
+        });
+      }
+    } catch (error: any) {
+      console.error("Error fetching settings:", error);
+    } finally {
+      setLoadingSettings(false);
+    }
+  };
+
+  const handleUpdateSetting = async (key: keyof Settings, value: any) => {
+    if (!providerId) return;
+
+    try {
+      // Update local state immediately
+      setSettings(prev => ({ ...prev, [key]: value }));
+
+      // Check if settings exist
+      const { data: existing } = await supabase
+        .from("prestataire_settings")
+        .select("id")
+        .eq("prestataire_id", providerId)
+        .maybeSingle();
+
+      if (existing) {
+        // Update
+        const { error } = await supabase
+          .from("prestataire_settings")
+          .update({ [key]: value })
+          .eq("prestataire_id", providerId);
+
+        if (error) throw error;
+      } else {
+        // Insert
+        const { error } = await supabase
+          .from("prestataire_settings")
+          .insert({
+            prestataire_id: providerId,
+            [key]: value
+          });
+
+        if (error) throw error;
+      }
+
+      toast.success("Paramètre mis à jour");
+    } catch (error: any) {
+      console.error("Error updating setting:", error);
+      toast.error("Erreur lors de la mise à jour");
+      // Revert local state
+      fetchSettings();
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      toast.error("Veuillez remplir tous les champs");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error("Les mots de passe ne correspondent pas");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast.error("Le mot de passe doit contenir au moins 6 caractères");
+      return;
+    }
+
+    try {
+      setChangingPassword(true);
+
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) throw error;
+
+      toast.success("Mot de passe modifié avec succès");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error: any) {
+      console.error("Error changing password:", error);
+      toast.error(error.message || "Erreur lors du changement de mot de passe");
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const handleSavePreferences = async () => {
+    if (!providerId) return;
+
+    try {
+      setSavingSettings(true);
+
+      const { data: existing } = await supabase
+        .from("prestataire_settings")
+        .select("id")
+        .eq("prestataire_id", providerId)
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase
+          .from("prestataire_settings")
+          .update({
+            langue: settings.langue,
+            fuseau_horaire: settings.fuseau_horaire
+          })
+          .eq("prestataire_id", providerId);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("prestataire_settings")
+          .insert({
+            prestataire_id: providerId,
+            langue: settings.langue,
+            fuseau_horaire: settings.fuseau_horaire
+          });
+
+        if (error) throw error;
+      }
+
+      toast.success("Préférences enregistrées");
+    } catch (error: any) {
+      console.error("Error saving preferences:", error);
+      toast.error("Erreur lors de l'enregistrement");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   return (
-    <DashboardLayout role="prestataire" userName={providerName} userRole="Prestataire">
+    <DashboardLayout 
+      role="prestataire" 
+      userName={providerName} 
+      userRole="Prestataire"
+      isVerified={profile?.verified || false}
+      isProfileComplete={profile?.profile_completed || false}
+    >
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">Paramètres</h1>
@@ -512,92 +942,96 @@ export default function ParametresPage() {
           </TabsContent>
 
           <TabsContent value="notifications" className="space-y-6">
-            {hasChanges && (
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-blue-600" />
-                <span className="text-sm text-blue-600">Vous avez des modifications non enregistrées</span>
-                <Button size="sm" className="ml-auto" onClick={() => setShowSaveAlert(true)}>
-                  <Save className="w-4 h-4 mr-2" />
-                  Enregistrer
-                </Button>
+            {loadingSettings ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader className="w-6 h-6 animate-spin text-primary" />
               </div>
+            ) : (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Bell className="w-5 h-5" />
+                      Notifications push
+                    </CardTitle>
+                    <CardDescription>Gérez les notifications que vous recevez sur l'application</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {[
+                      { key: 'notif_nouvelles_missions', label: "Nouvelles missions disponibles", description: "Recevoir une alerte pour les nouvelles opportunités" },
+                      { key: 'notif_messages_clients', label: "Messages clients", description: "Notification pour chaque nouveau message" },
+                      { key: 'notif_maj_missions', label: "Mise à jour des missions", description: "Changements de statut de vos missions" },
+                      { key: 'notif_rappels_rdv', label: "Rappels de rendez-vous", description: "Rappel 1h avant chaque rendez-vous" },
+                      { key: 'notif_promotions', label: "Promotions KaziPro", description: "Offres spéciales et actualités" },
+                    ].map((item) => (
+                      <div key={item.key} className="flex items-center justify-between py-3 border-b border-border last:border-0">
+                        <div>
+                          <p className="font-medium">{item.label}</p>
+                          <p className="text-sm text-muted-foreground">{item.description}</p>
+                        </div>
+                        <Switch 
+                          checked={settings[item.key as keyof Settings] as boolean}
+                          onCheckedChange={(checked) => handleUpdateSetting(item.key as keyof Settings, checked)}
+                        />
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Mail className="w-5 h-5" />
+                      Notifications par email
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {[
+                      { key: 'email_resume_hebdo', label: "Résumé hebdomadaire", description: "Synthèse de votre activité chaque semaine" },
+                      { key: 'email_nouvelles_missions', label: "Nouvelles missions", description: "Email pour les missions correspondant à votre profil" },
+                      { key: 'email_paiements', label: "Paiements reçus", description: "Confirmation de réception des paiements" },
+                    ].map((item) => (
+                      <div key={item.key} className="flex items-center justify-between py-3 border-b border-border last:border-0">
+                        <div>
+                          <p className="font-medium">{item.label}</p>
+                          <p className="text-sm text-muted-foreground">{item.description}</p>
+                        </div>
+                        <Switch 
+                          checked={settings[item.key as keyof Settings] as boolean}
+                          onCheckedChange={(checked) => handleUpdateSetting(item.key as keyof Settings, checked)}
+                        />
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5" />
+                      Notifications SMS
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {[
+                      { key: 'sms_missions_urgentes', label: "Missions urgentes", description: "SMS pour les demandes urgentes uniquement" },
+                      { key: 'sms_codes_verification', label: "Codes de vérification", description: "SMS pour la sécurité du compte" },
+                    ].map((item) => (
+                      <div key={item.key} className="flex items-center justify-between py-3 border-b border-border last:border-0">
+                        <div>
+                          <p className="font-medium">{item.label}</p>
+                          <p className="text-sm text-muted-foreground">{item.description}</p>
+                        </div>
+                        <Switch 
+                          checked={settings[item.key as keyof Settings] as boolean}
+                          onCheckedChange={(checked) => handleUpdateSetting(item.key as keyof Settings, checked)}
+                        />
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </>
             )}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bell className="w-5 h-5" />
-                  Notifications push
-                </CardTitle>
-                <CardDescription>Gérez les notifications que vous recevez sur l'application</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  { label: "Nouvelles missions disponibles", description: "Recevoir une alerte pour les nouvelles opportunités", enabled: true },
-                  { label: "Messages clients", description: "Notification pour chaque nouveau message", enabled: true },
-                  { label: "Mise à jour des missions", description: "Changements de statut de vos missions", enabled: true },
-                  { label: "Rappels de rendez-vous", description: "Rappel 1h avant chaque rendez-vous", enabled: false },
-                  { label: "Promotions KaziPro", description: "Offres spéciales et actualités", enabled: false },
-                ].map((item, index) => (
-                  <div key={index} className="flex items-center justify-between py-3 border-b border-border last:border-0">
-                    <div>
-                      <p className="font-medium">{item.label}</p>
-                      <p className="text-sm text-muted-foreground">{item.description}</p>
-                    </div>
-                    <Switch 
-                      defaultChecked={item.enabled}
-                      onChange={() => setHasChanges(true)}
-                    />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Mail className="w-5 h-5" />
-                  Notifications par email
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  { label: "Résumé hebdomadaire", description: "Synthèse de votre activité chaque semaine", enabled: true },
-                  { label: "Nouvelles missions", description: "Email pour les missions correspondant à votre profil", enabled: false },
-                  { label: "Paiements reçus", description: "Confirmation de réception des paiements", enabled: true },
-                ].map((item, index) => (
-                  <div key={index} className="flex items-center justify-between py-3 border-b border-border last:border-0">
-                    <div>
-                      <p className="font-medium">{item.label}</p>
-                      <p className="text-sm text-muted-foreground">{item.description}</p>
-                    </div>
-                    <Switch defaultChecked={item.enabled} />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5" />
-                  Notifications SMS
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  { label: "Missions urgentes", description: "SMS pour les demandes urgentes uniquement", enabled: true },
-                  { label: "Codes de vérification", description: "SMS pour la sécurité du compte", enabled: true },
-                ].map((item, index) => (
-                  <div key={index} className="flex items-center justify-between py-3 border-b border-border last:border-0">
-                    <div>
-                      <p className="font-medium">{item.label}</p>
-                      <p className="text-sm text-muted-foreground">{item.description}</p>
-                    </div>
-                    <Switch defaultChecked={item.enabled} />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="security" className="space-y-6">
@@ -610,9 +1044,14 @@ export default function ParametresPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Mot de passe actuel</Label>
+                  <Label>Nouveau mot de passe</Label>
                   <div className="relative">
-                    <Input type={showPassword ? "text" : "password"} />
+                    <Input 
+                      type={showPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Minimum 6 caractères"
+                    />
                     <Button
                       type="button"
                       variant="ghost"
@@ -625,14 +1064,27 @@ export default function ParametresPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Nouveau mot de passe</Label>
-                  <Input type="password" />
-                </div>
-                <div className="space-y-2">
                   <Label>Confirmer le nouveau mot de passe</Label>
-                  <Input type="password" />
+                  <Input 
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Retapez le mot de passe"
+                  />
                 </div>
-                <Button>Mettre à jour le mot de passe</Button>
+                <Button 
+                  onClick={handleChangePassword}
+                  disabled={changingPassword || !newPassword || !confirmPassword}
+                >
+                  {changingPassword ? (
+                    <>
+                      <Loader className="w-4 h-4 mr-2 animate-spin" />
+                      Mise à jour...
+                    </>
+                  ) : (
+                    "Mettre à jour le mot de passe"
+                  )}
+                </Button>
               </CardContent>
             </Card>
 
@@ -642,7 +1094,7 @@ export default function ParametresPage() {
                   <Shield className="w-5 h-5" />
                   Authentification à deux facteurs
                 </CardTitle>
-                <CardDescription>Ajoutez une couche de sécurité supplémentaire</CardDescription>
+                <CardDescription>Ajoutez une couche de sécurité supplémentaire (Bientôt disponible)</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -650,7 +1102,7 @@ export default function ParametresPage() {
                     <p className="font-medium">Activer la 2FA</p>
                     <p className="text-sm text-muted-foreground">Via SMS ou application d'authentification</p>
                   </div>
-                  <Switch />
+                  <Switch disabled />
                 </div>
               </CardContent>
             </Card>
@@ -760,6 +1212,41 @@ export default function ParametresPage() {
           </TabsContent>
 
           <TabsContent value="availability" className="space-y-6">
+            {/* Disponibilité globale */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="w-5 h-5" />
+                  Disponibilité générale
+                </CardTitle>
+                <CardDescription>
+                  Activez ou désactivez votre disponibilité pour recevoir de nouvelles demandes
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-muted/30">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-3 h-3 rounded-full ${profile?.disponible ? 'bg-green-500' : 'bg-gray-400'}`} />
+                    <div>
+                      <p className="font-medium">
+                        {profile?.disponible ? 'Vous êtes disponible' : 'Vous êtes indisponible'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {profile?.disponible 
+                          ? 'Les clients peuvent vous contacter et vous envoyer des demandes'
+                          : 'Vous ne recevrez pas de nouvelles demandes'}
+                      </p>
+                    </div>
+                  </div>
+                  <Switch 
+                    checked={profile?.disponible || false}
+                    onCheckedChange={handleToggleDisponibilite}
+                    disabled={updatingDisponibilite}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -769,41 +1256,60 @@ export default function ParametresPage() {
                 <CardDescription>Définissez vos heures de disponibilité</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"].map((day) => (
-                  <div key={day} className="flex items-center justify-between py-2">
-                    <div className="flex items-center gap-4 w-32">
-                      <Switch defaultChecked={day !== "Dimanche"} />
-                      <span className="font-medium">{day}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Select defaultValue="08:00">
-                        <SelectTrigger className="w-24">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 24 }, (_, i) => (
-                            <SelectItem key={i} value={`${i.toString().padStart(2, "0")}:00`}>
-                              {`${i.toString().padStart(2, "0")}:00`}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <span>à</span>
-                      <Select defaultValue="18:00">
-                        <SelectTrigger className="w-24">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 24 }, (_, i) => (
-                            <SelectItem key={i} value={`${i.toString().padStart(2, "0")}:00`}>
-                              {`${i.toString().padStart(2, "0")}:00`}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                {loadingHoraires ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader className="w-6 h-6 animate-spin text-primary" />
                   </div>
-                ))}
+                ) : (
+                  <>
+                    {horaires.map((horaire) => (
+                      <div key={horaire.jour_semaine} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                        <div className="flex items-center gap-4 w-32">
+                          <Switch 
+                            checked={horaire.actif}
+                            onCheckedChange={(checked) => handleUpdateHoraire(horaire.jour_semaine, 'actif', checked)}
+                          />
+                          <span className="font-medium">{joursMap[horaire.jour_semaine]}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Select 
+                            value={horaire.heure_debut} 
+                            onValueChange={(value) => handleUpdateHoraire(horaire.jour_semaine, 'heure_debut', value)}
+                            disabled={!horaire.actif}
+                          >
+                            <SelectTrigger className="w-24">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 24 }, (_, i) => (
+                                <SelectItem key={i} value={`${i.toString().padStart(2, "0")}:00`}>
+                                  {`${i.toString().padStart(2, "0")}:00`}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <span>à</span>
+                          <Select 
+                            value={horaire.heure_fin}
+                            onValueChange={(value) => handleUpdateHoraire(horaire.jour_semaine, 'heure_fin', value)}
+                            disabled={!horaire.actif}
+                          >
+                            <SelectTrigger className="w-24">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 24 }, (_, i) => (
+                                <SelectItem key={i} value={`${i.toString().padStart(2, "0")}:00`}>
+                                  {`${i.toString().padStart(2, "0")}:00`}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -817,14 +1323,20 @@ export default function ParametresPage() {
                     <p className="font-medium">Mode vacances</p>
                     <p className="text-sm text-muted-foreground">Désactiver temporairement la réception de nouvelles demandes</p>
                   </div>
-                  <Switch />
+                  <Switch 
+                    checked={settings.mode_vacances}
+                    onCheckedChange={(checked) => handleUpdateSetting('mode_vacances', checked)}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">Accepter les missions urgentes</p>
                     <p className="text-sm text-muted-foreground">Recevoir les demandes marquées comme urgentes</p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch 
+                    checked={settings.accepter_urgences}
+                    onCheckedChange={(checked) => handleUpdateSetting('accepter_urgences', checked)}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -842,7 +1354,10 @@ export default function ParametresPage() {
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Langue</Label>
-                    <Select defaultValue="fr">
+                    <Select 
+                      value={settings.langue}
+                      onValueChange={(value) => setSettings(prev => ({ ...prev, langue: value }))}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -856,16 +1371,37 @@ export default function ParametresPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>Fuseau horaire</Label>
-                    <Select defaultValue="africa-kinshasa">
+                    <Select 
+                      value={settings.fuseau_horaire}
+                      onValueChange={(value) => setSettings(prev => ({ ...prev, fuseau_horaire: value }))}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="africa-kinshasa">Afrique/Kinshasa (UTC+1)</SelectItem>
-                        <SelectItem value="africa-lubumbashi">Afrique/Lubumbashi (UTC+2)</SelectItem>
+                        <SelectItem value="Africa/Kinshasa">Afrique/Kinshasa (UTC+1)</SelectItem>
+                        <SelectItem value="Africa/Lubumbashi">Afrique/Lubumbashi (UTC+2)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+                <div className="flex justify-end pt-4 border-t">
+                  <Button 
+                    onClick={handleSavePreferences}
+                    disabled={savingSettings}
+                  >
+                    {savingSettings ? (
+                      <>
+                        <Loader className="w-4 h-4 mr-2 animate-spin" />
+                        Enregistrement...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4 mr-2" />
+                        Enregistrer
+                      </>
+                    )}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -883,55 +1419,19 @@ export default function ParametresPage() {
                     <p className="font-medium">Désactiver le compte</p>
                     <p className="text-sm text-muted-foreground">Votre compte sera temporairement invisible</p>
                   </div>
-                  <Button variant="outline">Désactiver</Button>
+                  <Button variant="outline" disabled>Désactiver</Button>
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">Supprimer le compte</p>
                     <p className="text-sm text-muted-foreground">Cette action est irréversible</p>
                   </div>
-                  <Button variant="destructive">Supprimer</Button>
+                  <Button variant="destructive" disabled>Supprimer</Button>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
-
-        {/* Save Confirmation Modal */}
-        {showSaveAlert && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-md">
-              <CardHeader>
-                <CardTitle>Enregistrer les modifications</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Êtes-vous sûr de vouloir enregistrer toutes vos modifications ?
-                </p>
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    className="flex-1"
-                    onClick={() => setShowSaveAlert(false)}
-                  >
-                    Annuler
-                  </Button>
-                  <Button 
-                    className="flex-1"
-                    onClick={() => {
-                      setShowSaveAlert(false);
-                      setHasChanges(false);
-                      alert("Paramètres enregistrés avec succès !");
-                    }}
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Enregistrer
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
       </div>
     </DashboardLayout>
   );

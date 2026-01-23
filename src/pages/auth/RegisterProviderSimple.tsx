@@ -9,9 +9,9 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
 
-const RegisterClient = () => {
+const RegisterProviderSimple = () => {
   const navigate = useNavigate();
-  const { signUp } = useAuth();
+  // const { signUp } = useAuth(); // Plus utilisé - on utilise directement supabase.auth.signUp
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -53,10 +53,6 @@ const RegisterClient = () => {
       toast.error("Les mots de passe ne correspondent pas");
       return false;
     }
-    if (!formData.city.trim()) {
-      toast.error("La ville est requise");
-      return false;
-    }
     return true;
   };
 
@@ -68,29 +64,43 @@ const RegisterClient = () => {
     try {
       setLoading(true);
       
-      // Créer le compte Supabase avec OTP
-      await signUp(formData.email, formData.password, "client");
+      // Créer le compte Supabase
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: { role: "prestataire" }
+        }
+      });
       
-      // Créer le profil client (avant vérification OTP)
-      // Note: On utilise l'email comme identifiant temporaire
+      if (authError) throw authError;
+
+      if (!authData.user) {
+        throw new Error("Erreur lors de la création du compte");
+      }
+
+      // Créer le profil prestataire avec profile_completed = false
       const { error: profileError } = await supabase
-        .from("clients")
+        .from("prestataires")
         .insert([
           {
+            user_id: authData.user.id,
             email: formData.email,
             full_name: formData.fullName,
-            city: formData.city,
+            city: formData.city || null,
+            profession: "À définir",
             verified: false,
+            profile_completed: false,
           }
         ]);
       
       if (profileError) {
         console.warn("Profile creation warning:", profileError);
-        // On continue même si la création du profil échoue
       }
       
-      toast.success("Code OTP envoyé à votre email !");
-      navigate("/auth/verify-otp", { state: { email: formData.email } });
+      toast.success("Compte créé avec succès ! Redirection vers votre dashboard...");
+      // Redirection directe vers le dashboard
+      navigate("/dashboard/prestataire");
     } catch (error: any) {
       toast.error(error.message || "Erreur lors de l'inscription");
     } finally {
@@ -116,10 +126,10 @@ const RegisterClient = () => {
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-2xl lg:text-3xl font-display font-bold text-foreground mb-2">
-              Créer un compte client
+              Devenir prestataire
             </h1>
             <p className="text-muted-foreground">
-              Rejoignez KaziPro et trouvez les meilleurs prestataires
+              Créez votre compte et complétez votre profil ensuite
             </p>
           </div>
 
@@ -165,7 +175,7 @@ const RegisterClient = () => {
 
             {/* City */}
             <div className="space-y-2">
-              <Label htmlFor="city">Ville</Label>
+              <Label htmlFor="city">Ville (optionnel)</Label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
@@ -176,7 +186,6 @@ const RegisterClient = () => {
                   value={formData.city}
                   onChange={handleChange}
                   className="pl-10 h-12"
-                  required
                   disabled={loading}
                 />
               </div>
@@ -244,7 +253,7 @@ const RegisterClient = () => {
               className="w-full group mt-6"
               disabled={loading}
             >
-              {loading ? "Inscription en cours..." : "S'inscrire"}
+              {loading ? "Inscription en cours..." : "Créer mon compte"}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Button>
           </form>
@@ -260,7 +269,14 @@ const RegisterClient = () => {
           </div>
 
           {/* Google Auth Button */}
-          <GoogleAuthButton mode="signup-client" />
+          <GoogleAuthButton mode="signup-provider" />
+
+          {/* Info */}
+          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+            <p className="text-sm text-blue-900 dark:text-blue-100">
+              💡 Après l'inscription, vous pourrez compléter votre profil avec vos informations professionnelles
+            </p>
+          </div>
 
           {/* Login Link */}
           <p className="mt-6 text-center text-muted-foreground">
@@ -270,11 +286,11 @@ const RegisterClient = () => {
             </Link>
           </p>
 
-          {/* Register as Provider Link */}
+          {/* Register as Client Link */}
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            Vous êtes prestataire ?{" "}
-            <Link to="/inscription/prestataire" className="text-secondary font-medium hover:underline">
-              S'inscrire comme prestataire
+            Vous êtes client ?{" "}
+            <Link to="/inscription/client" className="text-secondary font-medium hover:underline">
+              S'inscrire comme client
             </Link>
           </p>
         </div>
@@ -289,15 +305,35 @@ const RegisterClient = () => {
         
         <div className="relative text-primary-foreground text-center max-w-md">
           <h2 className="text-3xl font-display font-bold mb-4">
-            Trouvez les meilleurs prestataires
+            Rejoignez notre réseau de professionnels
           </h2>
-          <p className="text-primary-foreground/70">
-            Rejoignez des milliers de clients satisfaits qui font confiance à KaziPro pour leurs besoins en services.
+          <p className="text-primary-foreground/70 mb-6">
+            Inscription rapide en 2 minutes. Complétez votre profil ensuite pour commencer à recevoir des opportunités.
           </p>
+          <div className="space-y-3 text-left">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center">
+                <span className="text-sm font-bold">1</span>
+              </div>
+              <span>Créez votre compte</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center">
+                <span className="text-sm font-bold">2</span>
+              </div>
+              <span>Complétez votre profil</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center">
+                <span className="text-sm font-bold">3</span>
+              </div>
+              <span>Recevez des opportunités</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-export default RegisterClient;
+export default RegisterProviderSimple;

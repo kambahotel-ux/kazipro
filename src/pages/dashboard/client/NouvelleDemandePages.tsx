@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ const communes = [
 
 export default function NouvelleDemandePages() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [clientName, setClientName] = useState("Client");
   const [step, setStep] = useState(1);
@@ -59,7 +60,13 @@ export default function NouvelleDemandePages() {
     if (user) {
       fetchClientName();
     }
-  }, [user]);
+    
+    // Pré-sélectionner un prestataire si l'ID est dans l'URL
+    const prestataireId = searchParams.get("prestataire");
+    if (prestataireId) {
+      loadPreselectedProvider(prestataireId);
+    }
+  }, [user, searchParams]);
 
   useEffect(() => {
     if (formData.type === "directe" && formData.service) {
@@ -136,6 +143,34 @@ export default function NouvelleDemandePages() {
       setAvailableProviders(data || []);
     } catch (error) {
       console.error("Error loading providers:", error);
+    }
+  };
+
+  const loadPreselectedProvider = async (prestataireId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("prestataires")
+        .select("id, full_name, profession, bio, rating, verified, created_at")
+        .eq("id", prestataireId)
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      if (data) {
+        // Passer en mode demande directe
+        setFormData(prev => ({ 
+          ...prev, 
+          type: "directe",
+          service: data.profession // Pré-remplir le service
+        }));
+        
+        // Pré-sélectionner le prestataire
+        setSelectedProviders([data]);
+        
+        toast.success(`${data.full_name} a été pré-sélectionné pour votre demande`);
+      }
+    } catch (error) {
+      console.error("Error loading preselected provider:", error);
     }
   };
 

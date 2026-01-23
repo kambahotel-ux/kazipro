@@ -4,7 +4,7 @@ import { StatsCard } from "@/components/dashboard/StatsCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Clock, CheckCircle, Plus, ArrowRight, Loader2 } from "lucide-react";
+import { FileText, Clock, CheckCircle, Plus, ArrowRight, Loader2, Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -102,12 +102,20 @@ export default function ClientDashboard() {
             <h1 className="text-2xl font-bold">Bonjour, {clientName} 👋</h1>
             <p className="text-muted-foreground">Voici un aperçu de vos demandes de service</p>
           </div>
-          <Button asChild>
-            <Link to="/services">
-              <Plus className="w-4 h-4 mr-2" />
-              Nouvelle demande
-            </Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" asChild>
+              <Link to="/dashboard/client/recherche">
+                <Search className="w-4 h-4 mr-2" />
+                Trouver un prestataire
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link to="/services">
+                <Plus className="w-4 h-4 mr-2" />
+                Nouvelle demande
+              </Link>
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -178,6 +186,12 @@ export default function ClientDashboard() {
               <CardTitle className="text-lg">Actions rapides</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3">
+              <Button variant="outline" className="h-auto py-4 flex-col" asChild>
+                <Link to="/dashboard/client/recherche">
+                  <Search className="w-5 h-5 mb-2" />
+                  <span className="text-sm">Trouver un prestataire</span>
+                </Link>
+              </Button>
               <Button variant="outline" className="h-auto py-4 flex-col" asChild>
                 <Link to="/services">
                   <Plus className="w-5 h-5 mb-2" />

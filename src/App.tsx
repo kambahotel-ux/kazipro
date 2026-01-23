@@ -13,9 +13,11 @@ import About from "./pages/About";
 import Login from "./pages/auth/Login";
 import RegisterClient from "./pages/auth/RegisterClient";
 import RegisterProvider from "./pages/auth/RegisterProvider";
+import RegisterProviderSimple from "./pages/auth/RegisterProviderSimple";
 import RegisterProviderSteps from "./pages/auth/RegisterProviderSteps";
 import VerifyOTP from "./pages/auth/VerifyOTP";
-import ProviderPending from "./pages/auth/ProviderPending";
+// import ProviderPending from "./pages/auth/ProviderPending"; // Obsolète - plus utilisé
+import AuthCallback from "./pages/auth/AuthCallback";
 import ClientDashboard from "./pages/dashboard/client/ClientDashboard";
 import DemandesPage from "./pages/dashboard/client/DemandesPage";
 import NouvelleDemandePages from "./pages/dashboard/client/NouvelleDemandePages";
@@ -24,7 +26,10 @@ import PaiementsPage from "./pages/dashboard/client/PaiementsPage";
 import AvisPage from "./pages/dashboard/client/AvisPage";
 import ClientMessagesPage from "./pages/dashboard/client/MessagesPage";
 import ClientParametresPage from "./pages/dashboard/client/ParametresPage";
+import PrestataireProfilPage from "./pages/dashboard/client/PrestataireProfilPage";
+import RecherchePrestatairesPage from "./pages/dashboard/client/RecherchePrestatairesPage";
 import PrestataireDashboard from "./pages/dashboard/prestataire/PrestataireDashboard";
+import CompleterProfil from "./pages/dashboard/prestataire/CompleterProfil";
 import OpportunitesPage from "./pages/dashboard/prestataire/OpportunitesPage";
 import DemandeDetailPage from "./pages/dashboard/prestataire/DemandeDetailPage";
 import CreerDevisPage from "./pages/dashboard/prestataire/CreerDevisPage";
@@ -63,10 +68,13 @@ const App = () => (
           <Route path="/a-propos" element={<About />} />
           <Route path="/connexion" element={<Login />} />
           <Route path="/inscription/client" element={<RegisterClient />} />
-          <Route path="/inscription/prestataire" element={<RegisterProviderSteps />} />
-          <Route path="/inscription/prestataire/simple" element={<RegisterProvider />} />
+          <Route path="/inscription/prestataire" element={<RegisterProviderSimple />} />
+          <Route path="/inscription/prestataire/complete" element={<RegisterProvider />} />
+          <Route path="/inscription/prestataire/steps" element={<RegisterProviderSteps />} />
           <Route path="/auth/verify-otp" element={<VerifyOTP />} />
-          <Route path="/prestataire/en-attente" element={<ProviderPending />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          {/* Route obsolète - Les prestataires vont directement au dashboard */}
+          {/* <Route path="/prestataire/en-attente" element={<ProviderPending />} /> */}
           
           {/* Dashboard routes */}
           <Route path="/dashboard/client" element={<ProtectedRoute><ClientDashboard /></ProtectedRoute>} />
@@ -77,9 +85,12 @@ const App = () => (
           <Route path="/dashboard/client/avis" element={<ProtectedRoute><AvisPage /></ProtectedRoute>} />
           <Route path="/dashboard/client/messages" element={<ProtectedRoute><ClientMessagesPage /></ProtectedRoute>} />
           <Route path="/dashboard/client/parametres" element={<ProtectedRoute><ClientParametresPage /></ProtectedRoute>} />
+          <Route path="/dashboard/client/recherche" element={<ProtectedRoute><RecherchePrestatairesPage /></ProtectedRoute>} />
+          <Route path="/dashboard/client/prestataire/:id" element={<ProtectedRoute><PrestataireProfilPage /></ProtectedRoute>} />
           
           {/* Prestataire Dashboard routes */}
           <Route path="/dashboard/prestataire" element={<ProtectedRoute><PrestataireDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/prestataire/completer-profil" element={<ProtectedRoute><CompleterProfil /></ProtectedRoute>} />
           <Route path="/dashboard/prestataire/opportunites" element={<ProtectedRoute><OpportunitesPage /></ProtectedRoute>} />
           <Route path="/dashboard/prestataire/demandes/:id" element={<ProtectedRoute><DemandeDetailPage /></ProtectedRoute>} />
           <Route path="/dashboard/prestataire/devis/nouveau/:demandeId" element={<ProtectedRoute><CreerDevisPage /></ProtectedRoute>} />

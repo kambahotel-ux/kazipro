@@ -1,0 +1,240 @@
+📱 GUIDE DE TEST MOBILE - KAZIPRO
+==================================
+
+🎯 OBJECTIF
+-----------
+Vérifier que l'application fonctionne parfaitement sur tous les appareils mobiles.
+
+🔧 OUTILS DE TEST
+-----------------
+
+1. CHROME DEVTOOLS (Recommandé)
+   - Ouvrir Chrome
+   - F12 ou Clic droit → Inspecter
+   - Ctrl+Shift+M (Toggle device toolbar)
+   - Sélectionner un appareil dans la liste
+
+2. FIREFOX RESPONSIVE MODE
+   - Ouvrir Firefox
+   - F12 → Responsive Design Mode
+   - Ctrl+Shift+M
+
+3. SAFARI (Mac uniquement)
+   - Develop → Enter Responsive Design Mode
+
+📱 APPAREILS À TESTER
+---------------------
+
+SMARTPHONES (Portrait 375px - 430px)
+✓ iPhone SE (375 x 667)
+✓ iPhone 12/13 (390 x 844)
+✓ iPhone 14 Pro Max (430 x 932)
+✓ Samsung Galaxy S20 (360 x 800)
+✓ Pixel 5 (393 x 851)
+
+TABLETTES (768px - 1024px)
+✓ iPad Mini (768 x 1024)
+✓ iPad Air (820 x 1180)
+✓ iPad Pro (1024 x 1366)
+
+DESKTOP (1280px+)
+✓ Laptop (1280 x 720)
+✓ Desktop (1920 x 1080)
+
+📋 CHECKLIST PAR PAGE
+---------------------
+
+1. PAGE D'ACCUEIL (/)
+   ✓ Header responsive avec menu hamburger
+   ✓ Hero section lisible
+   ✓ Cartes de services en grille adaptative
+   ✓ Footer empilé verticalement
+   ✓ Boutons CTA pleine largeur sur mobile
+
+2. CONNEXION/INSCRIPTION
+   ✓ Formulaires centrés et lisibles
+   ✓ Inputs de taille confortable (min 44px hauteur)
+   ✓ Boutons pleine largeur
+   ✓ Pas de débordement horizontal
+   ✓ Clavier mobile ne cache pas les champs
+
+3. DASHBOARD CLIENT
+   ✓ Menu hamburger fonctionnel
+   ✓ Stats cards: 1 colonne mobile, 2 tablette, 4 desktop
+   ✓ Boutons d'action empilés sur mobile
+   ✓ Cartes de demandes scrollables
+   ✓ Navigation latérale en drawer sur mobile
+
+4. DASHBOARD PRESTATAIRE
+   ✓ Toggle disponibilité accessible
+   ✓ Stats cards adaptatives
+   ✓ Opportunités et missions en colonnes
+   ✓ Calendrier responsive
+   ✓ Profil éditable sur mobile
+
+5. PAGE PARAMÈTRES (CRITIQUE)
+   ✓ Onglets wrappés sur plusieurs lignes
+   ✓ Upload logo/signature vertical sur mobile
+   ✓ Formulaires en 1 colonne sur mobile
+   ✓ Switches alignés correctement
+   ✓ Horaires de travail lisibles
+   ✓ Selects de taille confortable
+   ✓ Boutons "Enregistrer" pleine largeur
+
+6. RECHERCHE PRESTATAIRES
+   ✓ Filtres accessibles
+   ✓ Cartes prestataires empilées
+   ✓ Photos de profil bien dimensionnées
+   ✓ Boutons d'action visibles
+
+7. CRÉATION DEMANDE
+   ✓ Formulaire multi-étapes clair
+   ✓ Champs de saisie confortables
+   ✓ Boutons navigation visibles
+   ✓ Upload de fichiers fonctionnel
+
+🧪 TESTS FONCTIONNELS
+---------------------
+
+NAVIGATION
+✓ Menu hamburger s'ouvre/ferme
+✓ Liens cliquables (min 44x44px)
+✓ Retour arrière fonctionne
+✓ Scroll fluide
+
+FORMULAIRES
+✓ Tous les champs accessibles
+✓ Clavier adapté (email, tel, number)
+✓ Validation visible
+✓ Messages d'erreur lisibles
+✓ Boutons submit accessibles
+
+INTERACTIONS
+✓ Switches togglent correctement
+✓ Selects s'ouvrent en plein écran
+✓ Modales/Dialogs adaptées
+✓ Toasts visibles
+✓ Loading states clairs
+
+CONTENU
+✓ Texte lisible sans zoom
+✓ Images adaptées
+✓ Pas de débordement
+✓ Scroll vertical uniquement
+✓ Espacement confortable
+
+⚡ TESTS DE PERFORMANCE
+-----------------------
+
+VITESSE
+✓ Chargement initial < 3s
+✓ Navigation fluide
+✓ Pas de lag au scroll
+✓ Animations smooth
+
+TOUCH
+✓ Tap responsive
+✓ Swipe fonctionnel (drawer)
+✓ Pinch zoom désactivé (viewport)
+✓ Double tap désactivé
+
+🐛 PROBLÈMES COURANTS À VÉRIFIER
+---------------------------------
+
+1. DÉBORDEMENT HORIZONTAL
+   ❌ Scroll horizontal visible
+   ✅ Tout le contenu dans le viewport
+
+2. TEXTE TROP PETIT
+   ❌ Texte < 14px sur mobile
+   ✅ Texte ≥ 14px (text-sm minimum)
+
+3. BOUTONS TROP PETITS
+   ❌ Boutons < 44x44px
+   ✅ Boutons ≥ 44x44px
+
+4. IMAGES DÉFORMÉES
+   ❌ Images étirées ou coupées
+   ✅ Images proportionnelles (object-cover/contain)
+
+5. FORMULAIRES INACCESSIBLES
+   ❌ Champs cachés par le clavier
+   ✅ Scroll automatique vers le champ actif
+
+6. NAVIGATION CASSÉE
+   ❌ Menu ne s'ouvre pas
+   ✅ Drawer/Sheet fonctionnel
+
+📊 RAPPORT DE TEST
+------------------
+
+Pour chaque appareil testé, vérifier:
+
+APPAREIL: [Nom]
+RÉSOLUTION: [Largeur x Hauteur]
+ORIENTATION: [Portrait/Paysage]
+
+✓ Navigation fonctionnelle
+✓ Formulaires utilisables
+✓ Contenu lisible
+✓ Interactions fluides
+✓ Pas de bugs visuels
+
+PROBLÈMES TROUVÉS:
+- [Décrire le problème]
+- [Page concernée]
+- [Capture d'écran si possible]
+
+🎯 CRITÈRES DE VALIDATION
+--------------------------
+
+L'application est considérée comme "Mobile Ready" si:
+
+✅ Tous les tests passent sur iPhone SE (375px)
+✅ Navigation fluide sur tous les appareils
+✅ Aucun débordement horizontal
+✅ Tous les boutons cliquables facilement
+✅ Formulaires entièrement utilisables
+✅ Texte lisible sans zoom
+✅ Images bien dimensionnées
+✅ Performance acceptable (< 3s chargement)
+
+🚀 COMMANDES UTILES
+-------------------
+
+# Lancer en mode dev
+npm run dev
+
+# Build production
+npm run build
+
+# Preview du build
+npm run preview
+
+# Ouvrir sur réseau local (pour test mobile réel)
+npm run dev -- --host
+
+Puis accéder depuis le mobile via:
+http://[IP-DE-VOTRE-PC]:5173
+
+💡 ASTUCES
+----------
+
+1. Tester en mode portrait ET paysage
+2. Vérifier avec connexion lente (Chrome DevTools → Network → Slow 3G)
+3. Tester avec différentes tailles de police (Paramètres navigateur)
+4. Vérifier l'accessibilité (Lighthouse dans Chrome DevTools)
+5. Tester les interactions tactiles (pas seulement la souris)
+
+✅ RÉSULTAT ATTENDU
+-------------------
+
+Après ces tests, l'application doit être:
+- 📱 Parfaitement utilisable sur smartphone
+- 📱 Optimisée pour tablette
+- 💻 Excellente sur desktop
+- ⚡ Rapide et fluide
+- 🎨 Visuellement cohérente
+- ♿ Accessible à tous
+
+Bonne chance avec les tests! 🚀

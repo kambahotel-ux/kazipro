@@ -690,13 +690,13 @@ export default function ParametresPage() {
         </div>
 
         <Tabs defaultValue="company" className="space-y-4">
-          <TabsList className="flex-wrap">
-            <TabsTrigger value="company">Entreprise</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            <TabsTrigger value="security">Sécurité</TabsTrigger>
-            <TabsTrigger value="payments">Paiements</TabsTrigger>
-            <TabsTrigger value="availability">Disponibilité</TabsTrigger>
-            <TabsTrigger value="preferences">Préférences</TabsTrigger>
+          <TabsList className="w-full flex-wrap justify-start gap-1 h-auto p-1">
+            <TabsTrigger value="company" className="text-xs sm:text-sm px-2 sm:px-3">Entreprise</TabsTrigger>
+            <TabsTrigger value="notifications" className="text-xs sm:text-sm px-2 sm:px-3">Notifications</TabsTrigger>
+            <TabsTrigger value="security" className="text-xs sm:text-sm px-2 sm:px-3">Sécurité</TabsTrigger>
+            <TabsTrigger value="payments" className="text-xs sm:text-sm px-2 sm:px-3">Paiements</TabsTrigger>
+            <TabsTrigger value="availability" className="text-xs sm:text-sm px-2 sm:px-3">Disponibilité</TabsTrigger>
+            <TabsTrigger value="preferences" className="text-xs sm:text-sm px-2 sm:px-3">Préférences</TabsTrigger>
           </TabsList>
 
           <TabsContent value="company" className="space-y-6">
@@ -720,9 +720,9 @@ export default function ParametresPage() {
                     {/* Logo Upload */}
                     <div className="space-y-3">
                       <Label>Logo de l'entreprise</Label>
-                      <div className="flex items-center gap-4">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                         {entrepriseInfo.logo_url ? (
-                          <div className="relative w-24 h-24 border-2 border-border rounded-lg overflow-hidden">
+                          <div className="relative w-24 h-24 border-2 border-border rounded-lg overflow-hidden flex-shrink-0">
                             <img 
                               src={entrepriseInfo.logo_url} 
                               alt="Logo" 
@@ -730,11 +730,11 @@ export default function ParametresPage() {
                             />
                           </div>
                         ) : (
-                          <div className="w-24 h-24 border-2 border-dashed border-border rounded-lg flex items-center justify-center bg-muted">
+                          <div className="w-24 h-24 border-2 border-dashed border-border rounded-lg flex items-center justify-center bg-muted flex-shrink-0">
                             <Building2 className="w-8 h-8 text-muted-foreground" />
                           </div>
                         )}
-                        <div className="flex-1">
+                        <div className="flex-1 w-full sm:w-auto">
                           <input
                             type="file"
                             id="logo-upload"
@@ -747,6 +747,7 @@ export default function ParametresPage() {
                             variant="outline"
                             onClick={() => document.getElementById('logo-upload')?.click()}
                             disabled={uploadingLogo}
+                            className="w-full sm:w-auto"
                           >
                             {uploadingLogo ? (
                               <>
@@ -770,9 +771,9 @@ export default function ParametresPage() {
                     {/* Signature Upload */}
                     <div className="space-y-3">
                       <Label>Signature du prestataire</Label>
-                      <div className="flex items-center gap-4">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                         {entrepriseInfo.signature_url ? (
-                          <div className="relative w-32 h-20 border-2 border-border rounded-lg overflow-hidden bg-white">
+                          <div className="relative w-32 h-20 border-2 border-border rounded-lg overflow-hidden bg-white flex-shrink-0">
                             <img 
                               src={entrepriseInfo.signature_url} 
                               alt="Signature" 
@@ -780,11 +781,11 @@ export default function ParametresPage() {
                             />
                           </div>
                         ) : (
-                          <div className="w-32 h-20 border-2 border-dashed border-border rounded-lg flex items-center justify-center bg-muted">
+                          <div className="w-32 h-20 border-2 border-dashed border-border rounded-lg flex items-center justify-center bg-muted flex-shrink-0">
                             <span className="text-xs text-muted-foreground">Signature</span>
                           </div>
                         )}
-                        <div className="flex-1">
+                        <div className="flex-1 w-full sm:w-auto">
                           <input
                             type="file"
                             id="signature-upload"
@@ -797,6 +798,7 @@ export default function ParametresPage() {
                             variant="outline"
                             onClick={() => document.getElementById('signature-upload')?.click()}
                             disabled={uploadingSignature}
+                            className="w-full sm:w-auto"
                           >
                             {uploadingSignature ? (
                               <>
@@ -904,6 +906,7 @@ export default function ParametresPage() {
                       <Button 
                         onClick={handleSaveCompanyInfo}
                         disabled={savingCompanyInfo || !entrepriseInfo.nom_entreprise}
+                        className="w-full sm:w-auto"
                       >
                         {savingCompanyInfo ? (
                           <>
@@ -964,14 +967,15 @@ export default function ParametresPage() {
                       { key: 'notif_rappels_rdv', label: "Rappels de rendez-vous", description: "Rappel 1h avant chaque rendez-vous" },
                       { key: 'notif_promotions', label: "Promotions KaziPro", description: "Offres spéciales et actualités" },
                     ].map((item) => (
-                      <div key={item.key} className="flex items-center justify-between py-3 border-b border-border last:border-0">
-                        <div>
-                          <p className="font-medium">{item.label}</p>
-                          <p className="text-sm text-muted-foreground">{item.description}</p>
+                      <div key={item.key} className="flex flex-col sm:flex-row sm:items-center justify-between py-3 border-b border-border last:border-0 gap-2">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm sm:text-base">{item.label}</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground">{item.description}</p>
                         </div>
                         <Switch 
                           checked={settings[item.key as keyof Settings] as boolean}
                           onCheckedChange={(checked) => handleUpdateSetting(item.key as keyof Settings, checked)}
+                          className="self-start sm:self-center"
                         />
                       </div>
                     ))}
@@ -991,14 +995,15 @@ export default function ParametresPage() {
                       { key: 'email_nouvelles_missions', label: "Nouvelles missions", description: "Email pour les missions correspondant à votre profil" },
                       { key: 'email_paiements', label: "Paiements reçus", description: "Confirmation de réception des paiements" },
                     ].map((item) => (
-                      <div key={item.key} className="flex items-center justify-between py-3 border-b border-border last:border-0">
-                        <div>
-                          <p className="font-medium">{item.label}</p>
-                          <p className="text-sm text-muted-foreground">{item.description}</p>
+                      <div key={item.key} className="flex flex-col sm:flex-row sm:items-center justify-between py-3 border-b border-border last:border-0 gap-2">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm sm:text-base">{item.label}</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground">{item.description}</p>
                         </div>
                         <Switch 
                           checked={settings[item.key as keyof Settings] as boolean}
                           onCheckedChange={(checked) => handleUpdateSetting(item.key as keyof Settings, checked)}
+                          className="self-start sm:self-center"
                         />
                       </div>
                     ))}
@@ -1017,14 +1022,15 @@ export default function ParametresPage() {
                       { key: 'sms_missions_urgentes', label: "Missions urgentes", description: "SMS pour les demandes urgentes uniquement" },
                       { key: 'sms_codes_verification', label: "Codes de vérification", description: "SMS pour la sécurité du compte" },
                     ].map((item) => (
-                      <div key={item.key} className="flex items-center justify-between py-3 border-b border-border last:border-0">
-                        <div>
-                          <p className="font-medium">{item.label}</p>
-                          <p className="text-sm text-muted-foreground">{item.description}</p>
+                      <div key={item.key} className="flex flex-col sm:flex-row sm:items-center justify-between py-3 border-b border-border last:border-0 gap-2">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm sm:text-base">{item.label}</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground">{item.description}</p>
                         </div>
                         <Switch 
                           checked={settings[item.key as keyof Settings] as boolean}
                           onCheckedChange={(checked) => handleUpdateSetting(item.key as keyof Settings, checked)}
+                          className="self-start sm:self-center"
                         />
                       </div>
                     ))}
@@ -1263,21 +1269,21 @@ export default function ParametresPage() {
                 ) : (
                   <>
                     {horaires.map((horaire) => (
-                      <div key={horaire.jour_semaine} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                        <div className="flex items-center gap-4 w-32">
+                      <div key={horaire.jour_semaine} className="flex flex-col sm:flex-row sm:items-center justify-between py-3 border-b border-border last:border-0 gap-3">
+                        <div className="flex items-center gap-3 min-w-[120px]">
                           <Switch 
                             checked={horaire.actif}
                             onCheckedChange={(checked) => handleUpdateHoraire(horaire.jour_semaine, 'actif', checked)}
                           />
-                          <span className="font-medium">{joursMap[horaire.jour_semaine]}</span>
+                          <span className="font-medium text-sm">{joursMap[horaire.jour_semaine]}</span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                           <Select 
                             value={horaire.heure_debut} 
                             onValueChange={(value) => handleUpdateHoraire(horaire.jour_semaine, 'heure_debut', value)}
                             disabled={!horaire.actif}
                           >
-                            <SelectTrigger className="w-24">
+                            <SelectTrigger className="w-[100px] sm:w-24">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1288,13 +1294,13 @@ export default function ParametresPage() {
                               ))}
                             </SelectContent>
                           </Select>
-                          <span>à</span>
+                          <span className="text-sm text-muted-foreground">à</span>
                           <Select 
                             value={horaire.heure_fin}
                             onValueChange={(value) => handleUpdateHoraire(horaire.jour_semaine, 'heure_fin', value)}
                             disabled={!horaire.actif}
                           >
-                            <SelectTrigger className="w-24">
+                            <SelectTrigger className="w-[100px] sm:w-24">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1318,24 +1324,26 @@ export default function ParametresPage() {
                 <CardTitle>Statut de disponibilité</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Mode vacances</p>
-                    <p className="text-sm text-muted-foreground">Désactiver temporairement la réception de nouvelles demandes</p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <p className="font-medium text-sm sm:text-base">Mode vacances</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Désactiver temporairement la réception de nouvelles demandes</p>
                   </div>
                   <Switch 
                     checked={settings.mode_vacances}
                     onCheckedChange={(checked) => handleUpdateSetting('mode_vacances', checked)}
+                    className="self-start sm:self-center"
                   />
                 </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Accepter les missions urgentes</p>
-                    <p className="text-sm text-muted-foreground">Recevoir les demandes marquées comme urgentes</p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <p className="font-medium text-sm sm:text-base">Accepter les missions urgentes</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Recevoir les demandes marquées comme urgentes</p>
                   </div>
                   <Switch 
                     checked={settings.accepter_urgences}
                     onCheckedChange={(checked) => handleUpdateSetting('accepter_urgences', checked)}
+                    className="self-start sm:self-center"
                   />
                 </div>
               </CardContent>
@@ -1389,6 +1397,7 @@ export default function ParametresPage() {
                   <Button 
                     onClick={handleSavePreferences}
                     disabled={savingSettings}
+                    className="w-full sm:w-auto"
                   >
                     {savingSettings ? (
                       <>

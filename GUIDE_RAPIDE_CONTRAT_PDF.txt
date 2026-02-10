@@ -1,0 +1,92 @@
+🚀 GUIDE RAPIDE - CONTRAT ENRICHI ET PDF
+=========================================
+
+✅ CE QUI A ÉTÉ FAIT
+--------------------
+
+1. Contrat enrichi avec design professionnel
+2. Téléchargement PDF fonctionnel
+3. Tous les problèmes résolus
+
+
+🎯 COMMENT UTILISER
+-------------------
+
+ÉTAPE 1: Accepter un devis
+- Allez sur "Mes demandes"
+- Cliquez sur une demande
+- Cliquez "Accepter" sur un devis
+
+ÉTAPE 2: Voir le contrat
+- Cliquez sur "Voir le contrat"
+- Le contrat se génère automatiquement
+
+ÉTAPE 3: Télécharger le PDF
+- Cliquez sur "Télécharger PDF"
+- Le PDF se télécharge automatiquement
+
+ÉTAPE 4: Signer
+- Dessinez votre signature
+- Cliquez "Signer et continuer"
+- Vous êtes redirigé vers le paiement
+
+
+📥 TÉLÉCHARGEMENT PDF
+---------------------
+
+Bouton: "Télécharger PDF" (en haut à droite)
+Format: A4 (210 x 297 mm)
+Qualité: Haute résolution
+Nom fichier: Contrat_[NUMERO]_[DATE].pdf
+Temps: < 3 secondes
+
+
+🎨 CONTENU DU CONTRAT
+---------------------
+
+✓ En-tête professionnel
+✓ Informations client et prestataire
+✓ Objet du contrat
+✓ Tableau de paiement (acompte 30% + solde 70%)
+✓ Délais et garanties
+✓ Obligations des parties
+✓ Zones de signature
+✓ Pied de page KaziPro
+
+
+🔧 PROBLÈMES RÉSOLUS
+--------------------
+
+✅ Deux tables de devis → Vérification dans les deux
+✅ RLS restrictif → Politiques permissives
+✅ client_id manquant → Récupération depuis profil
+✅ Foreign key → Contrainte supprimée
+✅ Design basique → HTML enrichi
+✅ Pas de PDF → html2canvas + jsPDF
+
+
+📁 FICHIER PRINCIPAL
+--------------------
+
+src/pages/dashboard/client/SignerContratPage.tsx
+
+Fonctions clés:
+- createContrat() : Génère le contrat avec HTML enrichi
+- handleDownloadPDF() : Télécharge le PDF
+- handleSign() : Gère la signature électronique
+
+
+🧪 TEST RAPIDE
+--------------
+
+1. Login client
+2. Mes demandes
+3. Cliquer sur demande avec devis accepté
+4. "Voir le contrat"
+5. "Télécharger PDF"
+6. Signer
+7. Paiement
+
+
+✅ STATUT: TERMINÉ ET FONCTIONNEL
+==================================

@@ -1,0 +1,105 @@
+═══════════════════════════════════════════════════════════════
+   ✅ AJOUT DU BOUTON "VOIR LE CONTRAT"
+═══════════════════════════════════════════════════════════════
+
+📅 DATE: 27 janvier 2026
+🎯 OBJECTIF: Ajouter un bouton "Voir le contrat" dans les listes de devis
+
+
+═══════════════════════════════════════════════════════════════
+   ✅ MODIFICATIONS APPORTÉES
+═══════════════════════════════════════════════════════════════
+
+FICHIERS MODIFIÉS:
+───────────────────────────────────────────────────────────────
+1. src/pages/dashboard/client/DemandeDetailPage.tsx
+   → Ajout du bouton "Voir le contrat" pour les devis acceptés
+   → Condition: devis.statut === 'accepte'
+
+2. src/pages/dashboard/client/DemandesPage.tsx
+   → Ajout du bouton "Voir le contrat" dans l'onglet "Devis acceptés"
+   → Tous les devis acceptés ont maintenant ce bouton
+
+3. src/pages/dashboard/client/AccepterDevisPage.tsx
+   → Déjà modifié précédemment
+   → Affiche le bouton si on revient sur un devis déjà accepté
+
+
+═══════════════════════════════════════════════════════════════
+   🎨 OÙ APPARAÎT LE BOUTON
+═══════════════════════════════════════════════════════════════
+
+EMPLACEMENT 1: Page de détail d'une demande
+───────────────────────────────────────────────────────────────
+URL: /dashboard/client/demandes/:demandeId
+Section: "Devis reçus"
+
+Pour chaque devis avec statut = 'accepte':
+  [Voir détails]  [Voir le profil]  [Voir le contrat] ← NOUVEAU
+
+Pour chaque devis avec statut = 'en_attente':
+  [Voir détails]  [Voir le profil]  [Accepter]  [Refuser]
+
+
+EMPLACEMENT 2: Page liste des demandes - Onglet "Devis acceptés"
+───────────────────────────────────────────────────────────────
+URL: /dashboard/client/demandes
+Onglet: "Devis acceptés"
+
+Pour chaque devis accepté:
+  [Voir détails]  [Voir le contrat] ← NOUVEAU
+
+
+EMPLACEMENT 3: Page d'acceptation de devis
+───────────────────────────────────────────────────────────────
+URL: /dashboard/client/devis/:devisId/accepter
+
+Si le devis est déjà accepté:
+  Message bleu: "Devis déjà accepté"
+  Carte verte: "Contrat prêt à signer"
+  [Voir le contrat et signer] ← DÉJÀ FAIT
+
+
+═══════════════════════════════════════════════════════════════
+   🐛 PROBLÈME RENCONTRÉ
+═══════════════════════════════════════════════════════════════
+
+ERREUR:
+"Cannot coerce the result to a single JSON object"
+"The result contains 0 rows"
+
+CAUSE POSSIBLE:
+1. Le devis n'existe pas avec cet ID
+2. Les politiques RLS empêchent l'accès au devis
+3. Le client_id du devis ne correspond pas à l'utilisateur connecté
+
+
+═══════════════════════════════════════════════════════════════
+   ✅ SOLUTION
+═══════════════════════════════════════════════════════════════
+
+ÉTAPE 1: Corriger les RLS sur devis_pro
+───────────────────────────────────────────────────────────────
+Exécuter dans Supabase SQL Editor:
+→ sql/fix_rls_devis_simple.sql
+
+Ce script:
+✓ Active RLS sur devis_pro
+✓ Crée les politiques pour clients (lecture + mise à jour)
+✓ Crée les politiques pour prestataires (lecture + création + mise à jour)
+
+
+ÉTAPE 2: Diagnostiquer le problème
+───────────────────────────────────────────────────────────────
+Exécuter dans Supabase SQL Editor:
+→ sql/debug_devis_access.sql
+
+IMPORTANT: Remplacer l'ID dans le script par l'ID du devis qui pose problème
+
+Ce script affiche:
+✓ Si le devis existe
+✓ Les infos du devis
+✓ Les politiques RLS
+✓ Tous les devis disponibles
+✓ Tous les clients
+

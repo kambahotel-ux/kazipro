@@ -16,7 +16,8 @@ import {
   Shield,
   LogOut,
   Search,
-  Receipt
+  Receipt,
+  Car
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -46,6 +47,7 @@ const prestataireLinks: SidebarLink[] = [
   { icon: Home, label: "Tableau de bord", href: "/dashboard/prestataire" },
   { icon: Search, label: "Opportunités", href: "/dashboard/prestataire/opportunites" },
   { icon: Briefcase, label: "Missions", href: "/dashboard/prestataire/missions" },
+  { icon: FileText, label: "Contrats", href: "/dashboard/prestataire/contrats" },
   { icon: FileText, label: "Devis envoyés", href: "/dashboard/prestataire/devis" },
   { icon: Calendar, label: "Calendrier", href: "/dashboard/prestataire/calendrier" },
   { icon: TrendingUp, label: "Revenus", href: "/dashboard/prestataire/revenus" },
@@ -62,6 +64,7 @@ const adminLinks: SidebarLink[] = [
   { icon: Receipt, label: "Devis", href: "/dashboard/admin/devis" },
   { icon: AlertTriangle, label: "Litiges", href: "/dashboard/admin/litiges" },
   { icon: CreditCard, label: "Transactions", href: "/dashboard/admin/transactions" },
+  { icon: CreditCard, label: "Config Paiement", href: "/dashboard/admin/config-paiement" },
   { icon: BarChart3, label: "Rapports", href: "/dashboard/admin/rapports" },
   { icon: Settings, label: "Configuration", href: "/dashboard/admin/configuration" },
 ];

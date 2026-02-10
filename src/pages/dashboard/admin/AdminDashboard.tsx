@@ -290,6 +290,7 @@ export default function AdminDashboard() {
     { label: "Prestataires", icon: Briefcase, path: "/dashboard/admin/prestataires", color: "bg-purple-500" },
     { label: "Demandes", icon: AlertCircle, path: "/dashboard/admin/demandes", color: "bg-yellow-500" },
     { label: "Transactions", icon: DollarSign, path: "/dashboard/admin/transactions", color: "bg-green-500" },
+    { label: "Config Paiement", icon: DollarSign, path: "/dashboard/admin/config-paiement", color: "bg-emerald-500" },
     { label: "Litiges", icon: AlertCircle, path: "/dashboard/admin/litiges", color: "bg-red-500" },
     { label: "Rapports", icon: TrendingUp, path: "/dashboard/admin/rapports", color: "bg-indigo-500" },
     { label: "Configuration", icon: Settings, path: "/dashboard/admin/configuration", color: "bg-gray-500" },

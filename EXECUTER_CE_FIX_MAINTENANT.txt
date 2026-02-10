@@ -1,0 +1,84 @@
+⚡ EXÉCUTEZ CE FIX MAINTENANT
+=============================
+
+🔴 ERREUR ACTUELLE
+------------------
+"insert or update on table 'paiements' violates foreign key constraint"
+
+
+✅ SOLUTION (1 FICHIER SQL)
+---------------------------
+
+Exécutez ce fichier dans Supabase SQL Editor :
+
+📁 FIX_COMPLET_PAIEMENT_FINAL.sql
+
+
+🚀 COMMENT FAIRE (2 MINUTES)
+-----------------------------
+
+1. Ouvrez Supabase Dashboard
+   → https://supabase.com/dashboard
+   → Votre projet KaziPro
+   → SQL Editor (menu gauche)
+
+2. Ouvrez le fichier :
+   📁 FIX_COMPLET_PAIEMENT_FINAL.sql
+
+3. Copiez TOUT le contenu
+
+4. Collez dans SQL Editor
+
+5. Cliquez "Run" (ou Ctrl+Enter)
+
+6. Attendez les messages :
+   ✅ FIX COMPLET APPLIQUÉ AVEC SUCCÈS!
+   ✅ Génération de numéros fonctionnelle
+   ✅ Compatible avec tables "devis" et "devis_pro"
+   ✅ Système de paiement opérationnel
+
+
+📋 CE QUI EST CORRIGÉ
+---------------------
+
+✅ Fonctions de génération de numéro
+   - generate_contrat_numero()
+   - generate_paiement_numero()
+   - generate_litige_numero()
+
+✅ Contraintes foreign key
+   - paiements.devis_id → Contrainte supprimée
+   - contrats.devis_id → Contrainte supprimée
+   - Compatible avec les 2 tables de devis
+
+
+🎯 APRÈS L'EXÉCUTION
+--------------------
+
+1. Retournez sur votre application
+
+2. Allez sur la page de paiement
+
+3. Remplissez le formulaire
+
+4. Cliquez "Payer"
+
+5. → ÇA MARCHE ! 🎉
+
+
+✅ RÉSULTAT FINAL
+-----------------
+
+Le flux complet fonctionnera :
+1. Accepter un devis ✅
+2. Voir le contrat ✅
+3. Télécharger le PDF ✅
+4. Signer le contrat ✅
+5. Payer l'acompte ✅
+6. Mission créée ✅
+
+
+⏱️ TEMPS ESTIMÉ : 2 MINUTES
+============================
+
+Exécutez le fichier SQL et tout fonctionnera ! 🚀

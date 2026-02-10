@@ -1,0 +1,133 @@
+═══════════════════════════════════════════════════════════════════
+🔧 CORRECTION RAPIDE: PAIEMENT RESTÉ "EN_COURS"
+═══════════════════════════════════════════════════════════════════
+
+## 🎯 PROBLÈME
+
+Votre paiement PAY-2026-0009 est resté en statut "en_cours" au lieu 
+de passer à "valide".
+
+═══════════════════════════════════════════════════════════════════
+## ✅ SOLUTION IMMÉDIATE
+═══════════════════════════════════════════════════════════════════
+
+### ÉTAPE 1: EXÉCUTER LE SCRIPT SQL
+
+1. **Ouvrir Supabase** → SQL Editor
+2. **Copier tout le contenu** du fichier `FIX_PAIEMENT_EN_COURS.sql`
+3. **Coller** dans l'éditeur SQL
+4. **Exécuter** (bouton Run)
+5. **Vérifier** le message de succès
+
+**Ce que fait le script:**
+- ✅ Met à jour le paiement à "valide"
+- ✅ Ajoute la date de paiement
+- ✅ Ajoute les références de transaction
+- ✅ Met à jour le contrat à "acompte_paye"
+
+### ÉTAPE 2: RAFRAÎCHIR LA PAGE
+
+1. **Aller sur** la page de confirmation du paiement
+2. **Appuyer sur F5** ou rafraîchir la page
+3. **Vérifier** que le statut est maintenant "Validé" ✅
+
+═══════════════════════════════════════════════════════════════════
+## 🔍 VÉRIFICATION
+═══════════════════════════════════════════════════════════════════
+
+### VÉRIFIER LE PAIEMENT
+
+```sql
+SELECT 
+  numero,
+  statut,
+  montant_total,
+  date_paiement
+FROM paiements
+WHERE numero = 'PAY-2026-0009';
+```
+
+**Résultat attendu:**
+- statut: "valide" ✅
+- date_paiement: [date actuelle]
+- transaction_id: SIM-[timestamp]
+
+### VÉRIFIER LE CONTRAT
+
+```sql
+SELECT 
+  numero,
+  statut,
+  statut_paiement
+FROM contrats
+WHERE numero = 'CTR-1769517391901';
+```
+
+**Résultat attendu:**
+- statut: "signe_client"
+- statut_paiement: "acompte_paye" ✅
+
+═══════════════════════════════════════════════════════════════════
+## 🔄 POUR LES PROCHAINS PAIEMENTS
+═══════════════════════════════════════════════════════════════════
+
+Le code a été corrigé pour:
+1. ✅ Ajouter plus de logs pour déboguer
+2. ✅ Attendre 500ms après la mise à jour pour que le trigger se déclenche
+3. ✅ Ne pas bloquer si la création de mission échoue
+
+**Les prochains paiements fonctionneront correctement!**
+
+═══════════════════════════════════════════════════════════════════
+## 📊 AFFICHAGE APRÈS CORRECTION
+═══════════════════════════════════════════════════════════════════
+
+### PAGE CONFIRMATION (CLIENT)
+
+**Avant:**
+```
+Statut: en_cours ⏳
+```
+
+**Après:**
+```
+Statut: valide ✅
+```
+
+### PAGE REVENUS (PRESTATAIRE)
+
+**Avant:**
+```
+PAY-2026-0009 | 191 FC | En cours ⏳
+```
+
+**Après:**
+```
+PAY-2026-0009 | 191 FC | Validé ✅
+```
+
+### PAGE CONTRATS (PRESTATAIRE)
+
+**Avant:**
+```
+CTR-1769517391901 | [Signé] [Non payé]
+```
+
+**Après:**
+```
+CTR-1769517391901 | [Signé] [Partiellement payé] 🟡
+```
+
+═══════════════════════════════════════════════════════════════════
+## 🚀 ACTION IMMÉDIATE
+═══════════════════════════════════════════════════════════════════
+
+1. [ ] Exécuter `FIX_PAIEMENT_EN_COURS.sql` dans Supabase
+2. [ ] Rafraîchir la page de confirmation
+3. [ ] Vérifier que le statut est "Validé"
+4. [ ] Vérifier dans la page Revenus du prestataire
+5. [ ] Vérifier dans la page Contrats du prestataire
+
+═══════════════════════════════════════════════════════════════════
+✅ APRÈS CES ÉTAPES, TOUT SERA CORRIGÉ!
+═══════════════════════════════════════════════════════════════════

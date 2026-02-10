@@ -1,0 +1,80 @@
+═══════════════════════════════════════════════════════════════════
+🎯 SOLUTION À L'ERREUR "Cannot coerce result to single JSON object"
+═══════════════════════════════════════════════════════════════════
+
+✅ J'AI CORRIGÉ LE CODE
+✅ MAINTENANT IL FAUT CORRIGER LES PERMISSIONS
+
+═══════════════════════════════════════════════════════════════════
+📝 ÉTAPE 1: EXÉCUTER LE SCRIPT SQL (2 MINUTES)
+═══════════════════════════════════════════════════════════════════
+
+1. Ouvrez Supabase (https://supabase.com)
+2. Allez dans votre projet
+3. Cliquez sur "SQL Editor" dans le menu de gauche
+4. Cliquez sur "New query"
+5. Copiez TOUT le contenu du fichier: FIX_ACCES_DEVIS_CONTRAT.sql
+6. Collez dans l'éditeur SQL
+7. Cliquez sur "Run" (ou Ctrl+Enter)
+
+RÉSULTAT ATTENDU:
+✅ Plusieurs messages "✅ POLICIES..." s'affichent
+✅ Message final: "Policies RLS créées avec succès!"
+
+═══════════════════════════════════════════════════════════════════
+📝 ÉTAPE 2: TESTER À NOUVEAU (30 SECONDES)
+═══════════════════════════════════════════════════════════════════
+
+1. Retournez sur votre application KaziPro
+2. Rafraîchissez la page (F5 ou Ctrl+R)
+3. Allez sur "Mes Demandes"
+4. Onglet "Devis acceptés"
+5. Cliquez sur "Voir le contrat"
+
+RÉSULTAT ATTENDU:
+✅ La page de signature s'ouvre
+✅ Le contrat est créé automatiquement
+✅ Vous voyez le contenu du contrat
+✅ Vous pouvez signer
+
+═══════════════════════════════════════════════════════════════════
+🔍 QU'EST-CE QUI A ÉTÉ CORRIGÉ?
+═══════════════════════════════════════════════════════════════════
+
+PROBLÈME:
+- Le code utilisait .single() qui exige exactement 1 résultat
+- Les RLS policies bloquaient l'accès au devis
+- Résultat: erreur PGRST116 (0 rows)
+
+SOLUTION:
+✅ Code modifié pour utiliser .maybeSingle() (accepte 0 ou 1 résultat)
+✅ Ajout de vérification: si pas de devis, message clair
+✅ Script SQL pour corriger les permissions RLS
+✅ Clients peuvent maintenant lire/créer/modifier leurs contrats
+
+═══════════════════════════════════════════════════════════════════
+⚠️ SI L'ERREUR PERSISTE APRÈS LE SCRIPT SQL
+═══════════════════════════════════════════════════════════════════
+
+Vérifiez dans Supabase SQL Editor:
+
+-- Est-ce que le devis existe vraiment?
+SELECT * FROM devis_pro 
+WHERE id = 'VOTRE_DEVIS_ID_ICI';
+
+-- Est-ce que vous avez un profil client?
+SELECT * FROM clients 
+WHERE user_id = auth.uid();
+
+Si l'une de ces requêtes retourne 0 lignes, dites-moi!
+
+═══════════════════════════════════════════════════════════════════
+💬 APRÈS LE TEST
+═══════════════════════════════════════════════════════════════════
+
+Dites-moi:
+✅ "Ça marche! Je vois la page de signature"
+❌ "J'ai encore une erreur: [message]"
+❓ "Le script SQL a donné une erreur: [message]"
+
+═══════════════════════════════════════════════════════════════════

@@ -1,0 +1,186 @@
+═══════════════════════════════════════════════════════════════════
+⚠️ ACTION IMMÉDIATE REQUISE
+═══════════════════════════════════════════════════════════════════
+
+## 🎯 PROBLÈME
+
+Les paiements restent en statut "en_cours" et le prestataire ne voit pas 
+les paiements validés dans sa page Revenus.
+
+═══════════════════════════════════════════════════════════════════
+## ✅ SOLUTION EN 2 ÉTAPES
+═══════════════════════════════════════════════════════════════════
+
+### ÉTAPE 1: EXÉCUTER LE SCRIPT SQL (OBLIGATOIRE)
+
+1. **Ouvrir Supabase** → SQL Editor
+2. **Copier tout le contenu** du fichier `FIX_STATUT_CONTRAT_PAIEMENT.sql`
+3. **Coller** dans l'éditeur SQL
+4. **Exécuter** (bouton Run ou Ctrl+Enter)
+5. **Vérifier** le message de succès
+
+**Ce que fait le script:**
+- ✅ Ajoute la colonne `statut_paiement` aux contrats
+- ✅ Crée un trigger automatique pour mettre à jour le statut
+- ✅ Met à jour tous les contrats existants
+
+### ÉTAPE 2: TESTER LE FLUX
+
+1. **Aller sur la page** `/dashboard/client`
+2. **Accepter un devis** (ou utiliser un devis déjà accepté)
+3. **Signer le contrat**
+4. **Payer l'acompte**
+5. **Attendre 2 secondes** (simulation)
+6. **Vérifier** que vous êtes redirigé vers la confirmation
+7. **Vérifier** que le statut est "Validé" ✅
+
+### VÉRIFICATION CÔTÉ PRESTATAIRE
+
+1. **Se connecter** en tant que prestataire
+2. **Aller dans "Revenus"**
+3. **Vérifier** que le paiement apparaît avec statut "Validé" ✅
+4. **Aller dans "Contrats"**
+5. **Vérifier** que le contrat affiche "Partiellement payé" 🟡
+
+═══════════════════════════════════════════════════════════════════
+## 📊 STATUTS APRÈS LE FIX
+═══════════════════════════════════════════════════════════════════
+
+### PAIEMENTS (table paiements)
+
+- 🟡 **en_cours**: Paiement en cours de traitement
+- 🟢 **valide**: Paiement confirmé et reçu
+- 🔴 **echoue**: Paiement refusé ou annulé
+
+### CONTRATS (table contrats - NOUVEAU)
+
+- 🔴 **non_paye**: Aucun paiement reçu
+- 🟡 **acompte_paye**: Acompte payé (30%)
+- 🟢 **totalement_paye**: Montant total payé (100%)
+
+═══════════════════════════════════════════════════════════════════
+## 🔄 FONCTIONNEMENT AUTOMATIQUE
+═══════════════════════════════════════════════════════════════════
+
+**Quand un paiement passe à "valide":**
+
+1. Le trigger se déclenche automatiquement
+2. Calcule le total payé pour le contrat
+3. Compare avec le montant total
+4. Met à jour le statut du contrat:
+   - Si 0% payé → "non_paye"
+   - Si < 100% payé → "acompte_paye"
+   - Si 100% payé → "totalement_paye"
+
+**Aucune action manuelle requise!** ✨
+
+═══════════════════════════════════════════════════════════════════
+## 🎨 AFFICHAGE DANS L'INTERFACE
+═══════════════════════════════════════════════════════════════════
+
+### PAGE CONTRATS (PRESTATAIRE)
+
+**Avant:**
+```
+┌─────────────────────────────────────┐
+│ Contrat CONT-2025-0001              │
+│ [Signé]                             │
+│ Client: Jean Dupont                 │
+│ Montant: 500,000 FC                 │
+└─────────────────────────────────────┘
+```
+
+**Après:**
+```
+┌─────────────────────────────────────┐
+│ Contrat CONT-2025-0001              │
+│ [Signé] [Partiellement payé]       │
+│ Client: Jean Dupont                 │
+│ Montant: 500,000 FC                 │
+└─────────────────────────────────────┘
+```
+
+### PAGE REVENUS (PRESTATAIRE)
+
+**Avant:**
+```
+PAY-2025-0001 | Jean Dupont | 150,000 FC | [En cours]
+```
+
+**Après:**
+```
+PAY-2025-0001 | Jean Dupont | 150,000 FC | [Validé]
+```
+
+═══════════════════════════════════════════════════════════════════
+## 🐛 SI ÇA NE FONCTIONNE PAS
+═══════════════════════════════════════════════════════════════════
+
+### PROBLÈME: Le paiement reste "en_cours"
+
+**Solution 1: Vérifier le code de simulation**
+Le code simule un paiement pendant 2 secondes. Vérifiez que cette 
+partie s'exécute correctement.
+
+**Solution 2: Mettre à jour manuellement**
+```sql
+UPDATE paiements
+SET statut = 'valide',
+    date_paiement = NOW()
+WHERE id = '[VOTRE_PAIEMENT_ID]';
+```
+
+### PROBLÈME: Le contrat ne se met pas à jour
+
+**Solution: Déclencher manuellement le trigger**
+```sql
+-- Forcer la mise à jour
+UPDATE paiements
+SET statut = 'valide'
+WHERE id = '[VOTRE_PAIEMENT_ID]';
+```
+
+### PROBLÈME: La colonne statut_paiement n'existe pas
+
+**Solution: Réexécuter le script SQL**
+```sql
+-- Copier-coller FIX_STATUT_CONTRAT_PAIEMENT.sql
+```
+
+═══════════════════════════════════════════════════════════════════
+## 📝 FICHIERS MODIFIÉS
+═══════════════════════════════════════════════════════════════════
+
+### FICHIERS CRÉÉS
+
+1. ✅ `FIX_STATUT_CONTRAT_PAIEMENT.sql`
+   - Script SQL à exécuter dans Supabase
+   
+2. ✅ `SOLUTION_STATUT_PAIEMENT.txt`
+   - Documentation complète
+   
+3. ✅ `ACTION_IMMEDIATE_STATUT_PAIEMENT.txt`
+   - Ce fichier (guide rapide)
+
+### FICHIERS MODIFIÉS
+
+1. ✅ `src/pages/dashboard/prestataire/ContratsPage.tsx`
+   - Ajout de l'affichage du statut de paiement
+   - Fonction `getStatutPaiementBadge()`
+
+═══════════════════════════════════════════════════════════════════
+## ✅ CHECKLIST FINALE
+═══════════════════════════════════════════════════════════════════
+
+- [ ] Script SQL exécuté dans Supabase
+- [ ] Colonne `statut_paiement` existe dans `contrats`
+- [ ] Trigger créé et actif
+- [ ] Test de paiement effectué
+- [ ] Paiement passe à "valide"
+- [ ] Contrat passe à "acompte_paye"
+- [ ] Prestataire voit "Validé" dans Revenus
+- [ ] Prestataire voit "Partiellement payé" dans Contrats
+
+═══════════════════════════════════════════════════════════════════
+🚀 APRÈS CES ÉTAPES, TOUT FONCTIONNERA CORRECTEMENT!
+═══════════════════════════════════════════════════════════════════

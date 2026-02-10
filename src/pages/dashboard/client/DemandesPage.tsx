@@ -525,6 +525,13 @@ export default function DemandesPage() {
                             <Eye className="w-4 h-4 mr-1" />
                             Voir détails
                           </Button>
+                          
+                          <Link to={`/dashboard/client/contrat/${devis.id}`}>
+                            <Button className="bg-blue-600 hover:bg-blue-700">
+                              <FileText className="w-4 h-4 mr-1" />
+                              Voir le contrat
+                            </Button>
+                          </Link>
                         </div>
                       </div>
                     </CardContent>

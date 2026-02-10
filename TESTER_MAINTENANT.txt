@@ -1,0 +1,99 @@
+═══════════════════════════════════════════════════════════════════
+🧪 TESTER LA CRÉATION AUTOMATIQUE DE CONTRAT
+═══════════════════════════════════════════════════════════════════
+
+✅ LE CODE EST MODIFIÉ
+Le contrat est maintenant créé DIRECTEMENT quand vous acceptez un devis.
+Plus besoin de trigger SQL!
+
+═══════════════════════════════════════════════════════════════════
+📝 ÉTAPES DE TEST (2 MINUTES)
+═══════════════════════════════════════════════════════════════════
+
+ÉTAPE 1: Rafraîchir l'application
+----------------------------------
+- Appuyez sur F5 (ou Ctrl+R)
+- Cela charge le nouveau code
+
+ÉTAPE 2: Trouver un devis à accepter
+-------------------------------------
+Option A: Devis existant
+- Allez sur "Mes Demandes"
+- Cliquez sur une demande
+- Trouvez un devis avec statut "Envoyé" ou "En attente"
+
+Option B: Demander un nouveau devis
+- Créez une nouvelle demande
+- Attendez qu'un prestataire envoie un devis
+
+ÉTAPE 3: Accepter le devis
+---------------------------
+1. Cliquez sur le bouton "Accepter" du devis
+2. Cochez "J'accepte les conditions générales"
+3. Cochez "J'accepte les conditions de paiement"
+4. Cliquez "Accepter et continuer"
+
+ÉTAPE 4: Vérifier le résultat
+------------------------------
+✅ Message: "Devis accepté avec succès!"
+✅ Redirection automatique vers la page de signature
+✅ Le contrat s'affiche immédiatement
+✅ Vous voyez le contenu HTML du contrat
+✅ La zone de signature (canvas blanc) est visible
+✅ Le bouton "Signer et continuer" est actif
+
+═══════════════════════════════════════════════════════════════════
+⚠️ SI VOUS AVEZ UNE ERREUR
+═══════════════════════════════════════════════════════════════════
+
+ERREUR: "Permission denied" ou "RLS policy violation"
+SOLUTION: Exécutez INSTALLER_TRIGGER_SEULEMENT.sql
+→ Ce script configure les permissions RLS nécessaires
+
+ERREUR: "Devis introuvable"
+SOLUTION: Vérifiez que vous êtes connecté en tant que CLIENT
+→ Le devis doit vous appartenir
+
+ERREUR: Autre
+SOLUTION: Ouvrez la console (F12) et copiez-moi l'erreur exacte
+
+═══════════════════════════════════════════════════════════════════
+🔍 VÉRIFIER DANS SUPABASE (OPTIONNEL)
+═══════════════════════════════════════════════════════════════════
+
+Après avoir accepté le devis:
+
+1. Ouvrez Supabase Table Editor
+2. Ouvrez la table "contrats"
+3. Vous devriez voir un nouveau contrat avec:
+   - numero: CTR-[timestamp]
+   - devis_id: [l'ID de votre devis]
+   - statut: 'genere'
+   - contenu_html: [le HTML du contrat]
+
+═══════════════════════════════════════════════════════════════════
+✅ APRÈS LE TEST
+═══════════════════════════════════════════════════════════════════
+
+Si ça marche:
+👍 "Ça marche! Le contrat est créé et je peux le signer"
+→ Continuez vers la signature et le paiement
+
+Si ça ne marche pas:
+👎 "J'ai une erreur: [copiez le message exact]"
+→ Je corrigerai immédiatement
+
+═══════════════════════════════════════════════════════════════════
+🎯 PROCHAINES ÉTAPES
+═══════════════════════════════════════════════════════════════════
+
+Une fois que l'acceptation fonctionne:
+1. ✅ Tester la signature du contrat
+2. ✅ Tester le paiement de l'acompte
+3. ✅ Tester le flux complet jusqu'au paiement du solde
+
+═══════════════════════════════════════════════════════════════════
+
+👉 COMMENCEZ: Rafraîchissez l'app (F5) et acceptez un devis!
+
+═══════════════════════════════════════════════════════════════════

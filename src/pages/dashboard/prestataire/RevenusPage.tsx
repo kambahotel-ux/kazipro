@@ -13,11 +13,25 @@ import { toast } from "sonner";
 
 interface Paiement {
   id: string;
-  mission_id: string;
-  amount: number;
-  method: string;
-  status: string;
+  numero: string;
+  contrat_id: string;
+  devis_id: string;
+  client_id: string;
+  prestataire_id: string;
+  type_paiement: string;
+  montant_total: number;
+  methode_paiement: string;
+  statut: string;
+  date_paiement: string | null;
+  transaction_id: string | null;
+  reference_paiement: string | null;
   created_at: string;
+  clients?: {
+    full_name: string;
+  };
+  contrats?: {
+    numero: string;
+  };
 }
 
 export default function RevenusPage() {
@@ -72,24 +86,19 @@ export default function RevenusPage() {
         return;
       }
 
-      // Get missions for this prestataire
-      const { data: missionsData } = await supabase
-        .from("missions")
-        .select("id")
-        .eq("prestataire_id", prestataireData.id);
-
-      const missionIds = missionsData?.map(m => m.id) || [];
-
-      if (missionIds.length === 0) {
-        setPaiements([]);
-        return;
-      }
-
-      // Fetch paiements for these missions
+      // Fetch paiements for this prestataire
       const { data, error } = await supabase
         .from("paiements")
-        .select("*")
-        .in("mission_id", missionIds)
+        .select(`
+          *,
+          clients (
+            full_name
+          ),
+          contrats (
+            numero
+          )
+        `)
+        .eq("prestataire_id", prestataireData.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -102,25 +111,28 @@ export default function RevenusPage() {
   };
 
   const getStats = () => {
-    const completed = paiements.filter(p => p.status === "completed").length;
-    const pending = paiements.filter(p => p.status === "pending").length;
+    const valides = paiements.filter(p => p.statut === "valide").length;
+    const enCours = paiements.filter(p => p.statut === "en_cours").length;
     const totalEarnings = paiements
-      .filter(p => p.status === "completed")
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
+      .filter(p => p.statut === "valide")
+      .reduce((sum, p) => sum + (p.montant_total || 0), 0);
     const pendingEarnings = paiements
-      .filter(p => p.status === "pending")
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
+      .filter(p => p.statut === "en_cours")
+      .reduce((sum, p) => sum + (p.montant_total || 0), 0);
 
     return [
-      { title: "Revenus générés", value: `${totalEarnings.toLocaleString()} FC`, subtitle: "Complétés", icon: <DollarSign className="w-5 h-5" /> },
+      { title: "Revenus reçus", value: `${totalEarnings.toLocaleString()} FC`, subtitle: "Validés", icon: <DollarSign className="w-5 h-5" /> },
       { title: "En attente", value: `${pendingEarnings.toLocaleString()} FC`, subtitle: "À recevoir", icon: <Clock className="w-5 h-5" /> },
-      { title: "Transactions", value: completed.toString(), subtitle: "Complétées", icon: <CheckCircle className="w-5 h-5" /> },
+      { title: "Transactions", value: valides.toString(), subtitle: "Complétées", icon: <CheckCircle className="w-5 h-5" /> },
     ];
   };
 
   const filteredPaiements = paiements.filter(p => {
-    const matchesSearch = p.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === "all" || p.status === filterStatus;
+    const matchesSearch = 
+      p.numero?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.clients?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.contrats?.numero?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = filterStatus === "all" || p.statut === filterStatus;
     return matchesSearch && matchesStatus;
   });
 
@@ -134,9 +146,9 @@ export default function RevenusPage() {
         const date = new Date(p.created_at);
         return date.getMonth() === currentMonth && 
                date.getFullYear() === currentYear &&
-               p.status === "completed";
+               p.statut === "valide";
       })
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
+      .reduce((sum, p) => sum + (p.montant_total || 0), 0);
   };
 
   return (
@@ -190,9 +202,9 @@ export default function RevenusPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous</SelectItem>
-              <SelectItem value="completed">Complétés</SelectItem>
-              <SelectItem value="pending">En attente</SelectItem>
-              <SelectItem value="failed">Échoués</SelectItem>
+              <SelectItem value="valide">Validés</SelectItem>
+              <SelectItem value="en_cours">En cours</SelectItem>
+              <SelectItem value="echoue">Échoués</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -218,7 +230,9 @@ export default function RevenusPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">ID</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Numéro</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Client</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Type</th>
                       <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Montant</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Méthode</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
@@ -229,13 +243,29 @@ export default function RevenusPage() {
                   <tbody>
                     {filteredPaiements.map((paiement) => (
                       <tr key={paiement.id} className="border-b border-border hover:bg-muted/50">
-                        <td className="py-3 px-4 text-sm font-mono">{paiement.id}</td>
-                        <td className="py-3 px-4 text-sm text-right font-medium text-primary">{paiement.amount.toLocaleString()} FC</td>
-                        <td className="py-3 px-4 text-sm capitalize">{paiement.method}</td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">{new Date(paiement.created_at).toLocaleDateString()}</td>
+                        <td className="py-3 px-4 text-sm font-mono">{paiement.numero}</td>
+                        <td className="py-3 px-4 text-sm">{paiement.clients?.full_name || 'N/A'}</td>
+                        <td className="py-3 px-4 text-sm capitalize">
+                          {paiement.type_paiement === 'acompte' ? 'Acompte' : paiement.type_paiement}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-right font-medium text-primary">
+                          {paiement.montant_total.toLocaleString()} FC
+                        </td>
+                        <td className="py-3 px-4 text-sm capitalize">
+                          {paiement.methode_paiement.replace('_', ' ')}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">
+                          {new Date(paiement.date_paiement || paiement.created_at).toLocaleDateString('fr-FR')}
+                        </td>
                         <td className="py-3 px-4">
-                          <Badge variant={paiement.status === "completed" ? "default" : paiement.status === "pending" ? "secondary" : "destructive"}>
-                            {paiement.status === "completed" ? "Complété" : paiement.status === "pending" ? "En attente" : "Échoué"}
+                          <Badge variant={
+                            paiement.statut === "valide" ? "default" : 
+                            paiement.statut === "en_cours" ? "secondary" : 
+                            "destructive"
+                          }>
+                            {paiement.statut === "valide" ? "Validé" : 
+                             paiement.statut === "en_cours" ? "En cours" : 
+                             "Échoué"}
                           </Badge>
                         </td>
                         <td className="py-3 px-4 text-center">
@@ -270,31 +300,63 @@ export default function RevenusPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-3">
                   <div>
-                    <p className="text-sm text-muted-foreground">ID Transaction</p>
-                    <p className="font-mono text-sm">{selectedPaiement.id}</p>
+                    <p className="text-sm text-muted-foreground">Numéro de paiement</p>
+                    <p className="font-mono text-sm">{selectedPaiement.numero}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Client</p>
+                    <p className="font-medium">{selectedPaiement.clients?.full_name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Contrat</p>
+                    <p className="font-medium">{selectedPaiement.contrats?.numero || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Type de paiement</p>
+                    <p className="font-medium capitalize">
+                      {selectedPaiement.type_paiement === 'acompte' ? 'Acompte (30%)' : selectedPaiement.type_paiement}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Montant</p>
-                    <p className="text-2xl font-bold text-primary">{selectedPaiement.amount.toLocaleString()} FC</p>
+                    <p className="text-2xl font-bold text-primary">{selectedPaiement.montant_total.toLocaleString()} FC</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Méthode de paiement</p>
-                    <p className="font-medium capitalize">{selectedPaiement.method}</p>
+                    <p className="font-medium capitalize">{selectedPaiement.methode_paiement.replace('_', ' ')}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Date</p>
-                    <p className="font-medium">{new Date(selectedPaiement.created_at).toLocaleDateString()}</p>
+                    <p className="font-medium">
+                      {new Date(selectedPaiement.date_paiement || selectedPaiement.created_at).toLocaleDateString('fr-FR', {
+                        day: '2-digit',
+                        month: 'long',
+                        year: 'numeric'
+                      })}
+                    </p>
                   </div>
+                  {(selectedPaiement.transaction_id || selectedPaiement.reference_paiement) && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Référence de transaction</p>
+                      <p className="font-mono text-xs bg-muted p-2 rounded">
+                        {selectedPaiement.transaction_id || selectedPaiement.reference_paiement}
+                      </p>
+                    </div>
+                  )}
                   <div>
                     <p className="text-sm text-muted-foreground">Statut</p>
-                    <Badge variant={selectedPaiement.status === "completed" ? "default" : "secondary"} className="mt-1">
-                      {selectedPaiement.status === "completed" ? "Complété" : "En attente"}
+                    <Badge variant={selectedPaiement.statut === "valide" ? "default" : "secondary"} className="mt-1">
+                      {selectedPaiement.statut === "valide" ? "Validé" : "En cours"}
                     </Badge>
                   </div>
                 </div>
 
                 <div className="bg-muted/50 p-3 rounded-lg text-sm">
-                  <p className="text-muted-foreground">Votre paiement a été traité avec succès. Vous recevrez les fonds dans votre compte bancaire dans 1-2 jours ouvrables.</p>
+                  <p className="text-muted-foreground">
+                    {selectedPaiement.statut === "valide" 
+                      ? "Ce paiement a été validé. Les fonds seront transférés selon les conditions du contrat."
+                      : "Ce paiement est en cours de traitement. Vous serez notifié une fois validé."}
+                  </p>
                 </div>
 
                 <div className="flex gap-2">

@@ -13,11 +13,17 @@ import { toast } from "sonner";
 
 interface Paiement {
   id: string;
-  mission_id: string;
-  amount: number;
-  method: string;
-  status: string;
+  numero: string;
+  contrat_id: string;
+  type_paiement: string;
+  montant_total: number;
+  methode_paiement: string;
+  statut: string;
+  date_paiement: string | null;
   created_at: string;
+  contrats?: {
+    numero: string;
+  };
 }
 
 export default function PaiementsPage() {
@@ -65,36 +71,29 @@ export default function PaiementsPage() {
         .from("clients")
         .select("id")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
       if (!clientData) {
         setPaiements([]);
         return;
       }
 
-      // Get missions for this client
-      const { data: missionsData } = await supabase
-        .from("missions")
-        .select("id")
-        .eq("client_id", clientData.id);
-
-      const missionIds = missionsData?.map(m => m.id) || [];
-
-      if (missionIds.length === 0) {
-        setPaiements([]);
-        return;
-      }
-
-      // Fetch paiements for these missions
+      // Fetch paiements for this client
       const { data, error } = await supabase
         .from("paiements")
-        .select("*")
-        .in("mission_id", missionIds)
+        .select(`
+          *,
+          contrats (
+            numero
+          )
+        `)
+        .eq("client_id", clientData.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       setPaiements(data || []);
     } catch (error: any) {
+      console.error('Erreur:', error);
       toast.error(error.message || "Erreur lors du chargement des paiements");
     } finally {
       setLoading(false);
@@ -102,20 +101,24 @@ export default function PaiementsPage() {
   };
 
   const getStats = () => {
-    const completed = paiements.filter(p => p.status === "completed").length;
-    const pending = paiements.filter(p => p.status === "pending").length;
-    const totalAmount = paiements.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const valides = paiements.filter(p => p.statut === "valide").length;
+    const enCours = paiements.filter(p => p.statut === "en_cours").length;
+    const totalAmount = paiements
+      .filter(p => p.statut === "valide")
+      .reduce((sum, p) => sum + (p.montant_total || 0), 0);
 
     return [
-      { title: "Total dépensé", value: `${totalAmount.toLocaleString()} FC`, subtitle: "Total", icon: <CreditCard className="w-5 h-5" /> },
-      { title: "Paiements en attente", value: pending.toString(), subtitle: "À valider", icon: <Clock className="w-5 h-5" /> },
-      { title: "Transactions complétées", value: completed.toString(), subtitle: "Total", icon: <CheckCircle className="w-5 h-5" /> },
+      { title: "Total dépensé", value: `${totalAmount.toLocaleString()} FC`, subtitle: "Validés", icon: <CreditCard className="w-5 h-5" /> },
+      { title: "Paiements en attente", value: enCours.toString(), subtitle: "À valider", icon: <Clock className="w-5 h-5" /> },
+      { title: "Transactions complétées", value: valides.toString(), subtitle: "Total", icon: <CheckCircle className="w-5 h-5" /> },
     ];
   };
 
   const filteredPaiements = paiements.filter(p => {
-    const matchesSearch = p.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === "all" || p.status === filterStatus;
+    const matchesSearch = 
+      p.numero?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.contrats?.numero?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = filterStatus === "all" || p.statut === filterStatus;
     return matchesSearch && matchesStatus;
   });
 
@@ -157,9 +160,9 @@ export default function PaiementsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous</SelectItem>
-              <SelectItem value="completed">Complétés</SelectItem>
-              <SelectItem value="pending">En attente</SelectItem>
-              <SelectItem value="failed">Échoués</SelectItem>
+              <SelectItem value="valide">Validés</SelectItem>
+              <SelectItem value="en_cours">En cours</SelectItem>
+              <SelectItem value="echoue">Échoués</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -185,7 +188,9 @@ export default function PaiementsPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">ID</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Numéro</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Contrat</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Type</th>
                       <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Montant</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Méthode</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
@@ -196,13 +201,31 @@ export default function PaiementsPage() {
                   <tbody>
                     {filteredPaiements.map((paiement) => (
                       <tr key={paiement.id} className="border-b border-border hover:bg-muted/50">
-                        <td className="py-3 px-4 text-sm font-mono">{paiement.id}</td>
-                        <td className="py-3 px-4 text-sm text-right font-medium">{paiement.amount.toLocaleString()} FC</td>
-                        <td className="py-3 px-4 text-sm capitalize">{paiement.method}</td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">{new Date(paiement.created_at).toLocaleDateString()}</td>
+                        <td className="py-3 px-4 text-sm font-mono">{paiement.numero}</td>
+                        <td className="py-3 px-4 text-sm">{paiement.contrats?.numero || 'N/A'}</td>
+                        <td className="py-3 px-4 text-sm capitalize">
+                          {paiement.type_paiement === 'acompte' ? 'Acompte' : 
+                           paiement.type_paiement === 'solde' ? 'Solde' : 
+                           paiement.type_paiement}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-right font-medium text-primary">
+                          {paiement.montant_total.toLocaleString()} FC
+                        </td>
+                        <td className="py-3 px-4 text-sm capitalize">
+                          {paiement.methode_paiement.replace('_', ' ')}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">
+                          {new Date(paiement.date_paiement || paiement.created_at).toLocaleDateString('fr-FR')}
+                        </td>
                         <td className="py-3 px-4">
-                          <Badge variant={paiement.status === "completed" ? "default" : paiement.status === "pending" ? "secondary" : "destructive"}>
-                            {paiement.status === "completed" ? "Complété" : paiement.status === "pending" ? "En attente" : "Échoué"}
+                          <Badge variant={
+                            paiement.statut === "valide" ? "default" : 
+                            paiement.statut === "en_cours" ? "secondary" : 
+                            "destructive"
+                          }>
+                            {paiement.statut === "valide" ? "Validé" : 
+                             paiement.statut === "en_cours" ? "En cours" : 
+                             "Échoué"}
                           </Badge>
                         </td>
                         <td className="py-3 px-4 text-center">
@@ -237,31 +260,51 @@ export default function PaiementsPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-3">
                   <div>
-                    <p className="text-sm text-muted-foreground">ID Transaction</p>
-                    <p className="font-mono text-sm">{selectedPaiement.id}</p>
+                    <p className="text-sm text-muted-foreground">Numéro de paiement</p>
+                    <p className="font-mono text-sm">{selectedPaiement.numero}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Contrat</p>
+                    <p className="font-medium">{selectedPaiement.contrats?.numero || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Type de paiement</p>
+                    <p className="font-medium capitalize">
+                      {selectedPaiement.type_paiement === 'acompte' ? 'Acompte (30%)' : 
+                       selectedPaiement.type_paiement === 'solde' ? 'Solde (70%)' : 
+                       selectedPaiement.type_paiement}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Montant</p>
-                    <p className="text-2xl font-bold text-primary">{selectedPaiement.amount.toLocaleString()} FC</p>
+                    <p className="text-2xl font-bold text-primary">{selectedPaiement.montant_total.toLocaleString()} FC</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Méthode de paiement</p>
-                    <p className="font-medium capitalize">{selectedPaiement.method}</p>
+                    <p className="font-medium capitalize">{selectedPaiement.methode_paiement.replace('_', ' ')}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Date</p>
-                    <p className="font-medium">{new Date(selectedPaiement.created_at).toLocaleDateString()}</p>
+                    <p className="font-medium">
+                      {new Date(selectedPaiement.date_paiement || selectedPaiement.created_at).toLocaleDateString('fr-FR', {
+                        day: '2-digit',
+                        month: 'long',
+                        year: 'numeric'
+                      })}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Statut</p>
-                    <Badge variant={selectedPaiement.status === "completed" ? "default" : "secondary"} className="mt-1">
-                      {selectedPaiement.status === "completed" ? "Complété" : "En attente"}
+                    <Badge variant={selectedPaiement.statut === "valide" ? "default" : "secondary"} className="mt-1">
+                      {selectedPaiement.statut === "valide" ? "Validé" : "En cours"}
                     </Badge>
                   </div>
                 </div>
 
                 <div className="bg-muted/50 p-3 rounded-lg text-sm">
-                  <p className="text-muted-foreground">Votre paiement est sécurisé par notre système escrow. Le prestataire recevra le paiement après validation du travail.</p>
+                  <p className="text-muted-foreground">
+                    Votre paiement est sécurisé par notre système escrow. Le prestataire recevra le paiement après validation du travail.
+                  </p>
                 </div>
 
                 <div className="flex gap-2">

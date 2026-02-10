@@ -1,0 +1,72 @@
+═══════════════════════════════════════════════════════════════
+   🚀 ACTIONS RAPIDES À FAIRE MAINTENANT
+═══════════════════════════════════════════════════════════════
+
+📝 ÉTAPE 1: INSTALLER LE SYSTÈME (1 minute)
+───────────────────────────────────────────────────────────────
+1. Ouvrir Supabase SQL Editor
+2. Copier-coller le contenu de: INSTALLER_FLUX_PAIEMENT_COMPLET.sql
+3. Exécuter (Run)
+4. Vérifier que tout est ✅
+
+
+📝 ÉTAPE 2: CRÉER UN DEVIS DE TEST (30 secondes)
+───────────────────────────────────────────────────────────────
+1. Dans Supabase SQL Editor
+2. Copier-coller le contenu de: sql/create_test_devis_for_payment.sql
+3. Exécuter (Run)
+4. Noter l'ID du devis créé
+
+
+📝 ÉTAPE 3: TESTER LE FLUX (2 minutes)
+───────────────────────────────────────────────────────────────
+1. Se connecter en tant que CLIENT dans l'app
+2. Aller sur le dashboard client
+3. Dans "Actions en attente", cliquer "Accepter le devis"
+4. Cocher les 2 cases → Cliquer "Accepter et continuer"
+5. Dessiner une signature → Cliquer "Signer et continuer"
+6. Choisir M-Pesa → Entrer 0812345678 → Cliquer "Payer"
+7. ✅ Voir la page de confirmation!
+
+
+═══════════════════════════════════════════════════════════════
+   ❓ POURQUOI TU NE VOYAIS PAS LE BOUTON DE PAIEMENT?
+═══════════════════════════════════════════════════════════════
+
+Parce que le paiement vient APRÈS la signature!
+
+Le flux est:
+  Accepter devis → Signer contrat → Payer acompte
+
+Chaque page te redirige automatiquement vers la suivante.
+
+
+═══════════════════════════════════════════════════════════════
+   🆘 SI ÇA NE MARCHE PAS
+═══════════════════════════════════════════════════════════════
+
+1. Ouvrir la console du navigateur (F12)
+2. Regarder les erreurs
+3. Exécuter: sql/verify_payment_system.sql
+4. Vérifier que tous les checks sont ✅
+
+
+═══════════════════════════════════════════════════════════════
+   📚 DOCUMENTS UTILES
+═══════════════════════════════════════════════════════════════
+
+✓ REPONSE_SIMPLE.txt
+  → Réponse courte à ta question
+
+✓ EXPLICATION_FLUX_PAIEMENT.txt
+  → Explication détaillée avec schémas
+
+✓ GUIDE_TEST_FLUX_PAIEMENT.txt
+  → Guide complet de test
+
+
+═══════════════════════════════════════════════════════════════
+   ✅ C'EST TOUT!
+═══════════════════════════════════════════════════════════════
+
+3 étapes, 3 minutes, et le flux de paiement fonctionne!

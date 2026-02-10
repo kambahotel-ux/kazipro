@@ -1,0 +1,105 @@
+═══════════════════════════════════════════════════════════════════
+🔧 PROBLÈME: UPDATE CONFIGURATION NE FONCTIONNE PAS
+═══════════════════════════════════════════════════════════════════
+
+SYMPTÔME:
+- Message "Configuration enregistrée avec succès" s'affiche
+- Mais les valeurs ne changent pas dans la base de données
+
+═══════════════════════════════════════════════════════════════════
+✅ SOLUTION CRÉÉE
+═══════════════════════════════════════════════════════════════════
+
+J'ai créé 3 fichiers pour t'aider:
+
+1. FIX_CONFIG_UPDATE_COMPLET.sql
+   → Script SQL complet qui:
+   - Vérifie que la ligne de config existe
+   - Supprime TOUTES les anciennes policies RLS
+   - Crée des policies permissives
+   - Teste l'UPDATE
+   - Affiche l'état final
+
+2. ConfigPaiementPage.tsx (modifié)
+   → Ajout de logs détaillés dans la console:
+   - 💾 Tentative de sauvegarde
+   - ✅ UPDATE réussi
+   - ⚠️ Aucune ligne affectée
+   - ❌ Erreurs détaillées
+
+3. TEST_CONFIG_UPDATE.md
+   → Guide complet de diagnostic avec:
+   - Étapes de test
+   - Causes possibles
+   - Solutions rapides
+   - Tests manuels
+
+═══════════════════════════════════════════════════════════════════
+🎯 MARCHE À SUIVRE
+═══════════════════════════════════════════════════════════════════
+
+ÉTAPE 1: Exécuter le script SQL
+→ Va dans Supabase SQL Editor
+→ Copie/colle le contenu de: FIX_CONFIG_UPDATE_COMPLET.sql
+→ Exécute
+→ Lis les messages (✅ ou ❌)
+
+ÉTAPE 2: Tester la page admin
+→ Va sur: http://localhost:5173/dashboard/admin/config-paiement
+→ Ouvre la console du navigateur (F12)
+→ Modifie une valeur (ex: commission main d'œuvre à 7%)
+→ Clique sur "Enregistrer"
+→ Regarde les logs dans la console
+
+ÉTAPE 3: Vérifier le résultat
+→ Recharge la page
+→ Est-ce que la valeur a changé?
+
+═══════════════════════════════════════════════════════════════════
+🔍 DIAGNOSTIC RAPIDE
+═══════════════════════════════════════════════════════════════════
+
+Si ça ne marche toujours pas, vérifie dans Supabase:
+
+1. La ligne existe?
+   SELECT * FROM configuration_paiement_globale;
+   → Doit retourner 1 ligne avec id = '00000000-0000-0000-0000-000000000001'
+
+2. Les policies RLS?
+   SELECT * FROM pg_policies WHERE tablename = 'configuration_paiement_globale';
+   → Doit montrer: allow_read_config et allow_update_config
+
+3. Tu es connecté?
+   → Dans la console navigateur, tape:
+   const { data: { user } } = await supabase.auth.getUser();
+   console.log(user);
+   → Doit montrer ton user, pas null
+
+═══════════════════════════════════════════════════════════════════
+💡 CAUSES PROBABLES
+═══════════════════════════════════════════════════════════════════
+
+1. ❌ Policies RLS trop restrictives
+   → Le script FIX_CONFIG_UPDATE_COMPLET.sql règle ça
+
+2. ❌ La ligne de config n'existe pas
+   → Le script vérifie et crée si besoin
+
+3. ❌ Utilisateur pas authentifié
+   → Vérifie que tu es bien connecté
+
+4. ❌ ID incorrect dans le code
+   → Le script affiche l'ID réel
+
+═══════════════════════════════════════════════════════════════════
+📞 BESOIN D'AIDE?
+═══════════════════════════════════════════════════════════════════
+
+Envoie-moi:
+1. Le résultat du script SQL (les messages ✅/❌)
+2. Les logs de la console navigateur
+3. Le résultat de: SELECT * FROM configuration_paiement_globale;
+
+Et je t'aiderai à trouver le problème exact!
+
+═══════════════════════════════════════════════════════════════════

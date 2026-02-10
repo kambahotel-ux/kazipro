@@ -1,0 +1,77 @@
+═══════════════════════════════════════════════════════════════════
+✅ CONFIGURATION PAIEMENT - ACCÈS ADMIN
+═══════════════════════════════════════════════════════════════════
+
+## 🎯 OÙ TROUVER LA PAGE
+
+La page "Config Paiement" est maintenant accessible dans l'espace admin:
+
+### Option 1: Via le Dashboard Admin
+1. Va sur /dashboard/admin
+2. Clique sur la carte "Config Paiement" (vert émeraude)
+
+### Option 2: Via la Sidebar
+1. Dans le menu de gauche de l'admin
+2. Clique sur "Config Paiement" (icône carte de crédit)
+
+### Option 3: URL Directe
+http://localhost:5173/dashboard/admin/config-paiement
+
+═══════════════════════════════════════════════════════════════════
+📋 CE QUE TU VERRAS
+═══════════════════════════════════════════════════════════════════
+
+1. 💰 COMMISSIONS KAZIPRO
+   - Slider Main d'œuvre (0-20%)
+   - Slider Matériel (0-20%)
+   - Slider Déplacement (0-20%)
+   - Exemple de calcul en temps réel
+
+2. 🛡️ SÉCURITÉ DES DEUX PARTIES
+   - Slider Acompte (0-100%)
+   - Solde calculé automatiquement
+   - Délai de validation (jours)
+
+3. ⏰ GARANTIE (OPTIONNEL)
+   - Pourcentage de garantie (0-20%)
+   - Durée de garantie (jours)
+
+4. ⚙️ PERMISSIONS PRESTATAIRES
+   - Désactivation paiement KaziPro
+   - Choix des éléments
+   - Modification acompte
+
+5. 📝 RAISON DE LA MODIFICATION
+   - Champ texte optionnel
+
+6. 💾 ACTIONS
+   - Bouton "Enregistrer les modifications"
+   - Bouton "Annuler"
+
+═══════════════════════════════════════════════════════════════════
+🧪 TESTE MAINTENANT
+═══════════════════════════════════════════════════════════════════
+
+1. Redémarre ton serveur si nécessaire:
+   npm run dev
+
+2. Connecte-toi en tant qu'admin
+
+3. Va dans l'espace admin
+
+4. Tu devrais voir "Config Paiement" dans:
+   - Les cartes du dashboard
+   - Le menu de gauche (sidebar)
+
+5. Clique dessus et teste!
+
+═══════════════════════════════════════════════════════════════════
+✅ FICHIERS MODIFIÉS
+═══════════════════════════════════════════════════════════════════
+
+1. src/pages/dashboard/admin/ConfigPaiementPage.tsx (CRÉÉ)
+2. src/pages/dashboard/admin/AdminDashboard.tsx (MODIFIÉ)
+3. src/components/dashboard/DashboardSidebar.tsx (MODIFIÉ)
+4. src/App.tsx (MODIFIÉ)
+
+═══════════════════════════════════════════════════════════════════

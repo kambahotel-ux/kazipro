@@ -1,0 +1,125 @@
+═══════════════════════════════════════════════════════════════════
+🧪 TESTER LE FLUX COMPLET - GUIDE SIMPLE
+═══════════════════════════════════════════════════════════════════
+
+✅ MODIFICATION TERMINÉE
+Le contrat est maintenant créé quand vous cliquez sur "Voir le contrat"
+
+═══════════════════════════════════════════════════════════════════
+📝 TEST ÉTAPE PAR ÉTAPE (5 MINUTES)
+═══════════════════════════════════════════════════════════════════
+
+PRÉPARATION
+-----------
+1. Rafraîchir l'application (F5)
+2. Se connecter en tant que CLIENT
+
+ÉTAPE 1: ACCEPTER UN DEVIS
+---------------------------
+1. Aller sur "Mes Demandes"
+2. Cliquer sur une demande qui a des devis
+3. Trouver un devis avec statut "Envoyé" ou "En attente"
+4. Cliquer sur le bouton "Accepter"
+5. Cocher "J'accepte les conditions générales"
+6. Cocher "J'accepte les conditions de paiement"
+7. Cliquer "Accepter et continuer"
+
+RÉSULTAT ATTENDU:
+✅ Message: "Devis accepté avec succès! Cliquez sur 'Voir le contrat'..."
+✅ La page se recharge
+✅ Un bouton vert "Voir le contrat et signer" apparaît
+❌ PAS de redirection automatique
+
+ÉTAPE 2: VOIR LE CONTRAT
+-------------------------
+1. Cliquer sur le bouton "Voir le contrat et signer"
+
+RÉSULTAT ATTENDU:
+✅ Redirection vers la page de signature
+✅ Message: "Contrat généré avec succès!" (si c'est la première fois)
+✅ Le contrat s'affiche avec son contenu HTML
+✅ Vous voyez:
+   - Le numéro du contrat (CTR-...)
+   - Le contenu du contrat
+   - Les montants (acompte 30%, solde 70%)
+   - Une zone blanche pour signer (canvas)
+   - Un bouton "Signer et continuer vers le paiement"
+
+ÉTAPE 3: SIGNER LE CONTRAT
+---------------------------
+1. Dessiner votre signature dans la zone blanche
+   (avec la souris ou le doigt sur mobile)
+2. Si vous voulez recommencer, cliquer "Effacer"
+3. Cliquer "Signer et continuer vers le paiement"
+
+RÉSULTAT ATTENDU:
+✅ Message: "Contrat signé avec succès!"
+✅ Redirection vers la page de paiement de l'acompte
+✅ Vous voyez le montant à payer (30% du total)
+
+═══════════════════════════════════════════════════════════════════
+🔍 VÉRIFICATIONS DANS SUPABASE (OPTIONNEL)
+═══════════════════════════════════════════════════════════════════
+
+Après l'acceptation du devis:
+1. Ouvrir Supabase Table Editor
+2. Table "devis_pro"
+3. Trouver votre devis
+4. Vérifier: statut = 'accepte', date_acceptation remplie
+
+Après avoir cliqué "Voir le contrat":
+1. Table "contrats"
+2. Vous devriez voir un nouveau contrat
+3. Vérifier: numero, devis_id, statut = 'genere'
+
+Après la signature:
+1. Table "contrats"
+2. Vérifier: signature_client_url rempli, statut = 'signe_client'
+
+═══════════════════════════════════════════════════════════════════
+⚠️ SI VOUS AVEZ UNE ERREUR
+═══════════════════════════════════════════════════════════════════
+
+ERREUR: "Devis introuvable"
+→ Vérifiez que vous êtes connecté en tant que CLIENT
+→ Le devis doit vous appartenir
+
+ERREUR: "Permission denied"
+→ Exécutez: INSTALLER_TRIGGER_SEULEMENT.sql
+→ Configure les permissions RLS
+
+ERREUR: "Bucket signatures not found"
+→ Exécutez: sql/create_storage_signatures.sql
+→ Crée le bucket pour les signatures
+
+Autre erreur:
+→ Ouvrez la console (F12)
+→ Copiez-moi le message exact
+
+═══════════════════════════════════════════════════════════════════
+✅ POINTS À VÉRIFIER
+═══════════════════════════════════════════════════════════════════
+
+☐ Acceptation du devis fonctionne
+☐ Message "Devis accepté avec succès!" s'affiche
+☐ Bouton "Voir le contrat" apparaît
+☐ Clic sur le bouton redirige vers la signature
+☐ Contrat s'affiche correctement
+☐ Zone de signature fonctionne
+☐ Signature enregistrée
+☐ Redirection vers le paiement
+
+═══════════════════════════════════════════════════════════════════
+💬 APRÈS LE TEST
+═══════════════════════════════════════════════════════════════════
+
+Dites-moi:
+✅ "Ça marche! Le contrat est créé quand je clique sur 'Voir le contrat'"
+❌ "J'ai une erreur à l'étape X: [message]"
+❓ "Le bouton 'Voir le contrat' n'apparaît pas"
+
+═══════════════════════════════════════════════════════════════════
+
+👉 COMMENCEZ: Rafraîchissez l'app (F5) et acceptez un devis!
+
+═══════════════════════════════════════════════════════════════════

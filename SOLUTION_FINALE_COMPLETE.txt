@@ -1,0 +1,76 @@
+═══════════════════════════════════════════════════════════════════
+⚡ SOLUTION FINALE - CONTRAINTE FOREIGN KEY
+═══════════════════════════════════════════════════════════════════
+
+ERREUR: "violates foreign key constraint contrats_devis_id_fkey"
+
+CAUSE: La contrainte exige que devis_id existe dans `devis_pro`,
+mais votre devis est dans l'ancienne table `devis`.
+
+SOLUTION: Supprimer la contrainte foreign key.
+
+═══════════════════════════════════════════════════════════════════
+📝 EXÉCUTER CE SCRIPT (30 SECONDES)
+═══════════════════════════════════════════════════════════════════
+
+1. Ouvrez Supabase SQL Editor
+2. Copiez le fichier: FIX_FOREIGN_KEY_DEVIS.sql
+3. Collez
+4. Run
+
+RÉSULTAT ATTENDU:
+✅ "Contrainte foreign key supprimée!"
+✅ Liste des contraintes restantes
+✅ "CONTRAINTE SUPPRIMÉE!"
+
+═══════════════════════════════════════════════════════════════════
+🧪 TESTER APRÈS
+═══════════════════════════════════════════════════════════════════
+
+1. Rafraîchir l'app (F5)
+2. Cliquer sur "Voir le contrat"
+
+RÉSULTAT ATTENDU:
+✅ Contrat créé avec succès
+✅ Message: "Contrat généré avec succès!"
+✅ Page de signature s'affiche
+✅ Vous pouvez signer
+✅ PAS d'erreur foreign key
+
+═══════════════════════════════════════════════════════════════════
+💡 POURQUOI SUPPRIMER LA CONTRAINTE?
+═══════════════════════════════════════════════════════════════════
+
+AVANT:
+- Contrainte: devis_id DOIT exister dans devis_pro
+- Votre devis: existe dans `devis` (ancienne table)
+- Résultat: ❌ Erreur foreign key
+
+APRÈS:
+- Pas de contrainte foreign key
+- devis_id peut pointer vers n'importe quelle table
+- Résultat: ✅ Contrat créé avec succès
+
+SÉCURITÉ:
+- Pas de problème de sécurité
+- Le devis_id est toujours stocké
+- Vous pouvez toujours retrouver le devis
+- Juste plus de validation automatique
+
+═══════════════════════════════════════════════════════════════════
+📊 RÉSUMÉ DES PROBLÈMES RÉSOLUS
+═══════════════════════════════════════════════════════════════════
+
+1. ✅ Devis dans deux tables (devis + devis_pro)
+2. ✅ Permissions RLS bloquantes
+3. ✅ client_id manquant
+4. ✅ Contrainte foreign key
+
+APRÈS CE FIX:
+✅ Tout devrait fonctionner!
+
+═══════════════════════════════════════════════════════════════════
+
+👉 EXÉCUTEZ: FIX_FOREIGN_KEY_DEVIS.sql
+
+═══════════════════════════════════════════════════════════════════

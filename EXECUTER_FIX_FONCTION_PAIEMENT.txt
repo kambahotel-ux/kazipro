@@ -1,0 +1,114 @@
+🔴 ERREUR LORS DU PAIEMENT
+==========================
+
+Erreur rencontrée :
+POST /rest/v1/rpc/generate_paiement_numero
+Status: 400 Bad Request
+Error: "column reference 'numero' is ambiguous"
+
+
+🔍 CAUSE DU PROBLÈME
+--------------------
+
+La fonction SQL `generate_paiement_numero()` a une référence ambiguë.
+Dans la requête SQL, la colonne "numero" peut faire référence à :
+1. La colonne de la table "paiements"
+2. La variable locale "numero"
+
+PostgreSQL ne sait pas laquelle utiliser → Erreur
+
+
+✅ SOLUTION
+-----------
+
+Exécuter le fichier SQL suivant dans Supabase SQL Editor :
+
+📁 Fichier : FIX_TOUTES_FONCTIONS_NUMERO.sql
+
+
+🚀 COMMENT EXÉCUTER
+-------------------
+
+1. Ouvrez Supabase Dashboard
+   https://supabase.com/dashboard
+
+2. Allez dans votre projet KaziPro
+
+3. Cliquez sur "SQL Editor" dans le menu de gauche
+
+4. Cliquez sur "New query"
+
+5. Copiez TOUT le contenu du fichier :
+   FIX_TOUTES_FONCTIONS_NUMERO.sql
+
+6. Collez dans l'éditeur SQL
+
+7. Cliquez sur "Run" (ou Ctrl+Enter)
+
+8. Vous devriez voir :
+   ✅ Toutes les fonctions ont été corrigées avec succès!
+   📋 Tests des fonctions:
+      - generate_contrat_numero() → CONT-2026-0001
+      - generate_paiement_numero() → PAY-2026-0001
+      - generate_litige_numero() → LIT-2026-0001
+
+
+📝 CE QUI EST CORRIGÉ
+---------------------
+
+3 fonctions sont corrigées :
+
+1. generate_contrat_numero()
+   Avant : WHERE numero LIKE...
+   Après : WHERE contrats.numero LIKE...
+
+2. generate_paiement_numero()
+   Avant : WHERE numero LIKE...
+   Après : WHERE paiements.numero LIKE...
+
+3. generate_litige_numero()
+   Avant : WHERE numero LIKE...
+   Après : WHERE litiges.numero LIKE...
+
+
+🧪 APRÈS L'EXÉCUTION
+--------------------
+
+1. Retournez sur votre application
+
+2. Allez sur la page de paiement
+
+3. Cliquez sur "Payer"
+
+4. → Le paiement devrait maintenant fonctionner !
+
+
+⚠️ IMPORTANT
+------------
+
+Ce fix corrige TOUTES les fonctions de génération de numéro.
+Vous n'aurez plus ce problème pour :
+- Les contrats
+- Les paiements
+- Les litiges
+
+
+✅ STATUT
+---------
+
+Une fois le SQL exécuté :
+✅ Fonction generate_paiement_numero() corrigée
+✅ Fonction generate_contrat_numero() corrigée
+✅ Fonction generate_litige_numero() corrigée
+✅ Paiement fonctionnel
+
+
+📞 SI ÇA NE MARCHE PAS
+----------------------
+
+Vérifiez que :
+1. Le SQL s'est exécuté sans erreur
+2. Vous voyez les messages de confirmation
+3. Vous avez rafraîchi la page de l'application
+
+Si le problème persiste, partagez le message d'erreur complet.

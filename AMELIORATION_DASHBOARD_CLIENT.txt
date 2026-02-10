@@ -1,0 +1,169 @@
+═══════════════════════════════════════════════════════════════════
+✅ AMÉLIORATION - DASHBOARD CLIENT (ACTIONS EN ATTENTE)
+═══════════════════════════════════════════════════════════════════
+
+Date: 27 janvier 2025
+Statut: ✅ Implémentée
+
+═══════════════════════════════════════════════════════════════════
+🎯 PROBLÈME RÉSOLU
+═══════════════════════════════════════════════════════════════════
+
+Le client ne voyait pas clairement:
+- Les devis reçus à accepter
+- Les contrats à signer
+- Les paiements à effectuer
+
+Il devait naviguer manuellement pour trouver ces actions.
+
+═══════════════════════════════════════════════════════════════════
+✨ SOLUTION IMPLÉMENTÉE
+═══════════════════════════════════════════════════════════════════
+
+Ajout d'une section "Actions en attente" sur le dashboard client qui affiche:
+
+1. **Devis à accepter**
+   - Statut: 'en_attente'
+   - Affiche: Numéro, montant, prestataire
+   - Action: "Accepter le devis"
+   - Lien: /dashboard/client/devis/:devisId/accepter
+
+2. **Contrats à signer**
+   - Statut: 'genere'
+   - Affiche: Numéro de contrat
+   - Action: "Signer le contrat"
+   - Lien: /dashboard/client/contrat/:devisId
+
+3. **Paiements à effectuer**
+   - Contrats signés sans paiement d'acompte
+   - Affiche: Numéro de contrat
+   - Action: "Payer l'acompte"
+   - Lien: /dashboard/client/paiement/:contratId/acompte
+
+═══════════════════════════════════════════════════════════════════
+🎨 DESIGN
+═══════════════════════════════════════════════════════════════════
+
+- Section mise en évidence avec fond orange clair
+- Bordure orange pour attirer l'attention
+- Icône Clock pour indiquer l'urgence
+- Boutons d'action clairs avec flèche
+- Affichage des 5 actions les plus récentes
+- Tri par date (plus récent en premier)
+
+═══════════════════════════════════════════════════════════════════
+📊 FLUX UTILISATEUR
+═══════════════════════════════════════════════════════════════════
+
+1. Client se connecte
+   → Va sur /dashboard/client
+
+2. Voit immédiatement les actions en attente
+   → Section orange en haut du dashboard
+
+3. Clique sur une action
+   → Redirigé vers la page appropriée:
+     - Acceptation de devis
+     - Signature de contrat
+     - Paiement d'acompte
+
+4. Complète l'action
+   → L'action disparaît du dashboard
+   → Passe à l'étape suivante automatiquement
+
+═══════════════════════════════════════════════════════════════════
+🔧 MODIFICATIONS TECHNIQUES
+═══════════════════════════════════════════════════════════════════
+
+Fichier: src/pages/dashboard/client/ClientDashboard.tsx
+
+Ajouts:
+- State `pendingActions` pour stocker les actions
+- Fonction `fetchPendingActions()` pour récupérer:
+  * Devis en attente (statut = 'en_attente')
+  * Contrats à signer (statut = 'genere')
+  * Paiements manquants (contrats signés sans paiement)
+- Section UI "Actions en attente" avec:
+  * Fond orange clair
+  * Liste des actions
+  * Boutons d'action avec liens
+
+Requêtes SQL:
+1. SELECT devis_pro WHERE statut = 'en_attente'
+2. SELECT contrats WHERE statut = 'genere'
+3. SELECT contrats WHERE statut = 'signe_client'
+   + Vérification absence paiement acompte
+
+═══════════════════════════════════════════════════════════════════
+✅ AVANTAGES
+═══════════════════════════════════════════════════════════════════
+
+✓ Visibilité immédiate des actions requises
+✓ Réduction des clics pour accéder aux actions
+✓ Guidage clair du client dans le processus
+✓ Priorisation des actions par date
+✓ Design attractif qui attire l'attention
+✓ Expérience utilisateur améliorée
+
+═══════════════════════════════════════════════════════════════════
+🎯 EXEMPLE D'AFFICHAGE
+═══════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🕐 Actions en attente                                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│ ┌─────────────────────────────────────────────────────┐   │
+│ │ Devis N° DEV-20250127-0001                          │   │
+│ │ 150,000 FC - Jean Mukendi                           │   │
+│ │                              [Accepter le devis →]  │   │
+│ └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│ ┌─────────────────────────────────────────────────────┐   │
+│ │ Contrat N° CNT-20250127-0001                        │   │
+│ │ Signature électronique requise                      │   │
+│ │                              [Signer le contrat →]  │   │
+│ └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│ ┌─────────────────────────────────────────────────────┐   │
+│ │ Paiement acompte - Contrat N° CNT-20250127-0002     │   │
+│ │ Paiement de l'acompte requis                        │   │
+│ │                              [Payer l'acompte →]    │   │
+│ └─────────────────────────────────────────────────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+📝 NOTES
+═══════════════════════════════════════════════════════════════════
+
+- La section n'apparaît que s'il y a des actions en attente
+- Limite de 5 actions affichées (les plus récentes)
+- Les actions disparaissent automatiquement une fois complétées
+- Chaque action a un lien direct vers la page appropriée
+- Design responsive (mobile-friendly)
+
+═══════════════════════════════════════════════════════════════════
+🚀 PROCHAINES AMÉLIORATIONS POSSIBLES
+═══════════════════════════════════════════════════════════════════
+
+□ Notifications push pour nouvelles actions
+□ Badge de compteur sur l'icône du dashboard
+□ Emails de rappel pour actions en attente
+□ Filtrage par type d'action
+□ Historique des actions complétées
+□ Estimation du temps pour chaque action
+
+═══════════════════════════════════════════════════════════════════
+🎉 RÉSUMÉ
+═══════════════════════════════════════════════════════════════════
+
+✅ Section "Actions en attente" ajoutée au dashboard
+✅ Affichage des devis, contrats et paiements en attente
+✅ Liens directs vers les pages d'action
+✅ Design attractif et visible
+✅ Expérience utilisateur grandement améliorée
+
+Le client voit maintenant immédiatement ce qu'il doit faire!
+
+═══════════════════════════════════════════════════════════════════

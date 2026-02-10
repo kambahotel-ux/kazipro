@@ -1,0 +1,42 @@
+═══════════════════════════════════════════════════════════════════
+⚡ FIX URGENT - ERREUR RLS CONTRATS
+═══════════════════════════════════════════════════════════════════
+
+ERREUR: "new row violates row-level security policy for table contrats"
+
+CAUSE: Le devis de l'ancienne table `devis` n'a pas de client_id,
+donc la policy RLS bloque la création du contrat.
+
+SOLUTION: Policy ultra-permissive pour permettre la création.
+
+═══════════════════════════════════════════════════════════════════
+📝 EXÉCUTER CE SCRIPT (1 MINUTE)
+═══════════════════════════════════════════════════════════════════
+
+1. Ouvrez Supabase SQL Editor
+2. Copiez TOUT le fichier: FIX_RLS_CONTRATS_FINAL.sql
+3. Collez
+4. Run
+
+RÉSULTAT ATTENDU:
+✅ "Policies contrats mises à jour!"
+✅ Liste des policies affichée
+✅ "PERMISSIONS RLS CONFIGURÉES!"
+
+═══════════════════════════════════════════════════════════════════
+🧪 TESTER APRÈS
+═══════════════════════════════════════════════════════════════════
+
+1. Rafraîchir l'app (F5)
+2. Cliquer sur "Voir le contrat"
+
+RÉSULTAT ATTENDU:
+✅ Contrat créé avec succès
+✅ Page de signature s'affiche
+✅ PAS d'erreur RLS
+
+═══════════════════════════════════════════════════════════════════
+
+👉 EXÉCUTEZ: FIX_RLS_CONTRATS_FINAL.sql
+
+═══════════════════════════════════════════════════════════════════

@@ -1,0 +1,179 @@
+═══════════════════════════════════════════════════════════════
+   EXPLICATION DU FLUX DE PAIEMENT
+═══════════════════════════════════════════════════════════════
+
+🔍 TON PROBLÈME
+───────────────────────────────────────────────────────────────
+Tu as dit: "j'entre dans les devis à accepter je ne vois pas le 
+bouton pour le paiement ni contrat"
+
+C'EST NORMAL! Voici pourquoi:
+
+
+📊 LE FLUX COMPLET (3 ÉTAPES)
+═══════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────┐
+│  ÉTAPE 1: ACCEPTER LE DEVIS                                 │
+│  Page: /dashboard/client/devis/:devisId/accepter            │
+│  ─────────────────────────────────────────────────────────  │
+│  Sur cette page, tu vois:                                   │
+│  ✓ Détails du devis                                         │
+│  ✓ Montant de l'acompte (30%)                               │
+│  ✓ Montant du solde (70%)                                   │
+│  ✓ 2 checkboxes à cocher                                    │
+│  ✓ Bouton "Accepter et continuer"                           │
+│                                                              │
+│  ❌ PAS DE BOUTON PAIEMENT ICI                              │
+│  ❌ PAS DE BOUTON CONTRAT ICI                               │
+│                                                              │
+│  Quand tu cliques "Accepter et continuer":                  │
+│  → Le devis passe en statut "accepte"                       │
+│  → Un contrat est créé automatiquement (trigger SQL)        │
+│  → Tu es redirigé vers l'ÉTAPE 2                            │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  ÉTAPE 2: SIGNER LE CONTRAT                                 │
+│  Page: /dashboard/client/contrat/:devisId                   │
+│  ─────────────────────────────────────────────────────────  │
+│  Sur cette page, tu vois:                                   │
+│  ✓ Le contenu du contrat (HTML)                             │
+│  ✓ Une zone de signature (canvas blanc)                     │
+│  ✓ Bouton "Effacer"                                         │
+│  ✓ Bouton "Signer et continuer vers le paiement"            │
+│                                                              │
+│  ❌ PAS DE BOUTON PAIEMENT DIRECT ICI                       │
+│                                                              │
+│  Quand tu cliques "Signer et continuer":                    │
+│  → Ta signature est uploadée                                │
+│  → Le contrat passe en statut "signe_client"                │
+│  → Tu es redirigé vers l'ÉTAPE 3                            │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  ÉTAPE 3: PAYER L'ACOMPTE                                   │
+│  Page: /dashboard/client/paiement/:contratId/acompte        │
+│  ─────────────────────────────────────────────────────────  │
+│  Sur cette page, tu vois:                                   │
+│  ✓ Détails du contrat                                       │
+│  ✓ Montant de l'acompte                                     │
+│  ✓ Choix de méthode (M-Pesa, Airtel, Orange)               │
+│  ✓ Champ numéro de téléphone                                │
+│  ✓ Bouton "Payer l'acompte"                                 │
+│                                                              │
+│  🎯 C'EST ICI QUE TU PAIES!                                 │
+│                                                              │
+│  Quand tu cliques "Payer l'acompte":                        │
+│  → Le paiement est créé                                     │
+│  → Une mission est créée automatiquement                    │
+│  → Tu es redirigé vers la confirmation                      │
+└─────────────────────────────────────────────────────────────┘
+
+
+🎯 POURQUOI CE FLUX EN 3 ÉTAPES?
+═══════════════════════════════════════════════════════════════
+
+1. ACCEPTATION DU DEVIS
+   → Le client accepte les conditions et les prix
+   → Engagement moral mais pas encore légal
+
+2. SIGNATURE DU CONTRAT
+   → Engagement légal des deux parties
+   → Preuve juridique en cas de litige
+   → Nécessaire AVANT le paiement
+
+3. PAIEMENT DE L'ACOMPTE
+   → Sécurisation du prestataire
+   → Démarrage effectif de la mission
+   → Argent bloqué jusqu'au début des travaux
+
+
+🔧 CE QU'IL FAUT FAIRE POUR TESTER
+═══════════════════════════════════════════════════════════════
+
+1. EXÉCUTER LES SCRIPTS SQL (dans l'ordre):
+   ✅ sql/create_storage_signatures.sql
+   ✅ sql/create_trigger_contrat_auto.sql
+   ✅ FIX_RLS_PAIEMENTS.sql
+
+2. CRÉER UN DEVIS DE TEST:
+   ✅ sql/create_test_devis_for_payment.sql
+
+3. TESTER LE FLUX COMPLET:
+   ✅ Se connecter en tant que client
+   ✅ Aller sur le dashboard
+   ✅ Cliquer sur "Accepter le devis" dans "Actions en attente"
+   ✅ Cocher les 2 cases et cliquer "Accepter et continuer"
+   ✅ Dessiner une signature et cliquer "Signer et continuer"
+   ✅ Choisir une méthode de paiement et payer
+
+
+📱 NAVIGATION AUTOMATIQUE
+═══════════════════════════════════════════════════════════════
+
+Le système te guide automatiquement:
+
+Dashboard Client
+    ↓ (clic sur "Accepter le devis")
+Page Acceptation Devis
+    ↓ (clic sur "Accepter et continuer")
+Page Signature Contrat
+    ↓ (clic sur "Signer et continuer")
+Page Paiement Acompte
+    ↓ (clic sur "Payer l'acompte")
+Page Confirmation
+    ↓ (clic sur "Voir ma mission")
+Page Détail Mission
+
+
+🚨 SI ÇA NE MARCHE PAS
+═══════════════════════════════════════════════════════════════
+
+PROBLÈME 1: "Le contrat est en cours de génération"
+→ Le trigger SQL n'a pas créé le contrat
+→ Solution: Exécuter sql/create_trigger_contrat_auto.sql
+
+PROBLÈME 2: "Erreur lors de la signature"
+→ Le bucket "signatures" n'existe pas
+→ Solution: Exécuter sql/create_storage_signatures.sql
+
+PROBLÈME 3: "Erreur lors du paiement"
+→ Les RLS ne sont pas configurés
+→ Solution: Exécuter FIX_RLS_PAIEMENTS.sql
+
+PROBLÈME 4: Page blanche
+→ Erreur JavaScript
+→ Solution: Ouvrir la console (F12) et voir l'erreur
+
+
+📚 DOCUMENTS À CONSULTER
+═══════════════════════════════════════════════════════════════
+
+✓ GUIDE_TEST_FLUX_PAIEMENT.txt
+  → Guide complet avec toutes les étapes de test
+
+✓ FLUX_PAIEMENT_COMPLET.txt
+  → Diagramme détaillé du flux
+
+✓ PHASE3_PAIEMENT_ACOMPTE_COMPLETE.txt
+  → Documentation de la phase 3 (paiement)
+
+✓ PHASE2_SIGNATURE_COMPLETE.txt
+  → Documentation de la phase 2 (signature)
+
+
+💡 RÉSUMÉ
+═══════════════════════════════════════════════════════════════
+
+Tu ne vois pas le bouton de paiement sur la page d'acceptation 
+de devis parce que:
+
+1. Le paiement vient APRÈS la signature du contrat
+2. La signature vient APRÈS l'acceptation du devis
+3. Chaque étape redirige automatiquement vers la suivante
+
+C'est un flux séquentiel pour des raisons légales et de sécurité:
+Acceptation → Signature → Paiement
+
+Tu dois suivre les 3 étapes dans l'ordre!

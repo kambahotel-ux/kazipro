@@ -1,0 +1,283 @@
+═══════════════════════════════════════════════════════════════════
+✅ PAGES PRESTATAIRE CRÉÉES - SYSTÈME DE PAIEMENT
+═══════════════════════════════════════════════════════════════════
+
+Date: 27 janvier 2025
+Statut: ✅ Terminé
+
+═══════════════════════════════════════════════════════════════════
+📦 FICHIERS CRÉÉS (2 nouvelles pages)
+═══════════════════════════════════════════════════════════════════
+
+1. src/pages/dashboard/prestataire/ConfigPaiementPage.tsx
+   → Page de configuration du paiement pour les prestataires
+   → Route: /dashboard/prestataire/config-paiement
+   
+   Fonctionnalités:
+   ✓ Activer/désactiver le paiement via KaziPro
+   ✓ Choisir quels éléments passent par KaziPro:
+     - Main d'œuvre (avec commission affichée)
+     - Matériel (avec commission affichée)
+     - Déplacement (avec commission affichée)
+   ✓ Personnaliser le pourcentage d'acompte (si autorisé)
+   ✓ Voir un exemple de calcul de commission
+   ✓ Résumé de la configuration
+   ✓ Respect des permissions admin (permettre_desactivation, etc.)
+
+2. src/pages/dashboard/prestataire/FraisDeplacementPage.tsx
+   → Page de configuration des frais de déplacement
+   → Route: /dashboard/prestataire/frais-deplacement
+   
+   Fonctionnalités:
+   ✓ Activer/désactiver les frais de déplacement
+   ✓ 4 modes de calcul:
+     - Montant fixe (ex: 5000 FC)
+     - Par kilomètre (ex: 500 FC/km avec 5 km gratuits)
+     - Par zone géographique (ex: Zone A: 3000 FC, Zone B: 5000 FC)
+     - Gratuit (inclus dans le prix)
+   ✓ Ajouter/supprimer des zones
+   ✓ Définir des limites min/max
+   ✓ Exemple de calcul en temps réel
+
+═══════════════════════════════════════════════════════════════════
+🔧 FICHIERS MODIFIÉS (2 fichiers)
+═══════════════════════════════════════════════════════════════════
+
+1. src/App.tsx
+   Ajouté:
+   ✓ Import de ConfigPaiementPrestatairePage
+   ✓ Import de FraisDeplacementPage
+   ✓ Route /dashboard/prestataire/config-paiement
+   ✓ Route /dashboard/prestataire/frais-deplacement
+
+2. src/components/dashboard/DashboardSidebar.tsx
+   Ajouté:
+   ✓ Lien "Config Paiement" dans le menu prestataire
+   ✓ Icône CreditCard
+   ✓ Positionné entre "Revenus" et "Messages"
+
+═══════════════════════════════════════════════════════════════════
+🎨 DESIGN ET UX
+═══════════════════════════════════════════════════════════════════
+
+ConfigPaiementPage:
+─────────────────
+✓ Layout DashboardLayout avec sidebar
+✓ Header avec icône Settings
+✓ Alert info sur l'application aux nouveaux devis
+✓ Card activation avec Switch principal
+✓ Card éléments avec 3 switches (travaux, matériel, déplacement)
+✓ Card acompte personnalisé avec slider
+✓ Card résumé avec grid 2 colonnes
+✓ Exemple de calcul avec montants réels
+✓ Boutons sticky en bas (Enregistrer/Annuler)
+✓ Loading state avec spinner
+✓ Toast notifications
+✓ Responsive mobile
+
+FraisDeplacementPage:
+────────────────────
+✓ Layout DashboardLayout avec sidebar
+✓ Header avec icône Car
+✓ Alert info sur le caractère optionnel
+✓ Card activation avec Switch
+✓ Card mode de calcul avec RadioGroup (4 options)
+✓ Cards de configuration selon le mode:
+  - Fixe: Input montant
+  - Par km: Input prix/km + distance gratuite + exemple
+  - Par zone: Liste zones + formulaire ajout + bouton supprimer
+  - Gratuit: Rien à configurer
+✓ Card limites avec min/max
+✓ Bouton sticky en bas (Enregistrer)
+✓ Loading state avec spinner
+✓ Toast notifications
+✓ Responsive mobile
+
+═══════════════════════════════════════════════════════════════════
+🔗 NOUVELLES ROUTES
+═══════════════════════════════════════════════════════════════════
+
+1. /dashboard/prestataire/config-paiement
+   → Configuration du paiement KaziPro
+   → Accessible depuis la sidebar
+   → Protected route (authentification requise)
+
+2. /dashboard/prestataire/frais-deplacement
+   → Configuration des frais de déplacement
+   → Accessible depuis la sidebar (bientôt)
+   → Protected route (authentification requise)
+
+═══════════════════════════════════════════════════════════════════
+📊 INTÉGRATION AVEC LE SYSTÈME
+═══════════════════════════════════════════════════════════════════
+
+Hooks utilisés:
+✓ useConfigurationGlobale() - Config admin
+✓ useConfigurationPrestataire() - Config prestataire
+✓ useSaveConfigurationPrestataire() - Sauvegarde config
+✓ useFraisDeplacementConfig() - Config frais
+✓ useSaveFraisDeplacementConfig() - Sauvegarde frais
+✓ useAuth() - Authentification
+
+Types utilisés:
+✓ ConfigurationPaiementGlobale
+✓ ConfigurationPaiementPrestataire
+✓ FraisDeplacementConfig
+✓ ModeCalculFrais
+✓ ZoneFrais
+
+Tables Supabase:
+✓ configuration_paiement_globale (lecture)
+✓ configuration_paiement_prestataire (lecture/écriture)
+✓ frais_deplacement_config (lecture/écriture)
+
+═══════════════════════════════════════════════════════════════════
+🎯 FONCTIONNALITÉS CLÉS
+═══════════════════════════════════════════════════════════════════
+
+ConfigPaiementPage:
+──────────────────
+1. Activation/Désactivation
+   → Switch principal pour activer/désactiver KaziPro
+   → Respecte la permission admin (permettre_desactivation)
+   → Message si obligatoire
+
+2. Choix des éléments
+   → 3 switches indépendants (travaux, matériel, déplacement)
+   → Affichage du taux de commission pour chaque élément
+   → Respecte la permission admin (permettre_choix_elements)
+   → Calcul automatique de la commission totale
+
+3. Acompte personnalisé
+   → Switch pour utiliser l'acompte par défaut ou personnalisé
+   → Slider de 20% à 50% par pas de 5%
+   → Calcul automatique du solde (100 - acompte)
+   → Respecte la permission admin (permettre_modification_acompte)
+
+4. Exemple de calcul
+   → Calcul en temps réel selon la configuration
+   → Exemple: 100,000 FC (60k + 30k + 10k)
+   → Affiche la commission totale en FC
+
+5. Résumé
+   → Vue d'ensemble de la configuration
+   → Grid 2 colonnes
+   → Statut activé/désactivé pour chaque élément
+
+FraisDeplacementPage:
+────────────────────
+1. Activation
+   → Switch pour activer/désactiver les frais
+   → Si désactivé, aucun frais ne sera facturé
+
+2. Mode fixe
+   → Input pour le montant fixe
+   → Appliqué à tous les devis
+
+3. Mode par kilomètre
+   → Input prix par km
+   → Input distance gratuite (premiers km)
+   → Exemple de calcul pour 25 km
+   → Calcul: (distance - gratuit) × prix/km
+
+4. Mode par zone
+   → Liste des zones avec nom et prix
+   → Formulaire d'ajout (nom + prix)
+   → Bouton supprimer pour chaque zone
+   → Validation: nom et prix requis
+
+5. Mode gratuit
+   → Aucune configuration nécessaire
+   → Frais inclus dans le prix
+
+6. Limites
+   → Montant minimum (plancher)
+   → Montant maximum (plafond)
+   → Optionnel pour tous les modes
+
+═══════════════════════════════════════════════════════════════════
+✅ VÉRIFICATIONS EFFECTUÉES
+═══════════════════════════════════════════════════════════════════
+
+✓ Pas d'erreurs TypeScript
+✓ Imports corrects
+✓ Routes ajoutées
+✓ Composants valides
+✓ Hooks fonctionnels
+✓ Types corrects
+✓ UI responsive
+✓ Loading states
+✓ Error handling
+✓ Toast notifications
+✓ Sidebar mise à jour
+
+═══════════════════════════════════════════════════════════════════
+🎯 COMMENT TESTER
+═══════════════════════════════════════════════════════════════════
+
+1. Connecte-toi en tant que prestataire
+
+2. Va sur: /dashboard/prestataire/config-paiement
+   → Teste l'activation/désactivation
+   → Teste les switches des éléments
+   → Teste le slider d'acompte
+   → Regarde l'exemple de calcul
+   → Clique sur "Enregistrer"
+   → Recharge la page → Les valeurs doivent être sauvegardées
+
+3. Va sur: /dashboard/prestataire/frais-deplacement
+   → Active les frais
+   → Teste chaque mode de calcul:
+     - Fixe: Entre un montant
+     - Par km: Entre prix/km et distance gratuite
+     - Par zone: Ajoute 2-3 zones, supprime-en une
+     - Gratuit: Rien à faire
+   → Teste les limites min/max
+   → Clique sur "Enregistrer"
+   → Recharge la page → Les valeurs doivent être sauvegardées
+
+4. Vérifie dans Supabase:
+   SELECT * FROM configuration_paiement_prestataire;
+   SELECT * FROM frais_deplacement_config;
+
+═══════════════════════════════════════════════════════════════════
+🚀 PROCHAINES ÉTAPES
+═══════════════════════════════════════════════════════════════════
+
+1. ✅ Pages prestataire créées (FAIT)
+
+2. 🔄 Améliorer la création de devis
+   → Modifier src/pages/dashboard/prestataire/CreerDevisPage.tsx
+   → Ajouter calculs automatiques des commissions
+   → Afficher montant total avec commissions
+   → Intégrer les frais de déplacement
+   → Prévisualisation du contrat
+
+3. 📄 Créer les pages client
+   → Visualisation devis améliorée
+   → Signature de contrat
+   → Paiement acompte/solde
+   → Validation des travaux
+
+4. 💳 Intégration paiement
+   → M-Pesa
+   → Airtel Money
+   → Génération PDF
+
+5. 📊 Historique et rapports
+   → Historique des modifications admin
+   → Rapports de commissions
+   → Statistiques de paiement
+
+═══════════════════════════════════════════════════════════════════
+📞 SUPPORT
+═══════════════════════════════════════════════════════════════════
+
+Si problème:
+1. Vérifie que tu es connecté en tant que prestataire
+2. Vérifie que les tables existent dans Supabase
+3. Vérifie les policies RLS
+4. Regarde la console (F12) pour les erreurs
+5. Vérifie que le script FIX_PAIEMENTS_ET_INSTALLER.sql a été exécuté
+
+═══════════════════════════════════════════════════════════════════

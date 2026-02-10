@@ -1,0 +1,105 @@
+═══════════════════════════════════════════════════════════════════
+🔧 DEBUG ERREUR PGRST116 - "Cannot coerce result to single JSON object"
+═══════════════════════════════════════════════════════════════════
+
+Cette erreur signifie que la requête ne retourne AUCUNE ligne (0 rows).
+Cela peut être dû à:
+1. Le devis n'existe pas
+2. Les RLS policies bloquent l'accès
+3. Mauvais ID de devis
+
+═══════════════════════════════════════════════════════════════════
+✅ SOLUTION RAPIDE - 2 ÉTAPES
+═══════════════════════════════════════════════════════════════════
+
+ÉTAPE 1: CORRIGER LE CODE (DÉJÀ FAIT)
+--------------------------------------
+✅ J'ai modifié SignerContratPage.tsx pour utiliser maybeSingle()
+✅ Cela évite l'erreur et affiche un message clair si le devis n'existe pas
+
+ÉTAPE 2: CORRIGER LES RLS POLICIES
+-----------------------------------
+👉 Exécutez ce script dans Supabase SQL Editor:
+   FIX_ACCES_DEVIS_CONTRAT.sql
+
+Ce script va:
+✅ Créer les bonnes policies pour que les clients puissent lire leurs devis
+✅ Créer les policies pour que les clients puissent créer/modifier des contrats
+✅ Permettre aux prestataires de voir leurs contrats aussi
+
+═══════════════════════════════════════════════════════════════════
+🔍 VÉRIFIER QUEL EST LE PROBLÈME EXACT
+═══════════════════════════════════════════════════════════════════
+
+Dans Supabase SQL Editor, exécutez:
+
+-- 1. Vérifier que le devis existe
+SELECT id, numero, statut, client_id, prestataire_id
+FROM devis_pro
+WHERE id = 'e68ca997-ed77-4b0e-8ab8-e970ed989a78';
+
+-- Si ça retourne 0 lignes → Le devis n'existe pas
+-- Si ça retourne 1 ligne → Le devis existe, c'est un problème de RLS
+
+-- 2. Vérifier votre client_id
+SELECT id, user_id, full_name
+FROM clients
+WHERE user_id = auth.uid();
+
+-- Notez votre client_id
+
+-- 3. Vérifier que le devis appartient bien à ce client
+SELECT 
+  d.id,
+  d.numero,
+  d.client_id,
+  c.full_name as client_name,
+  c.user_id
+FROM devis_pro d
+JOIN clients c ON d.client_id = c.id
+WHERE d.id = 'e68ca997-ed77-4b0e-8ab8-e970ed989a78';
+
+-- Si le client_id ne correspond pas → Le devis n'est pas pour vous
+-- Si ça correspond → C'est un problème de RLS policies
+
+═══════════════════════════════════════════════════════════════════
+🚀 APRÈS AVOIR EXÉCUTÉ LE FIX
+═══════════════════════════════════════════════════════════════════
+
+1. Rafraîchissez la page de l'application (F5)
+2. Cliquez à nouveau sur "Voir le contrat"
+3. Ça devrait fonctionner maintenant!
+
+RÉSULTAT ATTENDU:
+✅ La page de signature s'affiche
+✅ Le contrat est créé automatiquement
+✅ Vous voyez le contenu HTML du contrat
+✅ Vous pouvez signer
+
+═══════════════════════════════════════════════════════════════════
+⚠️ SI ÇA NE MARCHE TOUJOURS PAS
+═══════════════════════════════════════════════════════════════════
+
+Ouvrez la console du navigateur (F12) et regardez:
+1. L'onglet "Network" pour voir quelle requête échoue
+2. L'onglet "Console" pour voir les erreurs JavaScript
+
+Copiez-moi:
+- L'URL de la requête qui échoue
+- Le message d'erreur complet
+- Le devis_id que vous essayez d'ouvrir
+
+Je corrigerai immédiatement!
+
+═══════════════════════════════════════════════════════════════════
+📋 CHECKLIST DE DÉBOGAGE
+═══════════════════════════════════════════════════════════════════
+
+☐ Code modifié (maybeSingle) - FAIT ✅
+☐ Script FIX_ACCES_DEVIS_CONTRAT.sql exécuté
+☐ Page rafraîchie (F5)
+☐ Réessayé de cliquer sur "Voir le contrat"
+
+Si tout est coché et ça ne marche pas → Dites-moi!
+
+═══════════════════════════════════════════════════════════════════

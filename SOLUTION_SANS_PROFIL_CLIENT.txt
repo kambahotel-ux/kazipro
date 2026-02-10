@@ -1,0 +1,119 @@
+═══════════════════════════════════════════════════════════════════
+⚠️ VOUS N'AVEZ PAS DE PROFIL CLIENT
+═══════════════════════════════════════════════════════════════════
+
+L'erreur "Vous n'avez pas de profil client" signifie que vous êtes
+connecté avec un compte qui n'a pas de profil dans la table "clients".
+
+Vous êtes probablement connecté en tant que:
+- Administrateur
+- Prestataire
+- Ou un compte sans profil
+
+═══════════════════════════════════════════════════════════════════
+✅ SOLUTION: INSTALLER LE SYSTÈME SANS CRÉER DE DEVIS DE TEST
+═══════════════════════════════════════════════════════════════════
+
+ÉTAPE 1: Installer le trigger et les permissions
+-------------------------------------------------
+Fichier: INSTALLER_TRIGGER_SEULEMENT.sql
+
+1. Ouvrez Supabase SQL Editor
+2. Copiez TOUT le contenu de: INSTALLER_TRIGGER_SEULEMENT.sql
+3. Collez et cliquez "Run"
+
+Ce script va:
+✅ Installer le trigger de création automatique de contrats
+✅ Configurer toutes les permissions RLS
+✅ Ne PAS essayer de créer de devis de test
+
+ÉTAPE 2: Tester avec un vrai client
+------------------------------------
+Vous avez 2 options:
+
+OPTION A: Se connecter en tant que client existant
+1. Déconnectez-vous de l'application
+2. Connectez-vous avec un compte CLIENT
+3. Allez sur "Mes Demandes"
+4. Si vous avez des devis acceptés, cliquez "Voir le contrat"
+
+OPTION B: Créer un profil client pour votre compte actuel
+1. Exécutez ce SQL dans Supabase:
+
+   INSERT INTO clients (user_id, full_name, email, city, verified)
+   VALUES (
+     auth.uid(),
+     'Votre Nom',
+     auth.email(),
+     'Kinshasa',
+     true
+   );
+
+2. Rafraîchissez l'application
+3. Vous avez maintenant un profil client
+
+═══════════════════════════════════════════════════════════════════
+🔍 VÉRIFIER VOTRE PROFIL ACTUEL
+═══════════════════════════════════════════════════════════════════
+
+Exécutez ce SQL pour voir quel type de profil vous avez:
+
+-- Votre identité
+SELECT 
+  'IDENTITÉ' as type,
+  auth.uid() as user_id,
+  auth.email() as email;
+
+-- Profil client?
+SELECT 
+  'PROFIL CLIENT' as type,
+  id,
+  full_name,
+  email
+FROM clients
+WHERE user_id = auth.uid();
+
+-- Profil prestataire?
+SELECT 
+  'PROFIL PRESTATAIRE' as type,
+  id,
+  full_name,
+  email,
+  profession
+FROM prestataires
+WHERE user_id = auth.uid();
+
+-- Si les deux dernières requêtes retournent 0 lignes,
+-- vous n'avez aucun profil!
+
+═══════════════════════════════════════════════════════════════════
+🎯 APRÈS L'INSTALLATION DU TRIGGER
+═══════════════════════════════════════════════════════════════════
+
+Le trigger est maintenant installé et fonctionnel.
+
+Quand un CLIENT accepte un devis:
+1. Le statut du devis passe à 'accepte'
+2. Le trigger se déclenche automatiquement
+3. Un contrat est créé dans la table contrats
+4. Le client peut cliquer "Voir le contrat"
+5. Le client signe le contrat
+6. Le client paie l'acompte
+
+═══════════════════════════════════════════════════════════════════
+📋 RÉSUMÉ
+═══════════════════════════════════════════════════════════════════
+
+PROBLÈME:
+❌ Vous n'avez pas de profil client
+❌ Le script de test ne peut pas créer de devis pour vous
+
+SOLUTION:
+✅ Installer juste le trigger (INSTALLER_TRIGGER_SEULEMENT.sql)
+✅ Se connecter en tant que client OU créer un profil client
+✅ Tester avec un vrai devis
+
+FICHIER À EXÉCUTER:
+👉 INSTALLER_TRIGGER_SEULEMENT.sql
+
+═══════════════════════════════════════════════════════════════════

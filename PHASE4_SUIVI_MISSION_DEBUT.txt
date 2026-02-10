@@ -1,0 +1,260 @@
+═══════════════════════════════════════════════════════════════════
+🚧 PHASE 4 - SUIVI DE LA MISSION (EN COURS)
+═══════════════════════════════════════════════════════════════════
+
+Date: 27 janvier 2025
+Statut: ⏳ En développement
+
+═══════════════════════════════════════════════════════════════════
+📦 FICHIERS CRÉÉS
+═══════════════════════════════════════════════════════════════════
+
+1. src/pages/dashboard/client/MissionDetailPage.tsx
+   → Page de détail de mission côté client
+   → Route: /dashboard/client/missions/:missionId
+   → Affichage des informations de la mission
+   → Barre de progression
+   → Galerie de photos
+   → Messagerie en temps réel
+   → Bouton de validation des travaux
+
+2. src/App.tsx (modifié)
+   → Route ajoutée pour la page de mission
+
+═══════════════════════════════════════════════════════════════════
+🎨 FONCTIONNALITÉS IMPLÉMENTÉES
+═══════════════════════════════════════════════════════════════════
+
+Page de détail de mission (Client):
+───────────────────────────────────
+✓ Affichage des informations générales:
+  - Prestataire (nom, profession)
+  - Date de début
+  - Montant total
+  - Statut de la mission
+✓ Barre de progression (0-100%)
+✓ Galerie de photos de progression
+✓ Messagerie intégrée:
+  - Affichage des messages
+  - Envoi de nouveaux messages
+  - Distinction client/prestataire
+✓ Bouton de validation (quand progression = 100%)
+✓ Redirection vers paiement du solde
+
+═══════════════════════════════════════════════════════════════════
+🔗 ROUTES AJOUTÉES
+═══════════════════════════════════════════════════════════════════
+
+/dashboard/client/missions/:missionId
+→ Page de détail de mission
+→ Protected route (authentification requise)
+
+═══════════════════════════════════════════════════════════════════
+📊 À IMPLÉMENTER
+═══════════════════════════════════════════════════════════════════
+
+CÔTÉ PRESTATAIRE:
+□ Page de détail de mission prestataire
+□ Mise à jour de la progression
+□ Upload de photos
+□ Messagerie
+□ Demande de validation finale
+
+BASE DE DONNÉES:
+□ Table photos_mission
+□ Colonne progress dans missions
+□ Colonne validation_requested_at dans missions
+□ RLS policies pour photos_mission
+
+CÔTÉ CLIENT:
+□ Liste des missions actives
+□ Notifications de nouveaux messages
+□ Notifications de progression
+□ Déclaration de litige
+
+PAIEMENT DU SOLDE:
+□ Page de paiement du solde
+□ Même processus que l'acompte
+□ Libération des fonds au prestataire
+
+═══════════════════════════════════════════════════════════════════
+🎯 FLUX UTILISATEUR
+═══════════════════════════════════════════════════════════════════
+
+1. Client paie l'acompte
+   → Mission créée automatiquement
+   → Statut: 'en_cours'
+
+2. Client accède à la mission
+   → /dashboard/client/missions/:missionId
+   → Voit les informations
+
+3. Prestataire met à jour la progression
+   → Upload des photos
+   → Envoie des messages
+   → Met à jour le pourcentage
+
+4. Client suit l'avancement
+   → Voit la barre de progression
+   → Voit les photos
+   → Communique avec le prestataire
+
+5. Prestataire termine (100%)
+   → Client reçoit une notification
+   → Bouton "Valider" apparaît
+
+6. Client valide les travaux
+   → Statut mission: 'en_validation'
+   → Redirection vers paiement du solde
+
+7. Client paie le solde
+   → Fonds libérés au prestataire
+   → Mission terminée
+
+═══════════════════════════════════════════════════════════════════
+🔧 SCRIPTS SQL NÉCESSAIRES
+═══════════════════════════════════════════════════════════════════
+
+À créer:
+
+1. Ajouter colonne progress à missions:
+```sql
+ALTER TABLE missions 
+ADD COLUMN IF NOT EXISTS progress INTEGER DEFAULT 0 CHECK (progress >= 0 AND progress <= 100);
+
+ALTER TABLE missions
+ADD COLUMN IF NOT EXISTS validation_requested_at TIMESTAMPTZ;
+```
+
+2. Créer table photos_mission:
+```sql
+CREATE TABLE IF NOT EXISTS photos_mission (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  mission_id UUID NOT NULL REFERENCES missions(id) ON DELETE CASCADE,
+  url TEXT NOT NULL,
+  description TEXT,
+  uploaded_by UUID NOT NULL,
+  uploaded_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_photos_mission_mission_id ON photos_mission(mission_id);
+```
+
+3. RLS policies pour photos_mission:
+```sql
+ALTER TABLE photos_mission ENABLE ROW LEVEL SECURITY;
+
+-- SELECT: Client et prestataire de la mission
+CREATE POLICY "photos_mission_select_policy" ON photos_mission
+FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM missions
+    WHERE missions.id = photos_mission.mission_id
+    AND (
+      missions.client_id IN (SELECT id FROM clients WHERE user_id = auth.uid())
+      OR missions.prestataire_id IN (SELECT id FROM prestataires WHERE user_id = auth.uid())
+    )
+  )
+);
+
+-- INSERT: Prestataire uniquement
+CREATE POLICY "photos_mission_insert_policy" ON photos_mission
+FOR INSERT
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM missions
+    JOIN prestataires ON prestataires.id = missions.prestataire_id
+    WHERE missions.id = photos_mission.mission_id
+    AND prestataires.user_id = auth.uid()
+  )
+);
+```
+
+═══════════════════════════════════════════════════════════════════
+📝 NOTES TECHNIQUES
+═══════════════════════════════════════════════════════════════════
+
+Messagerie:
+- Utilise la table messages existante
+- Temps réel avec polling (à améliorer avec subscriptions)
+- Distinction visuelle client/prestataire
+- Envoi avec Enter (Shift+Enter pour nouvelle ligne)
+
+Photos:
+- Table photos_mission à créer
+- Upload vers storage Supabase
+- Galerie responsive
+- Lightbox à ajouter pour agrandissement
+
+Progression:
+- Colonne progress (0-100) dans missions
+- Mise à jour par le prestataire uniquement
+- Barre de progression visuelle
+- Alerte quand 100% atteint
+
+Validation:
+- Bouton visible uniquement si progress = 100%
+- Confirmation avant validation
+- Mise à jour du statut mission
+- Redirection automatique vers paiement solde
+
+═══════════════════════════════════════════════════════════════════
+⚠️ LIMITATIONS ACTUELLES
+═══════════════════════════════════════════════════════════════════
+
+1. Pas de page prestataire
+   → Le prestataire ne peut pas encore mettre à jour
+
+2. Table photos_mission n'existe pas
+   → Les photos ne s'affichent pas
+
+3. Colonne progress n'existe pas
+   → La barre de progression est à 0%
+
+4. Pas de notifications en temps réel
+   → Pas de WebSocket/Subscriptions
+
+5. Pas de paiement du solde
+   → La validation redirige vers une page inexistante
+
+═══════════════════════════════════════════════════════════════════
+🚀 PROCHAINES ACTIONS
+═══════════════════════════════════════════════════════════════════
+
+IMMÉDIAT:
+1. Créer les scripts SQL (colonnes + table)
+2. Créer la page prestataire
+3. Implémenter l'upload de photos
+4. Implémenter la mise à jour de progression
+
+COURT TERME:
+5. Créer la page de paiement du solde
+6. Implémenter les notifications
+7. Ajouter le lightbox pour les photos
+8. Améliorer la messagerie (temps réel)
+
+MOYEN TERME:
+9. Système de litiges
+10. Évaluations et avis
+11. Historique des missions
+12. Statistiques
+
+═══════════════════════════════════════════════════════════════════
+🎉 RÉSUMÉ
+═══════════════════════════════════════════════════════════════════
+
+✅ Page de détail de mission créée (client)
+✅ Route ajoutée
+✅ Messagerie fonctionnelle
+✅ Interface de validation préparée
+⏳ Scripts SQL à exécuter
+⏳ Page prestataire à créer
+⏳ Upload de photos à implémenter
+⏳ Paiement du solde à créer
+
+Phase 4 est en cours! La structure de base est en place.
+Prochaine étape: Scripts SQL + Page prestataire 🚀
+
+═══════════════════════════════════════════════════════════════════

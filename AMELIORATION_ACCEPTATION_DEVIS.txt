@@ -1,0 +1,257 @@
+═══════════════════════════════════════════════════════════════
+   AMÉLIORATION - PAGE ACCEPTATION DEVIS
+═══════════════════════════════════════════════════════════════
+
+📅 DATE: 27 janvier 2026
+🎯 OBJECTIF: Ajouter un bouton "Voir le contrat" pour les devis déjà acceptés
+
+
+═══════════════════════════════════════════════════════════════
+   ✅ MODIFICATIONS APPORTÉES
+═══════════════════════════════════════════════════════════════
+
+FICHIER MODIFIÉ:
+✓ src/pages/dashboard/client/AccepterDevisPage.tsx
+
+
+CHANGEMENTS:
+───────────────────────────────────────────────────────────────
+
+1. AJOUT D'UN STATE POUR LE CONTRAT
+   → const [contrat, setContrat] = useState<any>(null);
+   → Permet de stocker les infos du contrat s'il existe
+
+2. VÉRIFICATION DU CONTRAT EXISTANT
+   → Dans fetchDevis(), si le devis est déjà accepté
+   → Récupère le contrat associé depuis la table contrats
+   → Stocke le contrat dans le state
+
+3. AFFICHAGE CONDITIONNEL
+   → Si devis.statut === 'accepte':
+     * Affiche un message bleu "Devis déjà accepté"
+     * Affiche la date d'acceptation
+     * Indique si le contrat est prêt ou en génération
+   
+   → Si contrat existe:
+     * Affiche une carte verte "Contrat prêt à signer"
+     * Affiche le numéro du contrat
+     * Affiche le statut du contrat
+     * Bouton "Voir le contrat et signer"
+   
+   → Si devis.statut !== 'accepte':
+     * Affiche le formulaire d'acceptation normal
+     * Avec les 2 checkboxes
+     * Et le bouton "Accepter et continuer"
+
+4. AMÉLIORATION DE LA LOGIQUE D'ACCEPTATION
+   → Attend jusqu'à 5 secondes que le trigger crée le contrat
+   → Vérifie toutes les 500ms si le contrat existe
+   → Affiche un message approprié selon le résultat
+   → Redirige vers la page de signature dans tous les cas
+
+
+═══════════════════════════════════════════════════════════════
+   🎨 INTERFACE UTILISATEUR
+═══════════════════════════════════════════════════════════════
+
+CAS 1: DEVIS NON ACCEPTÉ (statut = 'en_attente')
+───────────────────────────────────────────────────────────────
+┌─────────────────────────────────────────────────────────────┐
+│ Détails du devis                                            │
+│ (montants, description, etc.)                               │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ 📝 Acceptation du devis                                     │
+│                                                              │
+│ ☐ J'accepte les conditions générales                       │
+│ ☐ J'accepte les conditions de paiement                     │
+│                                                              │
+│ 🛡️ Votre paiement est protégé                              │
+│                                                              │
+│ [Accepter et continuer]  [Annuler]                         │
+└─────────────────────────────────────────────────────────────┘
+
+
+CAS 2: DEVIS ACCEPTÉ AVEC CONTRAT (statut = 'accepte')
+───────────────────────────────────────────────────────────────
+┌─────────────────────────────────────────────────────────────┐
+│ Détails du devis                                            │
+│ (montants, description, etc.)                               │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ ℹ️ Devis déjà accepté                                       │
+│ Ce devis a été accepté le 27/01/2026.                       │
+│ Le contrat a été généré et est prêt à être signé.          │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ ✅ Contrat prêt à signer                                    │
+│                                                              │
+│ Contrat N° CTR-20260127-0001                                │
+│ Statut: En attente de signature                            │
+│                                                              │
+│                    [📝 Voir le contrat et signer]           │
+└─────────────────────────────────────────────────────────────┘
+
+
+CAS 3: DEVIS ACCEPTÉ SANS CONTRAT (en génération)
+───────────────────────────────────────────────────────────────
+┌─────────────────────────────────────────────────────────────┐
+│ Détails du devis                                            │
+│ (montants, description, etc.)                               │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ ℹ️ Devis déjà accepté                                       │
+│ Ce devis a été accepté le 27/01/2026.                       │
+│ Le contrat est en cours de génération.                     │
+└─────────────────────────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════
+   🔄 FLUX UTILISATEUR AMÉLIORÉ
+═══════════════════════════════════════════════════════════════
+
+SCÉNARIO 1: PREMIÈRE ACCEPTATION
+───────────────────────────────────────────────────────────────
+1. Client arrive sur /dashboard/client/devis/:id/accepter
+2. Voit le formulaire d'acceptation
+3. Coche les 2 cases
+4. Clique "Accepter et continuer"
+5. Le système:
+   - Met à jour le devis (statut = 'accepte')
+   - Attend que le trigger crée le contrat (max 5s)
+   - Affiche un message de succès
+6. Redirige vers /dashboard/client/contrat/:id
+7. Client signe le contrat
+8. Redirige vers /dashboard/client/paiement/:id/acompte
+9. Client paie l'acompte
+
+
+SCÉNARIO 2: RETOUR SUR UN DEVIS DÉJÀ ACCEPTÉ
+───────────────────────────────────────────────────────────────
+1. Client arrive sur /dashboard/client/devis/:id/accepter
+2. Le système détecte que le devis est déjà accepté
+3. Affiche le message "Devis déjà accepté"
+4. Affiche le bouton "Voir le contrat et signer"
+5. Client clique sur le bouton
+6. Redirige vers /dashboard/client/contrat/:id
+7. Client continue le processus (signature → paiement)
+
+
+SCÉNARIO 3: PROBLÈME DE GÉNÉRATION DE CONTRAT
+───────────────────────────────────────────────────────────────
+1. Client accepte le devis
+2. Le trigger ne crée pas le contrat (erreur SQL)
+3. Après 5 secondes d'attente:
+   - Affiche "Le contrat est en cours de génération"
+   - Redirige quand même vers la page de signature
+4. La page de signature attend aussi le contrat
+5. Si le contrat n'arrive pas, affiche un message d'erreur
+
+
+═══════════════════════════════════════════════════════════════
+   🐛 PROBLÈMES RÉSOLUS
+═══════════════════════════════════════════════════════════════
+
+PROBLÈME 1: Pas de redirection après acceptation
+✅ RÉSOLU: Ajout d'une boucle d'attente pour le contrat
+
+PROBLÈME 2: Impossible de revenir sur un devis accepté
+✅ RÉSOLU: Affichage conditionnel avec bouton "Voir le contrat"
+
+PROBLÈME 3: Pas de feedback si le contrat n'est pas créé
+✅ RÉSOLU: Messages d'erreur et redirection dans tous les cas
+
+PROBLÈME 4: Utilisateur bloqué si le trigger échoue
+✅ RÉSOLU: Timeout de 5 secondes puis redirection
+
+
+═══════════════════════════════════════════════════════════════
+   📝 SCRIPTS SQL À EXÉCUTER
+═══════════════════════════════════════════════════════════════
+
+Pour que tout fonctionne correctement:
+
+1. Créer le trigger de génération de contrat:
+   ✅ sql/fix_trigger_contrat_simple.sql
+
+2. Créer le bucket de signatures:
+   ✅ sql/create_storage_signatures.sql
+
+3. Configurer les RLS pour les paiements:
+   ✅ FIX_RLS_PAIEMENTS.sql
+
+4. Tester le trigger:
+   ✅ sql/test_trigger_contrat.sql
+
+
+═══════════════════════════════════════════════════════════════
+   🧪 COMMENT TESTER
+═══════════════════════════════════════════════════════════════
+
+TEST 1: ACCEPTATION NORMALE
+───────────────────────────────────────────────────────────────
+1. Créer un devis de test (sql/create_test_devis_for_payment.sql)
+2. Se connecter en tant que client
+3. Aller sur /dashboard/client/devis/:id/accepter
+4. Vérifier que le formulaire s'affiche
+5. Cocher les 2 cases
+6. Cliquer "Accepter et continuer"
+7. Vérifier la redirection vers la page de signature
+
+
+TEST 2: DEVIS DÉJÀ ACCEPTÉ
+───────────────────────────────────────────────────────────────
+1. Accepter un devis (voir TEST 1)
+2. Revenir sur /dashboard/client/devis/:id/accepter
+3. Vérifier que le message "Devis déjà accepté" s'affiche
+4. Vérifier que le bouton "Voir le contrat" s'affiche
+5. Cliquer sur le bouton
+6. Vérifier la redirection vers la page de signature
+
+
+TEST 3: TRIGGER DÉFAILLANT
+───────────────────────────────────────────────────────────────
+1. Désactiver le trigger (DROP TRIGGER trigger_generate_contrat)
+2. Accepter un devis
+3. Vérifier que le message d'erreur s'affiche après 5s
+4. Vérifier que la redirection se fait quand même
+5. Réactiver le trigger
+
+
+═══════════════════════════════════════════════════════════════
+   ✅ RÉSULTAT FINAL
+═══════════════════════════════════════════════════════════════
+
+AVANT:
+❌ Pas de redirection après acceptation
+❌ Impossible de revenir sur un devis accepté
+❌ Pas de feedback si problème
+❌ Utilisateur bloqué en cas d'erreur
+
+APRÈS:
+✅ Redirection automatique après acceptation
+✅ Bouton "Voir le contrat" pour les devis acceptés
+✅ Messages clairs selon la situation
+✅ Gestion des erreurs avec timeout
+✅ Expérience utilisateur fluide
+
+
+═══════════════════════════════════════════════════════════════
+   📚 FICHIERS LIÉS
+═══════════════════════════════════════════════════════════════
+
+✓ src/pages/dashboard/client/AccepterDevisPage.tsx (modifié)
+✓ src/pages/dashboard/client/SignerContratPage.tsx (existant)
+✓ src/pages/dashboard/client/PaiementAcomptePage.tsx (existant)
+✓ sql/fix_trigger_contrat_simple.sql (nouveau)
+✓ sql/test_trigger_contrat.sql (nouveau)
+✓ AMELIORATION_ACCEPTATION_DEVIS.txt (ce fichier)
+
+
+═══════════════════════════════════════════════════════════════
+   FIN DU DOCUMENT
+═══════════════════════════════════════════════════════════════

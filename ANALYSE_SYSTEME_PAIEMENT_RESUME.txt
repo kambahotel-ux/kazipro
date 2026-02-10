@@ -1,0 +1,303 @@
+📊 ANALYSE DU SYSTÈME DE PAIEMENT ET CONTRAT - KAZIPRO
+========================================================
+
+🎯 TON BESOIN (Résumé)
+----------------------
+"Une demande acceptée par le client est censée être payée par rapport 
+au protocole ou conditions établies par le prestataire. Il paie le devis 
+séparément des frais de déplacement. On est censé générer un contrat 
+avec le client au moment où il veut verser son argent."
+
+✅ CE QUE J'AI FAIT
+-------------------
+1. ✅ Analysé le système actuel (devis, paiements)
+2. ✅ Identifié les problèmes:
+   - Pas de séparation travaux/déplacement
+   - Pas de génération de contrat
+   - Pas de flux de paiement structuré
+   - Frais de déplacement non configurables
+
+3. ✅ Proposé une solution complète avec:
+   - Nouvelles tables (contrats, paiements améliorés, config déplacement)
+   - Flux complet (devis → contrat → signature → paiement → mission)
+   - Interfaces utilisateur (prestataire et client)
+   - Intégration paiements mobiles (M-Pesa, Airtel Money)
+
+📂 DOCUMENTS CRÉÉS
+------------------
+1. .kiro/specs/systeme-paiement-contrat/ANALYSE_FLUX_PAIEMENT.md
+   → Analyse complète de 500+ lignes avec:
+      - État actuel du système
+      - Problèmes identifiés
+      - Solution proposée détaillée
+      - Architecture des nouvelles tables
+      - Flux complet étape par étape
+      - Interfaces utilisateur (maquettes texte)
+      - Avantages du nouveau système
+
+2. .kiro/specs/systeme-paiement-contrat/QUESTIONS_CLIENT.md
+   → 50+ questions organisées en 10 catégories:
+      - Frais de déplacement
+      - Conditions de paiement
+      - Contrat
+      - Méthodes de paiement
+      - Signatures électroniques
+      - Remboursements et litiges
+      - Notifications
+      - Documents générés
+      - Paiements échelonnés
+      - Sécurité et conformité
+
+🎯 PROCHAINES ÉTAPES
+--------------------
+
+ÉTAPE 1: TOI (Urgent)
+---------------------
+📝 Lire les 2 documents créés:
+   1. ANALYSE_FLUX_PAIEMENT.md (comprendre la solution)
+   2. QUESTIONS_CLIENT.md (répondre aux questions)
+
+⏱️ Temps estimé: 30-45 minutes
+
+ÉTAPE 2: MOI (Après tes réponses)
+----------------------------------
+Une fois que tu auras répondu aux questions, je pourrai:
+
+1. Créer le spec détaillé (requirements.md)
+   - User stories
+   - Acceptance criteria
+   - Cas d'usage détaillés
+
+2. Créer le design document (design.md)
+   - Architecture technique
+   - Schéma de base de données
+   - APIs nécessaires
+   - Diagrammes de flux
+
+3. Créer la task list (tasks.md)
+   - Tâches d'implémentation
+   - Ordre d'exécution
+   - Estimation du temps
+
+4. Commencer l'implémentation
+   - SQL (nouvelles tables)
+   - Backend (APIs)
+   - Frontend (interfaces)
+   - Intégrations (paiements)
+
+📊 APERÇU DE LA SOLUTION
+-------------------------
+
+NOUVEAU FLUX COMPLET:
+┌─────────────────────────────────────────────────────────┐
+│ 1. DEMANDE CLIENT                                       │
+│    └─> Client crée demande avec localisation           │
+│                                                         │
+│ 2. DEVIS PRESTATAIRE                                    │
+│    ├─> Montant travaux (HT)                            │
+│    ├─> Frais déplacement (calculés auto)               │
+│    ├─> TVA (16%)                                        │
+│    ├─> Total TTC                                        │
+│    └─> Conditions paiement (acompte %, échéances)      │
+│                                                         │
+│ 3. ACCEPTATION CLIENT                                   │
+│    └─> Client accepte le devis                         │
+│        └─> Statut: "accepte_en_attente_contrat"        │
+│                                                         │
+│ 4. GÉNÉRATION CONTRAT ⭐ NOUVEAU                        │
+│    ├─> Contrat PDF généré automatiquement              │
+│    ├─> Contient: devis + conditions + signatures       │
+│    └─> Numéro unique: CONT-2026-0001                   │
+│                                                         │
+│ 5. SIGNATURE ÉLECTRONIQUE ⭐ NOUVEAU                    │
+│    ├─> Client signe (dessin/upload/OTP)                │
+│    └─> Prestataire signe                               │
+│        └─> Contrat validé                              │
+│                                                         │
+│ 6. PAIEMENT(S) ⭐ NOUVEAU                               │
+│    ├─> Option 1: Paiement complet                      │
+│    ├─> Option 2: Acompte (30%) + Solde (70%)           │
+│    ├─> Méthodes: M-Pesa, Airtel Money, Carte           │
+│    └─> Reçu automatique généré                         │
+│                                                         │
+│ 7. MISSION CRÉÉE                                        │
+│    └─> Travaux peuvent commencer                       │
+└─────────────────────────────────────────────────────────┘
+
+NOUVELLES TABLES:
+-----------------
+1. contrats
+   - Stocke les contrats générés
+   - Signatures électroniques
+   - Statut (généré, signé_client, signé_complet)
+
+2. paiements (améliorée)
+   - Séparation travaux/déplacement
+   - Type (acompte, solde, complet)
+   - Méthode (mpesa, airtel, carte)
+   - Statut (en_attente, validé, échoué)
+   - Reçus automatiques
+
+3. frais_deplacement_config
+   - Configuration par prestataire
+   - Mode calcul (fixe, par km, par zone)
+   - Tarifs et limites
+
+4. conditions_paiement_templates
+   - Templates réutilisables
+   - Acompte/solde configurables
+   - Paiements échelonnés
+
+INTERFACES CLÉS:
+----------------
+Pour le Prestataire:
+- Configuration frais déplacement
+- Templates conditions paiement
+- Création devis (avec déplacement séparé)
+- Signature du contrat
+- Suivi des paiements
+
+Pour le Client:
+- Visualisation devis détaillé
+- Acceptation du devis
+- Signature du contrat
+- Page de paiement (M-Pesa/Airtel/Carte)
+- Téléchargement contrat + reçus
+
+🎨 EXEMPLE CONCRET
+------------------
+
+Scénario: Installation électrique à Kinshasa
+
+1. CLIENT: Crée demande "Installation électrique"
+   Localisation: Kinshasa, Commune de Gombe
+
+2. PRESTATAIRE: Crée devis
+   ┌─────────────────────────────────────┐
+   │ TRAVAUX                             │
+   │ - Installation: 50,000 FC           │
+   │ - Matériel: 30,000 FC               │
+   │ Sous-total: 80,000 FC               │
+   │                                     │
+   │ DÉPLACEMENT                         │
+   │ Distance: 12 km                     │
+   │ Tarif: 500 FC/km                    │
+   │ Frais: 6,000 FC                     │
+   │                                     │
+   │ TOTAL                               │
+   │ HT: 86,000 FC                       │
+   │ TVA (16%): 13,760 FC                │
+   │ TTC: 99,760 FC                      │
+   │                                     │
+   │ CONDITIONS                          │
+   │ Acompte 30%: 29,928 FC              │
+   │ Solde 70%: 69,832 FC                │
+   └─────────────────────────────────────┘
+
+3. CLIENT: Accepte le devis
+   → Contrat CONT-2026-0042 généré automatiquement
+
+4. CLIENT: Signe le contrat électroniquement
+   → Prestataire notifié
+
+5. PRESTATAIRE: Signe le contrat
+   → Contrat validé
+
+6. CLIENT: Paie l'acompte (29,928 FC)
+   Méthode: M-Pesa (+243 812 345 678)
+   → Reçu PAY-2026-0042-A généré
+   → Mission créée (statut: pending)
+
+7. TRAVAUX: Prestataire effectue les travaux
+
+8. CLIENT: Valide les travaux et paie le solde (69,832 FC)
+   → Reçu PAY-2026-0042-B généré
+   → Mission complétée
+
+💡 POINTS CLÉS À RETENIR
+-------------------------
+
+1. SÉPARATION CLAIRE
+   ✅ Travaux et déplacement séparés dans le devis
+   ✅ Client voit exactement ce qu'il paie
+
+2. CONTRAT AUTOMATIQUE
+   ✅ Généré dès acceptation du devis
+   ✅ Signatures électroniques des deux parties
+   ✅ Document légal téléchargeable
+
+3. PAIEMENTS FLEXIBLES
+   ✅ Complet ou échelonné (acompte + solde)
+   ✅ Plusieurs méthodes (M-Pesa, Airtel, Carte)
+   ✅ Reçus automatiques
+
+4. CONFIGURATION
+   ✅ Prestataire configure ses frais de déplacement
+   ✅ Templates de conditions de paiement
+   ✅ Conditions générales personnalisables
+
+5. TRAÇABILITÉ
+   ✅ Numéros uniques (contrats, paiements)
+   ✅ Historique complet
+   ✅ Audit trail
+
+⚠️ IMPORTANT
+------------
+JE N'AI PAS ENCORE CODÉ! 
+
+Comme tu l'as demandé, j'ai seulement:
+✅ Analysé le problème
+✅ Proposé une solution
+✅ Créé les documents de spec
+✅ Préparé les questions
+
+Avant de coder, j'ai besoin que tu:
+1. Lises l'analyse complète
+2. Répondes aux questions
+3. Valides l'approche proposée
+
+📞 QUESTIONS URGENTES À CLARIFIER
+----------------------------------
+Voici les 5 questions les plus importantes:
+
+1. Frais de déplacement: Fixe ou par km?
+2. Acompte: 30%, 40% ou 50%?
+3. Paiement: M-Pesa et Airtel Money prioritaires?
+4. Signature: Dessinée ou OTP par SMS?
+5. Contrat: As-tu un modèle existant?
+
+📂 OÙ TROUVER LES DOCUMENTS
+----------------------------
+Tous les documents sont dans:
+.kiro/specs/systeme-paiement-contrat/
+
+1. ANALYSE_FLUX_PAIEMENT.md (LIRE EN PREMIER)
+   → Analyse complète avec solution détaillée
+
+2. QUESTIONS_CLIENT.md (RÉPONDRE ENSUITE)
+   → 50+ questions pour clarifier les détails
+
+🚀 TIMELINE ESTIMÉE
+-------------------
+Après tes réponses:
+
+Phase 1: Spec détaillé (1-2 jours)
+Phase 2: Base de données (1 jour)
+Phase 3: Backend APIs (3-4 jours)
+Phase 4: Frontend (5-7 jours)
+Phase 5: Intégrations paiement (2-3 jours)
+Phase 6: Tests (2-3 jours)
+
+TOTAL: 2-3 semaines de développement
+
+✅ CONCLUSION
+-------------
+J'ai fait une analyse complète du système de paiement et contrat.
+La solution proposée est robuste, flexible et conforme aux besoins.
+
+PROCHAINE ÉTAPE: Lis les documents et réponds aux questions!
+
+Une fois que j'aurai tes réponses, je pourrai créer le spec complet
+et commencer l'implémentation. 🚀
+
+Des questions sur l'analyse? N'hésite pas! 💬

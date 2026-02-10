@@ -20,6 +20,11 @@ import VerifyOTP from "./pages/auth/VerifyOTP";
 import AuthCallback from "./pages/auth/AuthCallback";
 import ClientDashboard from "./pages/dashboard/client/ClientDashboard";
 import DemandesPage from "./pages/dashboard/client/DemandesPage";
+import AccepterDevisPage from "./pages/dashboard/client/AccepterDevisPage";
+import SignerContratPage from "./pages/dashboard/client/SignerContratPage";
+import PaiementAcomptePage from "./pages/dashboard/client/PaiementAcomptePage";
+import PaiementConfirmationPage from "./pages/dashboard/client/PaiementConfirmationPage";
+import MissionDetailPage from "./pages/dashboard/client/MissionDetailPage";
 import NouvelleDemandePages from "./pages/dashboard/client/NouvelleDemandePages";
 import ClientDemandeDetailPage from "./pages/dashboard/client/DemandeDetailPage";
 import PaiementsPage from "./pages/dashboard/client/PaiementsPage";
@@ -34,12 +39,16 @@ import OpportunitesPage from "./pages/dashboard/prestataire/OpportunitesPage";
 import DemandeDetailPage from "./pages/dashboard/prestataire/DemandeDetailPage";
 import CreerDevisPage from "./pages/dashboard/prestataire/CreerDevisPage";
 import MissionsPage from "./pages/dashboard/prestataire/MissionsPage";
+import ContratsPage from "./pages/dashboard/prestataire/ContratsPage";
+import VoirContratPage from "./pages/dashboard/prestataire/VoirContratPage";
 import DevisPage from "./pages/dashboard/prestataire/DevisPage";
 import CalendrierPage from "./pages/dashboard/prestataire/CalendrierPage";
 import RevenusPage from "./pages/dashboard/prestataire/RevenusPage";
 import PrestataireMessagesPage from "./pages/dashboard/prestataire/MessagesPage";
 import ProfilPage from "./pages/dashboard/prestataire/ProfilPage";
 import PrestataireParametresPage from "./pages/dashboard/prestataire/ParametresPage";
+import ConfigPaiementPrestatairePage from "./pages/dashboard/prestataire/ConfigPaiementPage";
+import FraisDeplacementPage from "./pages/dashboard/prestataire/FraisDeplacementPage";
 import AdminDashboard from "./pages/dashboard/admin/AdminDashboard";
 import UsersPage from "./pages/dashboard/admin/UsersPage";
 import ProvidersPage from "./pages/dashboard/admin/ProvidersPage";
@@ -48,6 +57,8 @@ import RequestsPage from "./pages/dashboard/admin/RequestsPage";
 import DisputesPage from "./pages/dashboard/admin/DisputesPage";
 import TransactionsPage from "./pages/dashboard/admin/TransactionsPage";
 import ReportsPage from "./pages/dashboard/admin/ReportsPage";
+import ConfigPaiementPage from "./pages/dashboard/admin/ConfigPaiementPage";
+import TestConfigPage from "./pages/dashboard/admin/TestConfigPage";
 import ConfigPage from "./pages/dashboard/admin/ConfigPage";
 import AdminDevisPage from "./pages/dashboard/admin/DevisPage";
 import NotFound from "./pages/NotFound";
@@ -81,6 +92,11 @@ const App = () => (
           <Route path="/dashboard/client/demandes" element={<ProtectedRoute><DemandesPage /></ProtectedRoute>} />
           <Route path="/dashboard/client/demandes/nouvelle" element={<ProtectedRoute><NouvelleDemandePages /></ProtectedRoute>} />
           <Route path="/dashboard/client/demandes/:demandeId" element={<ProtectedRoute><ClientDemandeDetailPage /></ProtectedRoute>} />
+          <Route path="/dashboard/client/devis/:devisId/accepter" element={<ProtectedRoute><AccepterDevisPage /></ProtectedRoute>} />
+          <Route path="/dashboard/client/contrat/:devisId" element={<ProtectedRoute><SignerContratPage /></ProtectedRoute>} />
+          <Route path="/dashboard/client/paiement/:contratId/acompte" element={<ProtectedRoute><PaiementAcomptePage /></ProtectedRoute>} />
+          <Route path="/dashboard/client/paiement/:paiementId/confirmation" element={<ProtectedRoute><PaiementConfirmationPage /></ProtectedRoute>} />
+          <Route path="/dashboard/client/missions/:missionId" element={<ProtectedRoute><MissionDetailPage /></ProtectedRoute>} />
           <Route path="/dashboard/client/paiements" element={<ProtectedRoute><PaiementsPage /></ProtectedRoute>} />
           <Route path="/dashboard/client/avis" element={<ProtectedRoute><AvisPage /></ProtectedRoute>} />
           <Route path="/dashboard/client/messages" element={<ProtectedRoute><ClientMessagesPage /></ProtectedRoute>} />
@@ -95,12 +111,16 @@ const App = () => (
           <Route path="/dashboard/prestataire/demandes/:id" element={<ProtectedRoute><DemandeDetailPage /></ProtectedRoute>} />
           <Route path="/dashboard/prestataire/devis/nouveau/:demandeId" element={<ProtectedRoute><CreerDevisPage /></ProtectedRoute>} />
           <Route path="/dashboard/prestataire/missions" element={<ProtectedRoute><MissionsPage /></ProtectedRoute>} />
+          <Route path="/dashboard/prestataire/contrats" element={<ProtectedRoute><ContratsPage /></ProtectedRoute>} />
+          <Route path="/dashboard/prestataire/contrat/:contratId" element={<ProtectedRoute><VoirContratPage /></ProtectedRoute>} />
           <Route path="/dashboard/prestataire/devis" element={<ProtectedRoute><DevisPage /></ProtectedRoute>} />
           <Route path="/dashboard/prestataire/calendrier" element={<ProtectedRoute><CalendrierPage /></ProtectedRoute>} />
           <Route path="/dashboard/prestataire/revenus" element={<ProtectedRoute><RevenusPage /></ProtectedRoute>} />
           <Route path="/dashboard/prestataire/messages" element={<ProtectedRoute><PrestataireMessagesPage /></ProtectedRoute>} />
           <Route path="/dashboard/prestataire/profil" element={<ProtectedRoute><ProfilPage /></ProtectedRoute>} />
           <Route path="/dashboard/prestataire/parametres" element={<ProtectedRoute><PrestataireParametresPage /></ProtectedRoute>} />
+          <Route path="/dashboard/prestataire/config-paiement" element={<ProtectedRoute><ConfigPaiementPrestatairePage /></ProtectedRoute>} />
+          <Route path="/dashboard/prestataire/frais-deplacement" element={<ProtectedRoute><FraisDeplacementPage /></ProtectedRoute>} />
           
           {/* Admin Dashboard routes */}
           <Route path="/dashboard/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
@@ -113,6 +133,8 @@ const App = () => (
           <Route path="/dashboard/admin/transactions" element={<AdminRoute><TransactionsPage /></AdminRoute>} />
           <Route path="/dashboard/admin/rapports" element={<AdminRoute><ReportsPage /></AdminRoute>} />
           <Route path="/dashboard/admin/configuration" element={<AdminRoute><ConfigPage /></AdminRoute>} />
+          <Route path="/dashboard/admin/config-paiement" element={<AdminRoute><ConfigPaiementPage /></AdminRoute>} />
+          <Route path="/dashboard/admin/test-config" element={<AdminRoute><TestConfigPage /></AdminRoute>} />
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

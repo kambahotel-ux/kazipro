@@ -1,0 +1,228 @@
+═══════════════════════════════════════════════════════════════════
+📋 GUIDE: ACCÈS AUX CONTRATS ET PAIEMENTS POUR LE PRESTATAIRE
+═══════════════════════════════════════════════════════════════════
+
+## 🎯 RÉSUMÉ
+
+Le prestataire peut maintenant voir tous ses contrats et paiements reçus via 
+deux pages dédiées dans son tableau de bord.
+
+═══════════════════════════════════════════════════════════════════
+## 📄 1. PAGE CONTRATS
+═══════════════════════════════════════════════════════════════════
+
+### 🔗 ACCÈS
+- **Menu latéral**: Cliquer sur "Contrats"
+- **URL directe**: `/dashboard/prestataire/contrats`
+
+### 📊 STATISTIQUES AFFICHÉES
+✅ Contrats signés (actifs)
+⏳ En attente (signature client)
+💰 Valeur totale (contrats signés)
+
+### 🔍 FONCTIONNALITÉS
+- **Recherche**: Par numéro de contrat, nom du client, ou titre
+- **Filtres**: Tous / En attente / Signés / Annulés
+- **Tri**: Par date de création (plus récent en premier)
+
+### 📋 INFORMATIONS AFFICHÉES PAR CONTRAT
+- Numéro du contrat (ex: CONT-2025-0001)
+- Titre du contrat
+- Statut (Signé / En attente / Annulé)
+- Nom du client
+- Montant total en FC
+- Date de création
+- Date de signature (si signé)
+- Conditions de paiement (acompte % / solde %)
+
+### 🎬 ACTIONS DISPONIBLES
+- **Voir**: Ouvre le contrat pour visualisation
+- **PDF**: Télécharge le contrat en PDF
+
+═══════════════════════════════════════════════════════════════════
+## 💰 2. PAGE REVENUS (AMÉLIORÉE)
+═══════════════════════════════════════════════════════════════════
+
+### 🔗 ACCÈS
+- **Menu latéral**: Cliquer sur "Revenus"
+- **URL directe**: `/dashboard/prestataire/revenus`
+
+### 📊 STATISTIQUES AFFICHÉES
+💵 Revenus reçus (validés)
+⏳ En attente (à recevoir)
+✅ Transactions (complétées)
+📈 Revenus ce mois (carte spéciale)
+
+### 🔍 FONCTIONNALITÉS
+- **Recherche**: Par numéro de paiement, nom du client, ou numéro de contrat
+- **Filtres**: Tous / Validés / En cours / Échoués
+- **Tri**: Par date (plus récent en premier)
+
+### 📋 INFORMATIONS AFFICHÉES PAR PAIEMENT
+**Dans le tableau:**
+- Numéro de paiement (ex: PAY-2025-0001)
+- Nom du client
+- Type de paiement (Acompte / Solde / etc.)
+- Montant en FC
+- Méthode de paiement (M-Pesa / Airtel Money / Orange Money)
+- Date du paiement
+- Statut (Validé / En cours / Échoué)
+
+**Dans les détails (modal):**
+- Toutes les infos du tableau +
+- Numéro du contrat associé
+- Référence de transaction
+- Pourcentage (ex: Acompte 30%)
+- Bouton pour télécharger le reçu
+
+═══════════════════════════════════════════════════════════════════
+## 🔄 FLUX COMPLET: DU DEVIS AU PAIEMENT
+═══════════════════════════════════════════════════════════════════
+
+### ÉTAPE 1: CRÉATION DU DEVIS
+📝 Prestataire crée un devis pour une demande
+   ↓
+📤 Devis envoyé au client
+
+### ÉTAPE 2: ACCEPTATION ET CONTRAT
+✅ Client accepte le devis
+   ↓
+📄 Contrat créé automatiquement
+   ↓
+✍️ Client signe le contrat
+   ↓
+👁️ **PRESTATAIRE VOIT LE CONTRAT** dans "Contrats"
+
+### ÉTAPE 3: PAIEMENT DE L'ACOMPTE
+💳 Client paie l'acompte (30% par défaut)
+   ↓
+✅ Paiement validé
+   ↓
+💰 **PRESTATAIRE VOIT LE PAIEMENT** dans "Revenus"
+
+### ÉTAPE 4: MISSION
+🚀 Mission créée automatiquement
+   ↓
+👷 Prestataire commence les travaux
+   ↓
+📊 Suivi dans "Missions"
+
+═══════════════════════════════════════════════════════════════════
+## 🎨 NAVIGATION DANS LE MENU
+═══════════════════════════════════════════════════════════════════
+
+**Menu latéral du prestataire (ordre):**
+1. 🏠 Tableau de bord
+2. 🔍 Opportunités
+3. 💼 Missions
+4. 📄 **Contrats** ← NOUVEAU
+5. 📋 Devis envoyés
+6. 📅 Calendrier
+7. 📈 **Revenus** ← AMÉLIORÉ
+8. 💬 Messages
+9. 👤 Mon profil
+10. ⚙️ Paramètres
+
+═══════════════════════════════════════════════════════════════════
+## 📱 EXEMPLE D'UTILISATION
+═══════════════════════════════════════════════════════════════════
+
+### SCÉNARIO: Vérifier un paiement reçu
+
+1. **Connexion** au dashboard prestataire
+   
+2. **Cliquer sur "Revenus"** dans le menu latéral
+   
+3. **Voir les statistiques** en haut:
+   - Revenus reçus: 450,000 FC
+   - En attente: 150,000 FC
+   - Transactions: 3
+   
+4. **Tableau des paiements**:
+   ```
+   PAY-2025-0001 | Jean Dupont | Acompte | 150,000 FC | M-Pesa | 15/01/2025 | Validé
+   PAY-2025-0002 | Marie Kala  | Acompte | 200,000 FC | Airtel | 18/01/2025 | Validé
+   PAY-2025-0003 | Paul Mbala  | Acompte | 100,000 FC | M-Pesa | 20/01/2025 | Validé
+   ```
+   
+5. **Cliquer sur l'icône œil** pour voir les détails
+   
+6. **Modal de détails** s'ouvre avec:
+   - Numéro: PAY-2025-0001
+   - Client: Jean Dupont
+   - Contrat: CONT-2025-0001
+   - Type: Acompte (30%)
+   - Montant: 150,000 FC
+   - Méthode: M-Pesa
+   - Date: 15 janvier 2025
+   - Référence: SIM-1737000000
+   - Statut: Validé ✅
+   
+7. **Télécharger le reçu** en cliquant sur "Reçu"
+
+═══════════════════════════════════════════════════════════════════
+## 🔐 SÉCURITÉ ET PERMISSIONS
+═══════════════════════════════════════════════════════════════════
+
+✅ Le prestataire voit UNIQUEMENT:
+   - Ses propres contrats (où il est le prestataire)
+   - Ses propres paiements (où il est le bénéficiaire)
+
+✅ Filtrage automatique par `prestataire_id`
+
+✅ RLS (Row Level Security) activé sur Supabase
+
+═══════════════════════════════════════════════════════════════════
+## 📊 DONNÉES AFFICHÉES
+═══════════════════════════════════════════════════════════════════
+
+### TABLES UTILISÉES
+
+**Pour les contrats:**
+```sql
+SELECT 
+  contrats.*,
+  clients.full_name,
+  devis.montant_ttc,
+  devis.titre,
+  devis.description
+FROM contrats
+WHERE prestataire_id = [ID_PRESTATAIRE]
+```
+
+**Pour les paiements:**
+```sql
+SELECT 
+  paiements.*,
+  clients.full_name,
+  contrats.numero
+FROM paiements
+WHERE prestataire_id = [ID_PRESTATAIRE]
+```
+
+═══════════════════════════════════════════════════════════════════
+## ✅ RÉSUMÉ DES AMÉLIORATIONS
+═══════════════════════════════════════════════════════════════════
+
+✅ **Nouvelle page "Contrats"** créée
+✅ **Page "Revenus"** améliorée avec vrais champs de paiement
+✅ **Route ajoutée** dans App.tsx
+✅ **Lien ajouté** dans le menu latéral
+✅ **Statistiques** complètes et précises
+✅ **Recherche et filtres** fonctionnels
+✅ **Détails complets** pour chaque contrat/paiement
+✅ **Téléchargement PDF** disponible
+
+═══════════════════════════════════════════════════════════════════
+## 🚀 PRÊT À UTILISER!
+═══════════════════════════════════════════════════════════════════
+
+Le prestataire peut maintenant:
+1. ✅ Voir tous ses contrats signés et en attente
+2. ✅ Télécharger les contrats en PDF
+3. ✅ Voir tous les paiements reçus
+4. ✅ Télécharger les reçus de paiement
+5. ✅ Suivre ses revenus mensuels
+6. ✅ Filtrer et rechercher facilement
+
+═══════════════════════════════════════════════════════════════════

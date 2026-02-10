@@ -1,0 +1,64 @@
+═══════════════════════════════════════════════════════════════════
+⚡ FAIRE CECI MAINTENANT
+═══════════════════════════════════════════════════════════════════
+
+Vous avez eu l'erreur: "Vous n'avez pas de profil client"
+
+C'est normal! Vous n'êtes pas connecté en tant que client.
+
+═══════════════════════════════════════════════════════════════════
+📝 SOLUTION EN 2 ÉTAPES
+═══════════════════════════════════════════════════════════════════
+
+ÉTAPE 1: Installer le trigger (2 minutes)
+------------------------------------------
+1. Ouvrez Supabase SQL Editor
+2. Copiez le fichier: INSTALLER_TRIGGER_SEULEMENT.sql
+3. Collez et Run
+
+✅ Le trigger sera installé
+✅ Les permissions seront configurées
+✅ Pas besoin de profil client pour cette étape
+
+ÉTAPE 2: Tester en tant que client
+-----------------------------------
+Vous avez 2 options:
+
+OPTION A: Se connecter avec un compte client existant
+- Déconnectez-vous
+- Reconnectez-vous avec un compte CLIENT
+- Testez l'acceptation de devis
+
+OPTION B: Créer un profil client pour votre compte
+- Exécutez ce SQL dans Supabase:
+
+  INSERT INTO clients (user_id, full_name, email, city, verified)
+  VALUES (
+    auth.uid(),
+    'Test Client',
+    auth.email(),
+    'Kinshasa',
+    true
+  );
+
+- Rafraîchissez l'app
+- Vous êtes maintenant un client
+
+═══════════════════════════════════════════════════════════════════
+✅ RÉSULTAT
+═══════════════════════════════════════════════════════════════════
+
+Après l'étape 1:
+✅ Le système de contrats automatique est installé
+✅ Tous les futurs devis acceptés auront un contrat
+
+Après l'étape 2:
+✅ Vous pouvez tester le flux complet
+✅ Accepter un devis → Contrat créé automatiquement
+✅ Voir le contrat → Signer → Payer
+
+═══════════════════════════════════════════════════════════════════
+
+👉 COMMENCEZ PAR: INSTALLER_TRIGGER_SEULEMENT.sql
+
+═══════════════════════════════════════════════════════════════════

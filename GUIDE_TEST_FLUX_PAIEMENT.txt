@@ -1,0 +1,260 @@
+═══════════════════════════════════════════════════════════════
+   GUIDE DE TEST - FLUX COMPLET DE PAIEMENT
+═══════════════════════════════════════════════════════════════
+
+📋 PRÉREQUIS SQL À EXÉCUTER
+═══════════════════════════════════════════════════════════════
+
+1. Installer le système de paiement complet:
+   ✅ Exécuter: FIX_PAIEMENTS_ET_INSTALLER.sql
+
+2. Créer le trigger de génération automatique de contrat:
+   ✅ Exécuter: sql/create_trigger_contrat_auto.sql
+
+3. Configurer les RLS pour les paiements:
+   ✅ Exécuter: FIX_RLS_PAIEMENTS.sql
+
+4. Créer le bucket de stockage pour les signatures:
+   ✅ Exécuter dans Supabase SQL Editor:
+
+   -- Créer le bucket signatures
+   INSERT INTO storage.buckets (id, name, public)
+   VALUES ('signatures', 'signatures', true)
+   ON CONFLICT (id) DO NOTHING;
+
+   -- Politique de lecture publique
+   CREATE POLICY "Public read signatures"
+   ON storage.objects FOR SELECT
+   USING (bucket_id = 'signatures');
+
+   -- Politique d'upload pour utilisateurs authentifiés
+   CREATE POLICY "Authenticated users can upload signatures"
+   ON storage.objects FOR INSERT
+   WITH CHECK (
+     bucket_id = 'signatures' 
+     AND auth.role() = 'authenticated'
+   );
+
+
+═══════════════════════════════════════════════════════════════
+   FLUX DE TEST COMPLET
+═══════════════════════════════════════════════════════════════
+
+ÉTAPE 1: CRÉER UN DEVIS (Côté Prestataire)
+───────────────────────────────────────────────────────────────
+1. Se connecter en tant que prestataire
+2. Aller dans "Opportunités" ou "Devis"
+3. Créer un nouveau devis pour un client
+4. Statut du devis: "en_attente"
+
+OU créer manuellement dans Supabase:
+
+INSERT INTO devis_pro (
+  numero,
+  prestataire_id,
+  client_id,
+  demande_id,
+  montant_ht,
+  montant_ttc,
+  statut,
+  validite_jours
+) VALUES (
+  'DEV-2025-001',
+  'UUID_PRESTATAIRE',
+  'UUID_CLIENT',
+  'UUID_DEMANDE',
+  1000000,
+  1000000,
+  'en_attente',
+  30
+);
+
+
+ÉTAPE 2: ACCEPTER LE DEVIS (Côté Client)
+───────────────────────────────────────────────────────────────
+1. Se connecter en tant que client
+2. Aller sur le dashboard client
+3. Dans "Actions en attente", cliquer sur "Accepter le devis"
+   OU aller directement: /dashboard/client/devis/{devisId}/accepter
+
+4. Vérifier que la page affiche:
+   ✓ Détails du devis
+   ✓ Montant de l'acompte (30% par défaut)
+   ✓ Montant du solde (70% par défaut)
+   ✓ 2 checkboxes (conditions générales + conditions de paiement)
+
+5. Cocher les 2 cases
+6. Cliquer sur "Accepter et continuer"
+
+RÉSULTAT ATTENDU:
+✓ Devis statut → "accepte"
+✓ Contrat créé automatiquement (via trigger)
+✓ Redirection vers: /dashboard/client/contrat/{devisId}
+
+
+ÉTAPE 3: SIGNER LE CONTRAT (Côté Client)
+───────────────────────────────────────────────────────────────
+1. La page de signature s'affiche automatiquement
+2. Vérifier que la page affiche:
+   ✓ Contenu du contrat (HTML)
+   ✓ Zone de signature (canvas blanc)
+   ✓ Bouton "Effacer"
+   ✓ Bouton "Signer et continuer vers le paiement"
+
+3. Dessiner une signature dans le canvas
+4. Cliquer sur "Signer et continuer vers le paiement"
+
+RÉSULTAT ATTENDU:
+✓ Signature uploadée dans bucket "signatures"
+✓ Contrat statut → "signe_client"
+✓ Champs remplis: signature_client_url, date_signature_client
+✓ Redirection vers: /dashboard/client/paiement/{contratId}/acompte
+
+
+ÉTAPE 4: PAYER L'ACOMPTE (Côté Client)
+───────────────────────────────────────────────────────────────
+1. La page de paiement s'affiche automatiquement
+2. Vérifier que la page affiche:
+   ✓ Détails du contrat
+   ✓ Montant de l'acompte
+   ✓ Choix de méthode de paiement (M-Pesa, Airtel Money, Orange Money)
+   ✓ Champ numéro de téléphone
+
+3. Sélectionner une méthode de paiement
+4. Entrer un numéro de téléphone (ex: 0812345678)
+5. Cliquer sur "Payer l'acompte"
+
+RÉSULTAT ATTENDU (MODE SIMULATION):
+✓ Paiement créé dans table "paiements"
+✓ Statut: "en_attente" puis "complete" (simulation)
+✓ Mission créée automatiquement
+✓ Redirection vers: /dashboard/client/paiement/{paiementId}/confirmation
+
+
+ÉTAPE 5: CONFIRMATION (Côté Client)
+───────────────────────────────────────────────────────────────
+1. La page de confirmation s'affiche
+2. Vérifier que la page affiche:
+   ✓ Message de succès
+   ✓ Détails du paiement
+   ✓ Numéro de transaction
+   ✓ Prochaines étapes
+   ✓ Bouton "Télécharger le reçu"
+   ✓ Bouton "Voir ma mission"
+
+
+═══════════════════════════════════════════════════════════════
+   VÉRIFICATIONS DANS SUPABASE
+═══════════════════════════════════════════════════════════════
+
+Après chaque étape, vérifier dans Supabase:
+
+APRÈS ACCEPTATION DEVIS:
+SELECT * FROM devis_pro WHERE id = 'UUID_DEVIS';
+-- statut doit être "accepte"
+-- date_acceptation doit être remplie
+
+SELECT * FROM contrats WHERE devis_id = 'UUID_DEVIS';
+-- Un contrat doit exister
+-- statut doit être "genere"
+
+APRÈS SIGNATURE:
+SELECT * FROM contrats WHERE devis_id = 'UUID_DEVIS';
+-- statut doit être "signe_client"
+-- signature_client_url doit être rempli
+-- date_signature_client doit être remplie
+
+APRÈS PAIEMENT:
+SELECT * FROM paiements WHERE contrat_id = 'UUID_CONTRAT';
+-- Un paiement doit exister
+-- type_paiement = "acompte"
+-- statut = "complete"
+
+SELECT * FROM missions WHERE contrat_id = 'UUID_CONTRAT';
+-- Une mission doit exister
+-- statut = "en_attente"
+
+
+═══════════════════════════════════════════════════════════════
+   PROBLÈMES COURANTS ET SOLUTIONS
+═══════════════════════════════════════════════════════════════
+
+❌ PROBLÈME: "Le contrat est en cours de génération"
+✅ SOLUTION: 
+   - Vérifier que le trigger existe: sql/create_trigger_contrat_auto.sql
+   - Vérifier dans Supabase que le contrat a été créé
+   - Si non, créer manuellement ou réexécuter le trigger
+
+❌ PROBLÈME: "Erreur lors de la signature"
+✅ SOLUTION:
+   - Vérifier que le bucket "signatures" existe
+   - Vérifier les politiques RLS du bucket
+   - Exécuter le SQL ci-dessus pour créer le bucket
+
+❌ PROBLÈME: "Erreur lors du paiement"
+✅ SOLUTION:
+   - Vérifier que la fonction generate_paiement_numero existe
+   - Vérifier les RLS de la table paiements
+   - Exécuter: FIX_RLS_PAIEMENTS.sql
+
+❌ PROBLÈME: Page blanche après acceptation
+✅ SOLUTION:
+   - Ouvrir la console (F12)
+   - Vérifier les erreurs JavaScript
+   - Vérifier que les routes existent dans App.tsx
+
+
+═══════════════════════════════════════════════════════════════
+   ROUTES À VÉRIFIER DANS App.tsx
+═══════════════════════════════════════════════════════════════
+
+✓ /dashboard/client/devis/:devisId/accepter → AccepterDevisPage
+✓ /dashboard/client/contrat/:devisId → SignerContratPage
+✓ /dashboard/client/paiement/:contratId/acompte → PaiementAcomptePage
+✓ /dashboard/client/paiement/:paiementId/confirmation → PaiementConfirmationPage
+✓ /dashboard/client/missions/:missionId → MissionDetailPage
+
+
+═══════════════════════════════════════════════════════════════
+   DONNÉES DE TEST RAPIDE
+═══════════════════════════════════════════════════════════════
+
+Pour tester rapidement, créer un devis de test:
+
+-- 1. Récupérer les IDs
+SELECT id, full_name FROM clients LIMIT 1;
+SELECT id, full_name FROM prestataires WHERE statut = 'actif' LIMIT 1;
+SELECT id, title FROM demandes LIMIT 1;
+
+-- 2. Créer le devis
+INSERT INTO devis_pro (
+  numero,
+  prestataire_id,
+  client_id,
+  demande_id,
+  montant_ht,
+  montant_ttc,
+  statut,
+  validite_jours,
+  description
+) VALUES (
+  'DEV-TEST-' || EXTRACT(EPOCH FROM NOW())::TEXT,
+  'PRESTATAIRE_ID_ICI',
+  'CLIENT_ID_ICI',
+  'DEMANDE_ID_ICI',
+  500000,
+  500000,
+  'en_attente',
+  30,
+  'Devis de test pour le flux de paiement'
+);
+
+-- 3. Récupérer l'ID du devis créé
+SELECT id, numero FROM devis_pro ORDER BY created_at DESC LIMIT 1;
+
+-- 4. Aller sur: /dashboard/client/devis/{ID_DU_DEVIS}/accepter
+
+
+═══════════════════════════════════════════════════════════════
+   FIN DU GUIDE
+═══════════════════════════════════════════════════════════════

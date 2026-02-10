@@ -1,0 +1,57 @@
+✅ PROBLÈME CLIENT_ID RÉSOLU
+================================
+
+🔍 PROBLÈME IDENTIFIÉ
+---------------------
+
+Erreur: "null value in column 'client_id' of relation 'contrats' violates not-null constraint"
+
+Cause: Les anciens devis dans la table `devis` n'ont pas de colonne `client_id`, 
+mais la table `contrats` exige cette valeur (NOT NULL constraint).
+
+
+✅ SOLUTION IMPLÉMENTÉE
+-----------------------
+
+Dans SignerContratPage.tsx, fonction createContrat() :
+
+1. Récupération du client_id depuis le devis (si disponible)
+2. Si absent, récupération depuis le profil client de l'utilisateur connecté
+3. Vérification finale avant insertion
+
+Code ajouté :
+```typescript
+// Récupérer le client_id depuis le profil de l'utilisateur connecté
+let clientId = devisData.client_id;
+
+if (!clientId) {
+  const { data: clientData } = await supabase
+    .from('clients')
+    .select('id, full_name, email, city')
+    .eq('user_id', user?.id)
+    .maybeSingle();
+  
+  clientId = clientData?.id;
+}
+
+// Si toujours pas de client_id, on ne peut pas créer le contrat
+if (!clientId) {
+  throw new Error('Impossible de déterminer le client_id');
+}
+```
+
+
+🎯 RÉSULTAT
+-----------
+
+✓ Les contrats peuvent maintenant être créés même pour les anciens devis
+✓ Le client_id est toujours présent
+✓ Pas d'erreur de contrainte NOT NULL
+✓ Compatibilité avec les deux tables (devis et devis_pro)
+
+
+📝 FICHIER MODIFIÉ
+------------------
+
+src/pages/dashboard/client/SignerContratPage.tsx
+- Fonction createContrat() enrichie avec récupération du client_id

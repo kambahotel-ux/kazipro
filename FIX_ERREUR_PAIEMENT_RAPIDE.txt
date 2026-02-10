@@ -1,0 +1,48 @@
+⚡ FIX RAPIDE - ERREUR PAIEMENT
+================================
+
+🔴 ERREUR
+---------
+"column reference 'numero' is ambiguous"
+
+
+✅ SOLUTION EN 3 ÉTAPES
+-----------------------
+
+1️⃣ Ouvrez Supabase SQL Editor
+   https://supabase.com/dashboard → Votre projet → SQL Editor
+
+2️⃣ Exécutez ce fichier SQL :
+   📁 FIX_TOUTES_FONCTIONS_NUMERO.sql
+   
+   (Copiez tout le contenu et cliquez "Run")
+
+3️⃣ Retournez sur l'application et réessayez le paiement
+   ✅ Ça devrait marcher !
+
+
+📝 CE QUI EST CORRIGÉ
+---------------------
+Les fonctions SQL qui génèrent les numéros automatiques :
+- generate_paiement_numero() → Pour les paiements
+- generate_contrat_numero() → Pour les contrats  
+- generate_litige_numero() → Pour les litiges
+
+
+⏱️ TEMPS ESTIMÉ
+---------------
+< 2 minutes
+
+
+✅ RÉSULTAT
+-----------
+Après le fix, vous pourrez :
+✅ Effectuer des paiements
+✅ Générer des numéros de paiement
+✅ Créer des contrats avec numéros
+✅ Créer des litiges avec numéros
+
+
+🎯 FICHIER À EXÉCUTER
+---------------------
+FIX_TOUTES_FONCTIONS_NUMERO.sql

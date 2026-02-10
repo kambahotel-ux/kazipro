@@ -30,6 +30,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
+import { ConfigPaiementTab } from "@/components/prestataire/ConfigPaiementTab";
 
 interface EntrepriseInfo {
   nom_entreprise: string;
@@ -1147,74 +1148,7 @@ export default function ParametresPage() {
           </TabsContent>
 
           <TabsContent value="payments" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="w-5 h-5" />
-                  Méthodes de retrait
-                </CardTitle>
-                <CardDescription>Gérez vos options de paiement pour recevoir vos revenus</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="p-4 border border-border rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-orange-500/10 rounded-lg flex items-center justify-center">
-                        <span className="font-bold text-orange-500">M</span>
-                      </div>
-                      <div>
-                        <p className="font-medium">M-Pesa</p>
-                        <p className="text-sm text-muted-foreground">+243 812 345 678</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-green-600 bg-green-500/10 px-2 py-1 rounded">Principal</span>
-                      <Button variant="ghost" size="sm">Modifier</Button>
-                    </div>
-                  </div>
-                </div>
-                <Button variant="outline" className="w-full">
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  Ajouter une méthode de paiement
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Préférences de facturation</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Devise préférée</Label>
-                    <Select defaultValue="fc">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fc">Franc Congolais (FC)</SelectItem>
-                        <SelectItem value="usd">Dollar US ($)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Seuil de retrait automatique</Label>
-                    <Select defaultValue="500000">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="100000">100,000 FC</SelectItem>
-                        <SelectItem value="250000">250,000 FC</SelectItem>
-                        <SelectItem value="500000">500,000 FC</SelectItem>
-                        <SelectItem value="manual">Manuel uniquement</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <ConfigPaiementTab />
           </TabsContent>
 
           <TabsContent value="availability" className="space-y-6">

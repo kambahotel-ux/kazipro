@@ -1,0 +1,85 @@
+✅ DERNIER FIX - COLONNE 'REFERENCE_EXTERNE'
+============================================
+
+🔴 ERREUR
+---------
+"Could not find the 'reference_externe' column of 'paiements'"
+
+
+✅ SOLUTION APPLIQUÉE
+---------------------
+
+Modifié le fichier :
+src/pages/dashboard/client/PaiementAcomptePage.tsx
+
+AVANT :
+```typescript
+.update({
+  statut: 'valide',
+  date_paiement: new Date().toISOString(),
+  reference_externe: `SIM-${Date.now()}` // ❌ Colonne inexistante
+})
+```
+
+APRÈS :
+```typescript
+.update({
+  statut: 'valide',
+  date_paiement: new Date().toISOString(),
+  transaction_id: `SIM-${Date.now()}`,      // ✅ Correct
+  reference_paiement: `REF-${Date.now()}`   // ✅ Correct
+})
+```
+
+
+📋 COLONNES CORRECTES DE LA TABLE PAIEMENTS
+--------------------------------------------
+
+Pour les références de transaction :
+✓ transaction_id (TEXT)
+✓ reference_paiement (TEXT)
+✓ recu_url (TEXT)
+
+❌ reference_externe (n'existe pas)
+
+
+🎯 RÉSULTAT
+-----------
+
+✅ Le code correspond maintenant à la structure de la table
+✅ La mise à jour du paiement fonctionnera
+✅ Les références de transaction seront enregistrées
+
+
+🔄 FLUX COMPLET MAINTENANT
+---------------------------
+
+1. Client accepte le devis ✅
+2. Client voit le contrat ✅
+3. Client télécharge le PDF ✅
+4. Client signe le contrat ✅
+5. Client effectue le paiement ✅
+   - Génération du numéro ✅ (après fix SQL)
+   - Insertion du paiement ✅
+   - Simulation paiement ✅
+   - Mise à jour statut ✅ (maintenant corrigé)
+6. Mission créée ✅
+7. Confirmation affichée ✅
+
+
+📝 RAPPEL DES ACTIONS
+---------------------
+
+Code TypeScript (déjà fait) :
+✅ Structure d'insertion corrigée
+✅ Structure de mise à jour corrigée
+✅ Compatibilité 2 tables de devis
+
+SQL (à exécuter) :
+⚠️ FIX_COMPLET_PAIEMENT_FINAL.sql
+
+
+✅ STATUT : TOUT EST CORRIGÉ DANS LE CODE
+==========================================
+
+Exécutez le fichier SQL et tout fonctionnera ! 🚀

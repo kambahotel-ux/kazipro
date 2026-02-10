@@ -462,6 +462,16 @@ export default function ClientDemandeDetailPage() {
                                 Refuser
                               </Button>
                             </>
+                          ) : devis.statut === 'accepte' ? (
+                            <Link to={`/dashboard/client/contrat/${devis.id}`}>
+                              <Button
+                                size="sm"
+                                className="w-full bg-blue-600 hover:bg-blue-700"
+                              >
+                                <FileText className="w-4 h-4 mr-1" />
+                                Voir le contrat
+                              </Button>
+                            </Link>
                           ) : null}
                         </div>
                       </div>

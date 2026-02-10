@@ -1,0 +1,162 @@
+═══════════════════════════════════════════════════════════════════
+✅ SOLUTION COMPLÈTE - PROBLÈME UPDATE CONFIGURATION
+═══════════════════════════════════════════════════════════════════
+
+J'ai créé une solution complète en 3 niveaux pour diagnostiquer et résoudre
+le problème d'UPDATE de la configuration.
+
+═══════════════════════════════════════════════════════════════════
+📦 FICHIERS CRÉÉS
+═══════════════════════════════════════════════════════════════════
+
+1. FIX_CONFIG_UPDATE_COMPLET.sql
+   → Script SQL qui fixe TOUT:
+   - Vérifie/crée la ligne de config
+   - Supprime toutes les anciennes policies RLS
+   - Crée des policies permissives (dev)
+   - Teste l'UPDATE
+   - Affiche un rapport détaillé
+
+2. src/pages/dashboard/admin/ConfigPaiementPage.tsx (modifié)
+   → Ajout de logs détaillés:
+   - 💾 Avant l'UPDATE
+   - ✅ Après l'UPDATE (avec données retournées)
+   - ⚠️ Si aucune ligne affectée
+   - ❌ Erreurs détaillées
+   - Rechargement automatique après succès
+
+3. src/pages/dashboard/admin/TestConfigPage.tsx (nouveau)
+   → Page de diagnostic complète avec 6 tests:
+   - Test 1: Authentification
+   - Test 2: SELECT sur la table
+   - Test 3: SELECT avec .eq()
+   - Test 4: UPDATE
+   - Test 5: Vérification UPDATE
+   - Test 6: Policies RLS
+   → Affiche résultat ✅/❌ pour chaque test
+   → Route: /dashboard/admin/test-config
+
+4. TEST_CONFIG_UPDATE.md
+   → Guide complet de diagnostic
+
+5. PROBLEME_UPDATE_CONFIG.txt
+   → Résumé du problème et marche à suivre
+
+═══════════════════════════════════════════════════════════════════
+🎯 MARCHE À SUIVRE (3 ÉTAPES)
+═══════════════════════════════════════════════════════════════════
+
+ÉTAPE 1: Exécuter le script SQL
+────────────────────────────────
+1. Va dans Supabase SQL Editor
+2. Copie/colle: FIX_CONFIG_UPDATE_COMPLET.sql
+3. Exécute
+4. Lis les messages (tu devrais voir plein de ✅)
+
+ÉTAPE 2: Tester avec la page de diagnostic
+───────────────────────────────────────────
+1. Va sur: http://localhost:5173/dashboard/admin/test-config
+2. La page lance automatiquement 6 tests
+3. Regarde les résultats:
+   - ✅ Vert = OK
+   - ❌ Rouge = Problème
+4. Si tout est vert → Passe à l'étape 3
+5. Si du rouge → Envoie-moi les résultats
+
+ÉTAPE 3: Tester la vraie page
+──────────────────────────────
+1. Va sur: http://localhost:5173/dashboard/admin/config-paiement
+2. Ouvre la console (F12)
+3. Modifie une valeur (ex: commission main d'œuvre à 7%)
+4. Clique "Enregistrer"
+5. Regarde les logs dans la console:
+   💾 Tentative de sauvegarde...
+   ✅ UPDATE réussi, données retournées: {...}
+   ✅ Configuration rechargée
+6. Recharge la page → La valeur doit avoir changé!
+
+═══════════════════════════════════════════════════════════════════
+🔍 DIAGNOSTIC AUTOMATIQUE
+═══════════════════════════════════════════════════════════════════
+
+La page de test (/dashboard/admin/test-config) va automatiquement:
+
+✓ Vérifier que tu es connecté
+✓ Vérifier que la table existe
+✓ Vérifier que la ligne de config existe
+✓ Tester le SELECT
+✓ Tester l'UPDATE
+✓ Vérifier que l'UPDATE a bien modifié la base
+✓ Afficher un résumé clair
+
+Si un test échoue, tu verras exactement lequel et pourquoi.
+
+═══════════════════════════════════════════════════════════════════
+💡 CAUSES POSSIBLES (et leurs solutions)
+═══════════════════════════════════════════════════════════════════
+
+1. ❌ Policies RLS trop restrictives
+   → FIX_CONFIG_UPDATE_COMPLET.sql les remplace
+
+2. ❌ La ligne de config n'existe pas
+   → FIX_CONFIG_UPDATE_COMPLET.sql la crée
+
+3. ❌ Utilisateur pas authentifié
+   → La page de test te le dira
+
+4. ❌ ID incorrect
+   → FIX_CONFIG_UPDATE_COMPLET.sql affiche l'ID réel
+
+5. ❌ UPDATE ne retourne rien
+   → ConfigPaiementPage.tsx modifié pour détecter ça
+
+═══════════════════════════════════════════════════════════════════
+📊 APRÈS LE FIX
+═══════════════════════════════════════════════════════════════════
+
+Une fois que tout fonctionne, on pourra:
+
+1. ✅ Réactiver l'historique des modifications
+   (actuellement commenté dans ConfigPaiementPage.tsx)
+
+2. ✅ Créer la page de configuration prestataire
+   src/pages/dashboard/prestataire/ConfigPaiementPage.tsx
+
+3. ✅ Créer la page frais de déplacement
+   src/pages/dashboard/prestataire/FraisDeplacementPage.tsx
+
+4. ✅ Améliorer la création de devis
+   Ajouter les calculs automatiques de commissions
+
+5. ✅ Créer les pages client
+   Signature contrat, paiement, validation
+
+═══════════════════════════════════════════════════════════════════
+🆘 BESOIN D'AIDE?
+═══════════════════════════════════════════════════════════════════
+
+Si ça ne marche toujours pas après les 3 étapes, envoie-moi:
+
+1. Le résultat complet du script SQL (tous les messages)
+2. Une capture d'écran de la page /dashboard/admin/test-config
+3. Les logs de la console navigateur (F12)
+4. Le résultat de cette requête SQL:
+   SELECT * FROM configuration_paiement_globale;
+
+Et je trouverai le problème exact!
+
+═══════════════════════════════════════════════════════════════════
+🎉 RÉSUMÉ
+═══════════════════════════════════════════════════════════════════
+
+✅ Script SQL complet créé
+✅ Logs détaillés ajoutés à la page admin
+✅ Page de diagnostic automatique créée
+✅ Guide de test complet rédigé
+✅ Route ajoutée: /dashboard/admin/test-config
+
+→ Commence par l'ÉTAPE 1 (script SQL)
+→ Puis ÉTAPE 2 (page de test)
+→ Puis ÉTAPE 3 (vraie page)
+
+Bonne chance! 🚀

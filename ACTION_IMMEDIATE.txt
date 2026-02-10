@@ -1,0 +1,117 @@
+═══════════════════════════════════════════════════════════════════
+🎯 ACTION IMMÉDIATE - TESTER LE SYSTÈME DE CONTRATS
+═══════════════════════════════════════════════════════════════════
+
+✅ TOUT EST PRÊT! Voici comment tester:
+
+═══════════════════════════════════════════════════════════════════
+MÉTHODE 1: TESTER AVEC UN DEVIS DÉJÀ ACCEPTÉ (PLUS RAPIDE)
+═══════════════════════════════════════════════════════════════════
+
+Vous avez mentionné ce devis accepté:
+ID: e68ca997-ed77-4b0e-8ab8-e970ed989a78
+
+1. Allez sur le dashboard client
+2. Cliquez sur "Mes Demandes"
+3. Allez dans l'onglet "Devis acceptés"
+4. Trouvez le devis avec cet ID
+5. Cliquez sur le bouton "Voir le contrat"
+
+RÉSULTAT ATTENDU:
+✅ La page de signature s'ouvre
+✅ Le contrat est créé automatiquement (si pas déjà créé)
+✅ Vous voyez le contenu du contrat
+✅ Vous pouvez signer avec votre doigt/souris
+✅ Après signature → redirection vers paiement acompte
+
+═══════════════════════════════════════════════════════════════════
+MÉTHODE 2: TESTER LE FLUX COMPLET (ACCEPTATION → CONTRAT)
+═══════════════════════════════════════════════════════════════════
+
+1. Trouvez une demande avec un devis en attente
+2. Cliquez sur "Voir détails" de la demande
+3. Dans la liste des devis, trouvez un devis "Envoyé" ou "En attente"
+4. Cliquez sur "Accepter"
+5. Cochez les deux cases (conditions + paiement)
+6. Cliquez "Accepter et continuer"
+
+RÉSULTAT ATTENDU:
+✅ Devis passe à statut "accepté"
+✅ Redirection automatique vers page de signature
+✅ Contrat créé automatiquement
+✅ Vous pouvez signer immédiatement
+
+═══════════════════════════════════════════════════════════════════
+🔍 OÙ TROUVER LE BOUTON "VOIR LE CONTRAT"
+═══════════════════════════════════════════════════════════════════
+
+Le bouton apparaît à 3 endroits:
+
+1. PAGE "MES DEMANDES" → Onglet "Devis acceptés"
+   - Liste tous les devis acceptés
+   - Bouton bleu "Voir le contrat" sur chaque devis
+
+2. PAGE "DÉTAIL D'UNE DEMANDE"
+   - Section "Devis reçus"
+   - Pour chaque devis accepté → bouton "Voir le contrat"
+
+3. PAGE "ACCEPTER LE DEVIS"
+   - Si le devis est déjà accepté
+   - Affiche une alerte bleue + carte verte avec le bouton
+
+═══════════════════════════════════════════════════════════════════
+⚠️ SI VOUS VOYEZ UNE ERREUR
+═══════════════════════════════════════════════════════════════════
+
+ERREUR: "Cannot coerce result to single JSON object"
+→ Normal! C'est pour ça qu'on a ajouté maybeSingle()
+→ Le contrat sera créé automatiquement
+
+ERREUR: "Bucket signatures not found"
+→ Exécutez: sql/create_storage_signatures.sql
+→ Cela créera le bucket pour les signatures
+
+ERREUR: "Permission denied" sur contrats
+→ Problème de RLS policies
+→ Dites-moi et je créerai le script de fix
+
+═══════════════════════════════════════════════════════════════════
+📊 COMMENT VÉRIFIER QUE ÇA MARCHE
+═══════════════════════════════════════════════════════════════════
+
+1. DANS SUPABASE (Table Editor):
+   - Ouvrez la table "contrats"
+   - Vous devriez voir un nouveau contrat créé
+   - Vérifiez: numero, devis_id, statut='genere'
+
+2. DANS L'APPLICATION:
+   - La page de signature s'affiche sans erreur
+   - Le contenu HTML du contrat est visible
+   - La zone de signature (canvas blanc) est présente
+   - Le bouton "Signer et continuer" est actif
+
+3. APRÈS SIGNATURE:
+   - Message "Contrat signé avec succès!"
+   - Redirection vers /dashboard/client/paiement/:contratId/acompte
+   - Dans Supabase: signature_client_url rempli, statut='signe_client'
+
+═══════════════════════════════════════════════════════════════════
+🚀 COMMENCEZ MAINTENANT
+═══════════════════════════════════════════════════════════════════
+
+👉 ÉTAPE 1: Allez sur le dashboard client
+👉 ÉTAPE 2: Cliquez "Mes Demandes"
+👉 ÉTAPE 3: Onglet "Devis acceptés"
+👉 ÉTAPE 4: Cliquez "Voir le contrat"
+
+C'EST TOUT! Le système fera le reste automatiquement.
+
+═══════════════════════════════════════════════════════════════════
+💬 APRÈS LE TEST
+═══════════════════════════════════════════════════════════════════
+
+Dites-moi:
+✅ "Ça marche!" → On passe au paiement
+❌ "J'ai une erreur: [message]" → Je corrige immédiatement
+
+═══════════════════════════════════════════════════════════════════

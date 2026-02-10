@@ -1,0 +1,346 @@
+═══════════════════════════════════════════════════════════════════
+🔄 FLUX COMPLET DU SYSTÈME DE PAIEMENT
+═══════════════════════════════════════════════════════════════════
+
+Date: 27 janvier 2025
+Version: 1.0
+
+═══════════════════════════════════════════════════════════════════
+📋 VUE D'ENSEMBLE
+═══════════════════════════════════════════════════════════════════
+
+Le système de paiement KaziPro suit un processus en 6 étapes:
+
+1. Acceptation du devis
+2. Signature du contrat
+3. Paiement de l'acompte
+4. Réalisation de la mission
+5. Paiement du solde
+6. Clôture et évaluation
+
+═══════════════════════════════════════════════════════════════════
+🎯 ÉTAPE 1: ACCEPTATION DU DEVIS
+═══════════════════════════════════════════════════════════════════
+
+Route: /dashboard/client/devis/:devisId/accepter
+
+Composant: AccepterDevisPage.tsx
+Composant: DevisDetailCard.tsx
+
+Actions:
+✓ Client consulte le devis détaillé
+✓ Voit les montants (HT, TVA, TTC)
+✓ Voit les conditions de paiement (acompte/solde)
+✓ Lit les alertes de sécurité
+✓ Accepte les conditions générales
+✓ Accepte les conditions de paiement
+✓ Clique "Accepter et continuer"
+
+Base de données:
+→ UPDATE devis_pro SET statut = 'accepte'
+
+Redirection:
+→ /dashboard/client/contrat/:devisId
+
+═══════════════════════════════════════════════════════════════════
+🎯 ÉTAPE 2: SIGNATURE DU CONTRAT
+═══════════════════════════════════════════════════════════════════
+
+Route: /dashboard/client/contrat/:devisId
+
+Composant: SignerContratPage.tsx
+Trigger SQL: create_trigger_contrat_auto.sql
+
+Actions:
+✓ Trigger SQL génère automatiquement le contrat
+✓ Client lit le contrat HTML
+✓ Client dessine sa signature sur le canvas
+✓ Signature uploadée dans storage (bucket 'signatures')
+✓ Clique "Signer et continuer"
+
+Base de données:
+→ INSERT INTO contrats (généré par trigger)
+→ UPDATE contrats SET 
+    signature_client_url = '...',
+    date_signature_client = NOW(),
+    statut = 'signe_client'
+
+Redirection:
+→ /dashboard/client/paiement/:contratId/acompte
+
+═══════════════════════════════════════════════════════════════════
+🎯 ÉTAPE 3: PAIEMENT DE L'ACOMPTE
+═══════════════════════════════════════════════════════════════════
+
+Route: /dashboard/client/paiement/:contratId/acompte
+
+Composant: PaiementAcomptePage.tsx
+
+Actions:
+✓ Client voit le résumé (prestataire, montant, acompte)
+✓ Choisit la méthode de paiement (M-Pesa, Airtel, Orange)
+✓ Entre son numéro de téléphone
+✓ Clique "Payer"
+✓ Système génère le numéro de paiement
+✓ Système crée l'enregistrement de paiement
+✓ Simulation du paiement (2 secondes)
+✓ Système valide le paiement
+✓ Système crée la mission
+
+Base de données:
+→ RPC generate_paiement_numero()
+→ INSERT INTO paiements (
+    numero, contrat_id, client_id, prestataire_id,
+    type_paiement = 'acompte',
+    montant, methode_paiement,
+    statut = 'en_cours'
+  )
+→ UPDATE paiements SET 
+    statut = 'valide',
+    date_paiement = NOW(),
+    reference_externe = '...'
+→ INSERT INTO missions (
+    demande_id, devis_id, contrat_id,
+    client_id, prestataire_id,
+    status = 'en_cours',
+    start_date = NOW()
+  )
+
+Redirection:
+→ /dashboard/client/paiement/:paiementId/confirmation
+
+═══════════════════════════════════════════════════════════════════
+🎯 ÉTAPE 3.5: CONFIRMATION DU PAIEMENT
+═══════════════════════════════════════════════════════════════════
+
+Route: /dashboard/client/paiement/:paiementId/confirmation
+
+Composant: PaiementConfirmationPage.tsx
+
+Actions:
+✓ Client voit la confirmation de succès
+✓ Voit les détails du paiement
+✓ Voit les prochaines étapes
+✓ Peut télécharger le reçu (préparé)
+✓ Retourne au dashboard
+
+Base de données:
+→ SELECT paiements (lecture seule)
+
+Redirection:
+→ /dashboard/client (bouton manuel)
+
+═══════════════════════════════════════════════════════════════════
+🎯 ÉTAPE 4: RÉALISATION DE LA MISSION (À IMPLÉMENTER)
+═══════════════════════════════════════════════════════════════════
+
+Route: /dashboard/client/missions/:missionId (à créer)
+Route: /dashboard/prestataire/missions/:missionId (existe)
+
+Actions à implémenter:
+□ Prestataire upload des photos de progression
+□ Client et prestataire communiquent
+□ Prestataire met à jour l'avancement
+□ Client valide les étapes
+□ Prestataire demande la validation finale
+□ Client valide la fin des travaux
+
+Base de données:
+→ UPDATE missions SET status = 'en_validation'
+→ INSERT INTO messages (communication)
+→ INSERT INTO photos_mission (preuves)
+
+Redirection:
+→ /dashboard/client/paiement/:contratId/solde
+
+═══════════════════════════════════════════════════════════════════
+🎯 ÉTAPE 5: PAIEMENT DU SOLDE (À IMPLÉMENTER)
+═══════════════════════════════════════════════════════════════════
+
+Route: /dashboard/client/paiement/:contratId/solde (à créer)
+
+Composant: PaiementSoldePage.tsx (à créer)
+
+Actions à implémenter:
+□ Client voit le résumé du solde
+□ Choisit la méthode de paiement
+□ Entre son numéro de téléphone
+□ Clique "Payer le solde"
+□ Système crée le paiement
+□ Système valide le paiement
+□ Système libère les fonds au prestataire
+□ Système clôture la mission
+
+Base de données:
+→ INSERT INTO paiements (type_paiement = 'solde')
+→ UPDATE paiements SET statut = 'valide'
+→ UPDATE missions SET status = 'terminee'
+→ Libération des fonds (via API externe)
+
+Redirection:
+→ /dashboard/client/paiement/:paiementId/confirmation
+
+═══════════════════════════════════════════════════════════════════
+🎯 ÉTAPE 6: CLÔTURE ET ÉVALUATION (À IMPLÉMENTER)
+═══════════════════════════════════════════════════════════════════
+
+Route: /dashboard/client/avis/nouveau/:missionId (à créer)
+
+Actions à implémenter:
+□ Client laisse un avis
+□ Client note le prestataire (1-5 étoiles)
+□ Client écrit un commentaire
+□ Système met à jour la note du prestataire
+□ Système archive la mission
+
+Base de données:
+→ INSERT INTO avis (
+    mission_id, client_id, prestataire_id,
+    note, commentaire
+  )
+→ UPDATE prestataires SET 
+    note_moyenne = AVG(avis.note),
+    nombre_avis = COUNT(avis)
+→ UPDATE missions SET status = 'archivee'
+
+═══════════════════════════════════════════════════════════════════
+🔀 FLUX ALTERNATIF: LITIGE
+═══════════════════════════════════════════════════════════════════
+
+Déclenchement: À tout moment après le paiement de l'acompte
+
+Route: /dashboard/client/litiges/nouveau/:missionId (à créer)
+
+Actions à implémenter:
+□ Client ou prestataire déclare un litige
+□ Remplit le formulaire (motif, description)
+□ Upload des preuves (photos, documents)
+□ Système notifie l'admin
+□ Admin examine le litige
+□ Admin propose une solution
+□ Parties acceptent ou refusent
+□ Système applique la décision (remboursement, etc.)
+
+Base de données:
+→ INSERT INTO litiges (
+    mission_id, declarant_type, motif,
+    description, statut = 'ouvert'
+  )
+→ INSERT INTO preuves_litige (photos, documents)
+→ UPDATE litiges SET statut = 'en_mediation'
+→ UPDATE litiges SET statut = 'resolu'
+→ Remboursement si nécessaire
+
+═══════════════════════════════════════════════════════════════════
+📊 STATUTS DES ENTITÉS
+═══════════════════════════════════════════════════════════════════
+
+DEVIS:
+- brouillon → en_attente → accepte → refuse
+
+CONTRAT:
+- genere → signe_client → signe_prestataire → actif
+
+PAIEMENT:
+- en_cours → valide → echoue → rembourse
+
+MISSION:
+- en_cours → en_validation → terminee → archivee
+
+LITIGE:
+- ouvert → en_mediation → resolu → clos
+
+═══════════════════════════════════════════════════════════════════
+🔐 SÉCURITÉ
+═══════════════════════════════════════════════════════════════════
+
+Acompte:
+✓ Bloqué sur le compte KaziPro
+✓ Libéré au prestataire au début des travaux
+✓ Remboursable en cas de litige
+
+Solde:
+✓ Payé après validation des travaux
+✓ Libéré immédiatement au prestataire
+✓ Non remboursable (sauf litige grave)
+
+RLS Policies:
+✓ Client voit ses paiements
+✓ Prestataire voit ses paiements
+✓ Admin voit tous les paiements
+✓ Webhooks utilisent le service role
+
+═══════════════════════════════════════════════════════════════════
+📱 NOTIFICATIONS
+═══════════════════════════════════════════════════════════════════
+
+À implémenter:
+
+Email:
+□ Confirmation d'acceptation du devis
+□ Contrat signé
+□ Paiement reçu (acompte)
+□ Mission démarrée
+□ Validation demandée
+□ Paiement reçu (solde)
+□ Mission terminée
+□ Litige déclaré
+
+SMS:
+□ Confirmation de paiement
+□ Rappel de validation
+□ Alerte de litige
+
+Push (app mobile):
+□ Nouveau message
+□ Mise à jour de mission
+□ Paiement reçu
+
+═══════════════════════════════════════════════════════════════════
+🎯 RÉSUMÉ DES ROUTES
+═══════════════════════════════════════════════════════════════════
+
+IMPLÉMENTÉES:
+✓ /dashboard/client/devis/:devisId/accepter
+✓ /dashboard/client/contrat/:devisId
+✓ /dashboard/client/paiement/:contratId/acompte
+✓ /dashboard/client/paiement/:paiementId/confirmation
+
+À CRÉER:
+□ /dashboard/client/missions/:missionId
+□ /dashboard/client/paiement/:contratId/solde
+□ /dashboard/client/avis/nouveau/:missionId
+□ /dashboard/client/litiges/nouveau/:missionId
+
+═══════════════════════════════════════════════════════════════════
+📈 PROGRESSION
+═══════════════════════════════════════════════════════════════════
+
+Phase 1: Configuration admin          ✅ 100%
+Phase 2: Configuration prestataire    ✅ 100%
+Phase 3: Acceptation et signature     ✅ 100%
+Phase 4: Paiement acompte             ✅ 100% (simulation)
+Phase 5: Suivi mission                ⏳ 0%
+Phase 6: Paiement solde               ⏳ 0%
+Phase 7: Évaluation                   ⏳ 0%
+Phase 8: Litiges                      ⏳ 0%
+Phase 9: Intégrations réelles         ⏳ 0%
+
+TOTAL: 44% complété
+
+═══════════════════════════════════════════════════════════════════
+🚀 PROCHAINES ACTIONS
+═══════════════════════════════════════════════════════════════════
+
+1. Tester le flux complet (acceptation → signature → paiement)
+2. Exécuter FIX_RLS_PAIEMENTS.sql
+3. Implémenter le suivi de mission
+4. Implémenter le paiement du solde
+5. Implémenter les évaluations
+6. Implémenter les litiges
+7. Intégrer les vraies APIs de paiement
+8. Implémenter les notifications
+9. Générer les reçus PDF
+10. Tests utilisateurs
+
+═══════════════════════════════════════════════════════════════════

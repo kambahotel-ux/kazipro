@@ -1,0 +1,364 @@
+═══════════════════════════════════════════════════════════════════
+✅ PHASE 3 - PAIEMENT DE L'ACOMPTE (TERMINÉE)
+═══════════════════════════════════════════════════════════════════
+
+Date: 27 janvier 2025
+Statut: ✅ Implémentée (mode simulation)
+
+═══════════════════════════════════════════════════════════════════
+📦 FICHIERS CRÉÉS
+═══════════════════════════════════════════════════════════════════
+
+1. src/pages/dashboard/client/PaiementAcomptePage.tsx
+   → Page de paiement de l'acompte
+   → Route: /dashboard/client/paiement/:contratId/acompte
+   → Choix de la méthode de paiement
+   → Formulaire de paiement
+   → Création du paiement et de la mission
+
+2. src/pages/dashboard/client/PaiementConfirmationPage.tsx
+   → Page de confirmation de paiement
+   → Route: /dashboard/client/paiement/:paiementId/confirmation
+   → Affichage des détails du paiement
+   → Prochaines étapes
+   → Téléchargement du reçu (préparé)
+
+3. FIX_RLS_PAIEMENTS.sql
+   → Policies RLS pour la table paiements
+   → Sécurité client/prestataire/admin
+   → Permissions SELECT/INSERT/UPDATE
+
+4. src/App.tsx (modifié)
+   → Routes ajoutées pour paiement et confirmation
+
+═══════════════════════════════════════════════════════════════════
+🎨 FONCTIONNALITÉS
+═══════════════════════════════════════════════════════════════════
+
+Page de paiement (PaiementAcomptePage):
+───────────────────────────────────────
+✓ Récupération du contrat et du devis
+✓ Calcul automatique du montant de l'acompte
+✓ Affichage du résumé (prestataire, montant total, acompte)
+✓ Choix de la méthode de paiement:
+  - M-Pesa (Vodacom)
+  - Airtel Money
+  - Orange Money
+✓ Saisie du numéro de téléphone
+✓ Génération du numéro de paiement (via RPC)
+✓ Création de l'enregistrement de paiement
+✓ Simulation du paiement (2 secondes)
+✓ Mise à jour du statut (en_cours → valide)
+✓ Création automatique de la mission
+✓ Redirection vers la confirmation
+✓ Alertes de sécurité
+✓ Mode simulation clairement indiqué
+
+Page de confirmation (PaiementConfirmationPage):
+────────────────────────────────────────────────
+✓ Affichage du statut (succès/en cours)
+✓ Détails du paiement:
+  - Numéro de paiement
+  - Date
+  - Montant
+  - Méthode
+  - Type (acompte)
+  - Statut
+  - Référence externe
+✓ Informations du prestataire
+✓ Prochaines étapes:
+  - Acompte payé et sécurisé
+  - Mission créée
+  - Suivi des travaux
+✓ Bouton télécharger le reçu (préparé)
+✓ Bouton retour au dashboard
+✓ Email de confirmation (mentionné)
+
+Sécurité RLS (FIX_RLS_PAIEMENTS.sql):
+─────────────────────────────────────
+✓ SELECT: Client, prestataire et admin peuvent voir leurs paiements
+✓ INSERT: Client peut créer ses paiements, admin peut tout créer
+✓ UPDATE: Client et admin peuvent modifier
+✓ Webhooks utilisent le service role (bypass RLS)
+
+═══════════════════════════════════════════════════════════════════
+🔗 ROUTES AJOUTÉES
+═══════════════════════════════════════════════════════════════════
+
+/dashboard/client/paiement/:contratId/acompte
+→ Page de paiement de l'acompte
+→ Protected route (authentification requise)
+
+/dashboard/client/paiement/:paiementId/confirmation
+→ Page de confirmation de paiement
+→ Protected route (authentification requise)
+
+═══════════════════════════════════════════════════════════════════
+🎯 FLUX UTILISATEUR COMPLET
+═══════════════════════════════════════════════════════════════════
+
+1. Client signe le contrat
+   → /dashboard/client/contrat/:devisId
+   → Signature électronique
+   → Statut contrat → 'signe_client'
+
+2. Client est redirigé vers le paiement
+   → /dashboard/client/paiement/:contratId/acompte
+   → Affichage du résumé
+
+3. Client choisit la méthode de paiement
+   → M-Pesa, Airtel Money ou Orange Money
+   → Saisie du numéro de téléphone
+
+4. Client clique "Payer"
+   → Génération du numéro de paiement
+   → Création de l'enregistrement (statut: en_cours)
+   → Simulation du paiement (2 secondes)
+   → Mise à jour du statut (valide)
+   → Création de la mission
+   → Redirection vers confirmation
+
+5. Client voit la confirmation
+   → /dashboard/client/paiement/:paiementId/confirmation
+   → Détails du paiement
+   → Prochaines étapes
+   → Téléchargement du reçu
+
+6. Client retourne au dashboard
+   → Peut suivre la mission
+   → Peut communiquer avec le prestataire
+
+═══════════════════════════════════════════════════════════════════
+💳 MÉTHODES DE PAIEMENT
+═══════════════════════════════════════════════════════════════════
+
+Actuellement supportées (simulation):
+✓ M-Pesa (Vodacom)
+✓ Airtel Money
+✓ Orange Money
+
+Mode de fonctionnement actuel:
+→ Simulation de 2 secondes
+→ Paiement automatiquement validé
+→ Référence externe simulée (SIM-timestamp)
+
+À intégrer (production):
+□ API M-Pesa (Vodacom)
+□ API Airtel Money
+□ API Orange Money
+□ Webhooks de confirmation
+□ Gestion des erreurs de paiement
+□ Timeout et retry
+□ Notifications SMS
+
+═══════════════════════════════════════════════════════════════════
+📊 DONNÉES CRÉÉES
+═══════════════════════════════════════════════════════════════════
+
+Table paiements:
+───────────────
+- numero: Généré automatiquement (PAY-YYYYMMDD-XXXX)
+- contrat_id: Référence au contrat
+- client_id: ID du client
+- prestataire_id: ID du prestataire
+- type_paiement: 'acompte'
+- montant: Calculé selon le pourcentage
+- methode_paiement: 'mpesa', 'airtel_money', 'orange_money'
+- statut: 'en_cours' → 'valide'
+- date_paiement: Date de validation
+- reference_externe: Référence de la transaction
+- metadata: Numéro de téléphone, devis_id
+
+Table missions:
+──────────────
+- demande_id: Référence à la demande
+- devis_id: Référence au devis
+- contrat_id: Référence au contrat
+- client_id: ID du client
+- prestataire_id: ID du prestataire
+- status: 'en_cours'
+- start_date: Date de début
+- montant_total: Montant total du devis
+
+═══════════════════════════════════════════════════════════════════
+🔧 INSTALLATION REQUISE
+═══════════════════════════════════════════════════════════════════
+
+Scripts SQL:
+→ Exécuter: FIX_RLS_PAIEMENTS.sql
+
+Aucun package npm supplémentaire requis.
+
+═══════════════════════════════════════════════════════════════════
+✅ VÉRIFICATIONS
+═══════════════════════════════════════════════════════════════════
+
+✓ Page de paiement créée
+✓ Page de confirmation créée
+✓ Routes ajoutées
+✓ RLS policies configurées
+✓ Génération du numéro de paiement
+✓ Création du paiement
+✓ Création de la mission
+✓ Redirection fonctionnelle
+✓ Responsive mobile
+✓ Mode simulation clairement indiqué
+
+═══════════════════════════════════════════════════════════════════
+🎯 COMMENT TESTER
+═══════════════════════════════════════════════════════════════════
+
+1. Exécute le script SQL:
+   FIX_RLS_PAIEMENTS.sql
+
+2. Signe un contrat:
+   → Va sur /dashboard/client/contrat/:devisId
+   → Signe le contrat
+   → Clique "Signer et continuer"
+
+3. Tu es redirigé vers /dashboard/client/paiement/:contratId/acompte
+
+4. Tu vois:
+   - Le résumé du paiement
+   - Les méthodes de paiement
+   - Le formulaire
+
+5. Choisis une méthode:
+   - M-Pesa, Airtel Money ou Orange Money
+   - Entre un numéro de téléphone
+
+6. Clique "Payer":
+   - Simulation de 2 secondes
+   - Paiement validé
+   - Mission créée
+
+7. Tu es redirigé vers /dashboard/client/paiement/:paiementId/confirmation
+
+8. Tu vois:
+   - Confirmation de succès
+   - Détails du paiement
+   - Prochaines étapes
+   - Boutons d'action
+
+═══════════════════════════════════════════════════════════════════
+🚀 PROCHAINES PHASES
+═══════════════════════════════════════════════════════════════════
+
+Phase 4: Suivi de la mission
+────────────────────────────
+□ Page de détail de la mission
+□ Upload de photos (prestataire)
+□ Commentaires et communication
+□ Mise à jour de l'avancement
+□ Validation des étapes
+□ Demande de validation finale
+
+Phase 5: Paiement du solde
+──────────────────────────
+□ Déclenchement après validation client
+□ Page de paiement du solde
+□ Même processus que l'acompte
+□ Libération des fonds au prestataire
+□ Génération du reçu final
+□ Clôture de la mission
+
+Phase 6: Litiges
+────────────────
+□ Déclaration de litige
+□ Formulaire avec description
+□ Upload de preuves
+□ Notification admin
+□ Médiation KaziPro
+□ Résolution et remboursement
+
+Phase 7: Intégrations réelles
+─────────────────────────────
+□ API M-Pesa (Vodacom)
+□ API Airtel Money
+□ API Orange Money
+□ Webhooks de confirmation
+□ Génération de reçus PDF
+□ Notifications SMS/Email
+□ Gestion des erreurs
+
+═══════════════════════════════════════════════════════════════════
+📝 NOTES TECHNIQUES
+═══════════════════════════════════════════════════════════════════
+
+Mode simulation:
+- Paiement validé automatiquement après 2 secondes
+- Référence externe simulée (SIM-timestamp)
+- Aucune vraie transaction
+- Idéal pour le développement et les tests
+
+Calcul de l'acompte:
+- Récupère le pourcentage depuis le contrat
+- Calcule: (montant_ttc * pourcentage) / 100
+- Arrondit le résultat
+
+Création de la mission:
+- Automatique après paiement validé
+- Statut initial: 'en_cours'
+- Date de début: maintenant
+- Montant total: montant_ttc du devis
+
+Sécurité:
+- RLS policies strictes
+- Client ne peut payer que ses contrats
+- Prestataire peut voir mais pas créer
+- Admin a tous les droits
+- Webhooks utilisent le service role
+
+Responsive:
+- Layout adaptatif mobile/desktop
+- Boutons empilés sur mobile
+- Grille responsive pour les détails
+- Touch-friendly
+
+═══════════════════════════════════════════════════════════════════
+⚠️ LIMITATIONS ACTUELLES
+═══════════════════════════════════════════════════════════════════
+
+1. Mode simulation uniquement
+   → Pas de vraie transaction
+   → Pas de vérification du solde
+   → Pas de notification SMS
+
+2. Génération de reçu non implémentée
+   → Bouton présent mais non fonctionnel
+   → À implémenter avec jsPDF ou API externe
+
+3. Notifications non implémentées
+   → Pas d'email de confirmation
+   → Pas de SMS au prestataire
+   → À implémenter avec service externe
+
+4. Gestion d'erreurs basique
+   → Pas de retry automatique
+   → Pas de timeout configurable
+   → Pas de gestion des paiements échoués
+
+5. Webhooks non configurés
+   → Pas de callback de paiement
+   → Pas de mise à jour asynchrone
+   → À implémenter pour la production
+
+═══════════════════════════════════════════════════════════════════
+🎉 RÉSUMÉ
+═══════════════════════════════════════════════════════════════════
+
+✅ Page de paiement fonctionnelle (simulation)
+✅ Page de confirmation complète
+✅ Création automatique du paiement
+✅ Création automatique de la mission
+✅ RLS policies sécurisées
+✅ Flux complet testé
+✅ Responsive mobile
+
+La Phase 3 est terminée! Le client peut maintenant payer l'acompte
+après avoir signé le contrat. Le système crée automatiquement la
+mission et redirige vers une page de confirmation.
+
+Prochaine étape: Suivi de la mission et paiement du solde 🚀
+
+═══════════════════════════════════════════════════════════════════

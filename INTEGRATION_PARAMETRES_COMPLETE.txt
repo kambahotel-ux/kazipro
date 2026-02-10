@@ -1,0 +1,199 @@
+═══════════════════════════════════════════════════════════════════
+✅ INTÉGRATION DANS PARAMÈTRES - TERMINÉE
+═══════════════════════════════════════════════════════════════════
+
+Date: 27 janvier 2025
+Statut: ✅ Terminé
+
+═══════════════════════════════════════════════════════════════════
+🎯 CE QUI A ÉTÉ FAIT
+═══════════════════════════════════════════════════════════════════
+
+1. ✅ Créé un script SQL pour fixer les RLS
+   → FIX_RLS_PRESTATAIRE_CONFIG.sql
+   → Permet INSERT/UPDATE pour les prestataires
+
+2. ✅ Créé un composant réutilisable
+   → src/components/prestataire/ConfigPaiementTab.tsx
+   → Contient les 2 configurations avec sous-onglets
+
+3. ✅ Intégré dans la page Paramètres
+   → Remplace l'ancien contenu de l'onglet "Paiements"
+   → Accessible via: /dashboard/prestataire/parametres
+
+4. ✅ Nettoyé la sidebar
+   → Supprimé les liens directs (config-paiement, frais-deplacement)
+   → Tout est maintenant dans Paramètres
+
+═══════════════════════════════════════════════════════════════════
+📦 FICHIERS CRÉÉS/MODIFIÉS
+═══════════════════════════════════════════════════════════════════
+
+CRÉÉS:
+──────
+1. FIX_RLS_PRESTATAIRE_CONFIG.sql
+   → Script SQL pour fixer les policies RLS
+   → Permet aux prestataires d'insérer/modifier leur config
+
+2. src/components/prestataire/ConfigPaiementTab.tsx
+   → Composant avec 2 sous-onglets:
+     - Configuration Paiement
+     - Frais de Déplacement
+   → Réutilisable et autonome
+
+MODIFIÉS:
+─────────
+1. src/pages/dashboard/prestataire/ParametresPage.tsx
+   → Import de ConfigPaiementTab
+   → Remplacement du contenu de l'onglet "payments"
+
+2. src/components/dashboard/DashboardSidebar.tsx
+   → Suppression des liens "Config Paiement" et "Frais déplacement"
+   → Retour à la sidebar originale
+
+═══════════════════════════════════════════════════════════════════
+🔧 STRUCTURE DE LA PAGE PARAMÈTRES
+═══════════════════════════════════════════════════════════════════
+
+/dashboard/prestataire/parametres
+
+Onglets principaux:
+├── Entreprise (company)
+├── Notifications (notifications)
+├── Sécurité (security)
+├── Paiements (payments) ⭐ MODIFIÉ
+│   ├── Configuration Paiement
+│   │   ├── Activation KaziPro
+│   │   ├── Choix des éléments
+│   │   └── Bouton Enregistrer
+│   └── Frais de Déplacement
+│       ├── Activation
+│       ├── Mode de calcul (fixe/km/zone/gratuit)
+│       ├── Configuration selon le mode
+│       └── Bouton Enregistrer
+├── Disponibilité (availability)
+└── Préférences (preferences)
+
+═══════════════════════════════════════════════════════════════════
+🔍 ERREURS RLS CORRIGÉES
+═══════════════════════════════════════════════════════════════════
+
+AVANT:
+❌ POST /configuration_paiement_prestataire → 403 Forbidden
+❌ POST /frais_deplacement_config → 403 Forbidden
+
+APRÈS (avec FIX_RLS_PRESTATAIRE_CONFIG.sql):
+✅ Les prestataires peuvent INSERT leur config
+✅ Les prestataires peuvent UPDATE leur config
+✅ Les prestataires peuvent SELECT leur config
+
+Policies créées:
+────────────────
+configuration_paiement_prestataire:
+  ✓ allow_prestataire_select_own_config (SELECT)
+  ✓ allow_prestataire_insert_own_config (INSERT)
+  ✓ allow_prestataire_update_own_config (UPDATE)
+
+frais_deplacement_config:
+  ✓ allow_prestataire_select_own_frais (SELECT)
+  ✓ allow_prestataire_insert_own_frais (INSERT)
+  ✓ allow_prestataire_update_own_frais (UPDATE)
+
+═══════════════════════════════════════════════════════════════════
+🎯 MARCHE À SUIVRE
+═══════════════════════════════════════════════════════════════════
+
+ÉTAPE 1: Exécuter le script SQL
+────────────────────────────────
+1. Va dans Supabase SQL Editor
+2. Copie/colle: FIX_RLS_PRESTATAIRE_CONFIG.sql
+3. Exécute
+4. Tu devrais voir:
+   ✅ Policies RLS créées pour configuration_paiement_prestataire
+   ✅ Policies RLS créées pour frais_deplacement_config
+   ✅ TOUT EST PRÊT!
+
+ÉTAPE 2: Tester la page
+────────────────────────
+1. Connecte-toi en tant que prestataire
+2. Va sur: /dashboard/prestataire/parametres
+3. Clique sur l'onglet "Paiements"
+4. Tu verras 2 sous-onglets:
+   - Configuration Paiement
+   - Frais de Déplacement
+
+ÉTAPE 3: Tester Configuration Paiement
+───────────────────────────────────────
+1. Active/désactive le paiement KaziPro
+2. Active/désactive les éléments (travaux, matériel, déplacement)
+3. Clique sur "Enregistrer"
+4. Recharge la page → Les valeurs doivent être sauvegardées
+
+ÉTAPE 4: Tester Frais de Déplacement
+─────────────────────────────────────
+1. Active les frais
+2. Choisis un mode (fixe, par km, par zone, gratuit)
+3. Configure selon le mode choisi
+4. Clique sur "Enregistrer"
+5. Recharge la page → Les valeurs doivent être sauvegardées
+
+═══════════════════════════════════════════════════════════════════
+✅ AVANTAGES DE CETTE APPROCHE
+═══════════════════════════════════════════════════════════════════
+
+✓ Tout centralisé dans Paramètres
+✓ Sidebar plus propre (moins de liens)
+✓ Navigation logique (Paramètres → Paiements)
+✓ Composant réutilisable
+✓ Pas de routes supplémentaires
+✓ Cohérent avec le reste de l'app
+✓ Facile à maintenir
+
+═══════════════════════════════════════════════════════════════════
+🔍 VÉRIFICATIONS
+═══════════════════════════════════════════════════════════════════
+
+✓ Pas d'erreurs TypeScript
+✓ Imports corrects
+✓ Composant autonome
+✓ Hooks fonctionnels
+✓ RLS policies créées
+✓ Sidebar nettoyée
+✓ Routes inutiles supprimées (optionnel)
+
+═══════════════════════════════════════════════════════════════════
+📊 RÉSUMÉ
+═══════════════════════════════════════════════════════════════════
+
+AVANT:
+- 2 pages séparées (ConfigPaiementPage, FraisDeplacementPage)
+- 2 liens dans la sidebar
+- 2 routes (/config-paiement, /frais-deplacement)
+- Erreurs RLS 403
+
+APRÈS:
+- 1 composant intégré (ConfigPaiementTab)
+- 1 onglet dans Paramètres
+- 0 routes supplémentaires
+- RLS fonctionnel ✅
+
+═══════════════════════════════════════════════════════════════════
+🆘 SI PROBLÈME
+═══════════════════════════════════════════════════════════════════
+
+Erreur 403 persiste:
+→ Vérifie que FIX_RLS_PRESTATAIRE_CONFIG.sql a été exécuté
+→ Vérifie les policies:
+  SELECT * FROM pg_policies 
+  WHERE tablename IN ('configuration_paiement_prestataire', 'frais_deplacement_config');
+
+Onglet Paiements vide:
+→ Vérifie l'import de ConfigPaiementTab
+→ Regarde la console (F12) pour les erreurs
+
+Valeurs ne se sauvegardent pas:
+→ Vérifie que tu es connecté en tant que prestataire
+→ Vérifie que user.id correspond à un prestataire_id
+→ Regarde la console pour les erreurs
+
+═══════════════════════════════════════════════════════════════════

@@ -1,0 +1,81 @@
+═══════════════════════════════════════════════════════════════════
+🎯 SOLUTION FINALE - TOUT EN UN
+═══════════════════════════════════════════════════════════════════
+
+Le problème: Aucun contrat n'est créé après acceptation du devis
+
+La solution: Exécuter UN SEUL script qui fait TOUT
+
+═══════════════════════════════════════════════════════════════════
+📝 ÉTAPE UNIQUE: EXÉCUTER CE SCRIPT
+═══════════════════════════════════════════════════════════════════
+
+1. Ouvrez Supabase SQL Editor
+2. Copiez TOUT le contenu de: CREER_DEVIS_ET_CONTRAT_TEST.sql
+3. Collez et cliquez "Run"
+
+CE SCRIPT VA:
+✅ Créer un devis de test déjà accepté pour vous
+✅ Installer le trigger de création automatique de contrats
+✅ Corriger toutes les permissions RLS
+✅ Afficher la liste de vos devis avec leur statut de contrat
+
+═══════════════════════════════════════════════════════════════════
+🧪 TESTER IMMÉDIATEMENT APRÈS
+═══════════════════════════════════════════════════════════════════
+
+1. Rafraîchissez votre application (F5)
+2. Allez sur "Mes Demandes"
+3. Cliquez sur l'onglet "Devis acceptés"
+4. Vous verrez le devis de test
+5. Cliquez sur "Voir le contrat"
+
+RÉSULTAT ATTENDU:
+✅ Page de signature s'ouvre
+✅ Contrat affiché avec le contenu
+✅ Zone de signature disponible
+✅ Bouton "Signer et continuer" actif
+
+═══════════════════════════════════════════════════════════════════
+🔄 POUR LES PROCHAINS DEVIS
+═══════════════════════════════════════════════════════════════════
+
+Maintenant que le trigger est installé:
+
+1. Quand un client accepte un devis
+2. Le contrat est créé AUTOMATIQUEMENT
+3. Le client peut immédiatement cliquer "Voir le contrat"
+4. Pas besoin de faire quoi que ce soit manuellement
+
+═══════════════════════════════════════════════════════════════════
+⚠️ SI VOUS VOYEZ UNE ERREUR DANS LE SCRIPT
+═══════════════════════════════════════════════════════════════════
+
+Erreur possible: "Aucun prestataire actif trouvé"
+→ Créez d'abord un prestataire ou changez la condition dans le script
+
+Erreur possible: "Vous n'avez pas de profil client"
+→ Connectez-vous en tant que client d'abord
+
+Autres erreurs: Copiez-moi le message exact
+
+═══════════════════════════════════════════════════════════════════
+💡 RÉSUMÉ
+═══════════════════════════════════════════════════════════════════
+
+AVANT:
+❌ Pas de trigger → pas de contrat créé
+❌ Pas de devis de test
+❌ Permissions RLS bloquantes
+
+APRÈS (avec ce script):
+✅ Trigger installé → contrats créés automatiquement
+✅ Devis de test créé et accepté
+✅ Permissions RLS correctes
+✅ Système fonctionnel de bout en bout
+
+═══════════════════════════════════════════════════════════════════
+
+👉 EXÉCUTEZ: CREER_DEVIS_ET_CONTRAT_TEST.sql
+
+═══════════════════════════════════════════════════════════════════

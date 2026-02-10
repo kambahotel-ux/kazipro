@@ -1,0 +1,167 @@
+═══════════════════════════════════════════════════════════════
+   🐛 DÉBOGAGE - ACCEPTATION DEVIS NE REDIRIGE PAS
+═══════════════════════════════════════════════════════════════
+
+📋 PROBLÈME RAPPORTÉ:
+"Le client vient d'accepter le devis mais il n'est pas redirigé 
+ou soit voir le contrat"
+
+
+🔍 CAUSES POSSIBLES:
+═══════════════════════════════════════════════════════════════
+
+1. ❌ Le trigger SQL n'existe pas ou ne fonctionne pas
+2. ❌ Le contrat n'est pas créé automatiquement
+3. ❌ Erreur JavaScript dans la console
+4. ❌ Problème de permissions RLS
+
+
+🛠️ SOLUTION RAPIDE (3 ÉTAPES)
+═══════════════════════════════════════════════════════════════
+
+ÉTAPE 1: INSTALLER LE TRIGGER CORRIGÉ
+───────────────────────────────────────────────────────────────
+Exécuter dans Supabase SQL Editor:
+
+📄 sql/fix_trigger_contrat_simple.sql
+
+Ce script:
+✓ Supprime l'ancien trigger
+✓ Crée une version simplifiée qui fonctionne à coup sûr
+✓ Ne dépend d'aucune autre fonction
+
+
+ÉTAPE 2: TESTER LE TRIGGER
+───────────────────────────────────────────────────────────────
+Exécuter dans Supabase SQL Editor:
+
+📄 sql/test_trigger_contrat.sql
+
+Ce script:
+✓ Vérifie que le trigger existe
+✓ Teste automatiquement avec un devis
+✓ Affiche si ça fonctionne ou non
+
+
+ÉTAPE 3: TESTER DANS L'APP
+───────────────────────────────────────────────────────────────
+1. Rafraîchir la page (F5)
+2. Ouvrir la console (F12)
+3. Accepter un devis
+4. Regarder:
+   - Les messages dans la console
+   - Si la redirection se fait
+   - Si des erreurs apparaissent
+
+
+═══════════════════════════════════════════════════════════════
+   🔎 VÉRIFICATIONS MANUELLES
+═══════════════════════════════════════════════════════════════
+
+VÉRIFICATION 1: Le devis a-t-il changé de statut?
+───────────────────────────────────────────────────────────────
+SELECT id, numero, statut, date_acceptation
+FROM devis_pro
+WHERE id = 'UUID_DU_DEVIS';
+
+✅ Si statut = 'accepte' et date_acceptation remplie → OK
+❌ Si statut toujours 'en_attente' → Problème de mise à jour
+
+
+VÉRIFICATION 2: Le contrat a-t-il été créé?
+───────────────────────────────────────────────────────────────
+SELECT id, numero, statut, date_generation
+FROM contrats
+WHERE devis_id = 'UUID_DU_DEVIS';
+
+✅ Si un contrat existe → Trigger fonctionne
+❌ Si aucun contrat → Trigger ne fonctionne pas
+
+
+VÉRIFICATION 3: Le trigger existe-t-il?
+───────────────────────────────────────────────────────────────
+SELECT tgname, tgenabled
+FROM pg_trigger
+WHERE tgname = 'trigger_generate_contrat';
+
+✅ Si une ligne apparaît → Trigger existe
+❌ Si aucune ligne → Exécuter sql/fix_trigger_contrat_simple.sql
+
+
+VÉRIFICATION 4: Y a-t-il des erreurs dans les logs?
+───────────────────────────────────────────────────────────────
+Dans Supabase:
+1. Aller dans "Logs" → "Postgres Logs"
+2. Chercher des erreurs récentes
+3. Regarder les messages RAISE NOTICE
+
+
+═══════════════════════════════════════════════════════════════
+   🎯 SCÉNARIOS ET SOLUTIONS
+═══════════════════════════════════════════════════════════════
+
+SCÉNARIO 1: Le devis change de statut mais pas de contrat créé
+───────────────────────────────────────────────────────────────
+CAUSE: Le trigger ne fonctionne pas
+SOLUTION:
+  1. Exécuter: sql/fix_trigger_contrat_simple.sql
+  2. Tester: sql/test_trigger_contrat.sql
+
+
+SCÉNARIO 2: Le contrat est créé mais pas de redirection
+───────────────────────────────────────────────────────────────
+CAUSE: Erreur JavaScript ou problème de navigation
+SOLUTION:
+  1. Ouvrir la console (F12)
+  2. Regarder les erreurs
+  3. Vérifier que la route existe dans App.tsx
+  4. Rafraîchir la page et réessayer
+
+
+SCÉNARIO 3: Message "Le contrat est en cours de génération"
+───────────────────────────────────────────────────────────────
+CAUSE: Le trigger prend du temps ou ne fonctionne pas
+SOLUTION:
+  1. Attendre 5 secondes
+  2. Rafraîchir la page
+  3. Aller manuellement sur: /dashboard/client/contrat/{devisId}
+  4. Si toujours rien, vérifier le trigger
+
+
+SCÉNARIO 4: Erreur "Permission denied" ou RLS
+───────────────────────────────────────────────────────────────
+CAUSE: Problème de permissions RLS
+SOLUTION:
+  1. Vérifier les politiques RLS sur la table contrats
+  2. Exécuter: FIX_RLS_PAIEMENTS.sql
+  3. Ou temporairement désactiver RLS pour tester:
+     ALTER TABLE contrats DISABLE ROW LEVEL SECURITY;
+
+
+═══════════════════════════════════════════════════════════════
+   📝 CHECKLIST COMPLÈTE
+═══════════════════════════════════════════════════════════════
+
+Avant de tester, vérifier que:
+
+□ Le trigger existe (sql/fix_trigger_contrat_simple.sql exécuté)
+□ Le bucket "signatures" existe (sql/create_storage_signatures.sql)
+□ Les RLS sont configurés (FIX_RLS_PAIEMENTS.sql)
+□ La route /dashboard/client/contrat/:devisId existe dans App.tsx
+□ Un devis en_attente existe pour tester
+
+Pendant le test:
+
+□ La console (F12) est ouverte
+□ L'onglet Network est ouvert pour voir les requêtes
+□ Les erreurs sont notées
+
+Après le test:
+
+□ Vérifier le statut du devis dans Supabase
+□ Vérifier si le contrat a été créé dans Supabase
+□ Vérifier les logs PostgreSQL
+
+
+═══════════════════════════════════════════════════════════════
+   🚀 SOLUTION ALTERNATIVE (SI RIEN NE MARCHE

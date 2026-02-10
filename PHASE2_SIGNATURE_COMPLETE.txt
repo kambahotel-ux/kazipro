@@ -1,0 +1,225 @@
+═══════════════════════════════════════════════════════════════════
+✅ PHASE 2 - SIGNATURE DU CONTRAT (TERMINÉE)
+═══════════════════════════════════════════════════════════════════
+
+Date: 27 janvier 2025
+Statut: ✅ Implémentée
+
+═══════════════════════════════════════════════════════════════════
+📦 FICHIERS CRÉÉS
+═══════════════════════════════════════════════════════════════════
+
+1. sql/create_trigger_contrat_auto.sql
+   → Trigger SQL pour génération automatique du contrat
+   → Se déclenche quand statut devis = 'accepte'
+   → Génère le contenu HTML du contrat
+   → Insère dans la table contrats
+
+2. src/pages/dashboard/client/SignerContratPage.tsx
+   → Page de signature du contrat
+   → Route: /dashboard/client/contrat/:devisId
+   → Canvas de signature électronique
+   → Upload de la signature
+   → Mise à jour du contrat
+
+3. INSTALLER_SIGNATURE.txt
+   → Instructions pour installer react-signature-canvas
+
+═══════════════════════════════════════════════════════════════════
+🎨 FONCTIONNALITÉS
+═══════════════════════════════════════════════════════════════════
+
+Trigger SQL:
+────────────
+✓ Détection automatique de l'acceptation du devis
+✓ Récupération des configs (globale + prestataire)
+✓ Calcul des pourcentages acompte/solde
+✓ Génération du numéro de contrat
+✓ Génération du contenu HTML:
+  - Informations prestataire
+  - Informations client
+  - Objet du contrat
+  - Conditions de paiement
+  - Délais
+  - Garantie
+  - Litiges
+  - Zones de signature
+✓ Insertion dans la table contrats
+
+Page de signature:
+──────────────────
+✓ Affichage du contrat HTML
+✓ Bouton télécharger PDF (préparé)
+✓ Canvas de signature tactile
+✓ Bouton effacer la signature
+✓ Validation de la signature
+✓ Upload dans Supabase Storage (bucket 'signatures')
+✓ Mise à jour du contrat:
+  - signature_client_url
+  - date_signature_client
+  - statut → 'signe_client'
+✓ Redirection vers le paiement de l'acompte
+
+═══════════════════════════════════════════════════════════════════
+🔗 ROUTES AJOUTÉES
+═══════════════════════════════════════════════════════════════════
+
+/dashboard/client/contrat/:devisId
+→ Page de signature du contrat
+→ Protected route (authentification requise)
+
+═══════════════════════════════════════════════════════════════════
+🎯 FLUX UTILISATEUR COMPLET
+═══════════════════════════════════════════════════════════════════
+
+1. Client accepte le devis
+   → /dashboard/client/devis/:devisId/accepter
+   → Statut devis → 'accepte'
+
+2. Trigger SQL se déclenche
+   → Génération automatique du contrat
+   → Insertion dans la table contrats
+   → Statut contrat → 'genere'
+
+3. Client est redirigé vers la signature
+   → /dashboard/client/contrat/:devisId
+   → Affichage du contrat
+
+4. Client lit et signe le contrat
+   → Signature sur le canvas
+   → Upload de la signature
+   → Statut contrat → 'signe_client'
+
+5. Client est redirigé vers le paiement
+   → /dashboard/client/paiement/:contratId/acompte
+   → (À créer dans Phase 3)
+
+═══════════════════════════════════════════════════════════════════
+📊 CONTENU DU CONTRAT GÉNÉRÉ
+═══════════════════════════════════════════════════════════════════
+
+Le contrat HTML contient:
+✓ Titre et numéro
+✓ Identité du prestataire (nom, email, profession)
+✓ Identité du client (nom, email)
+✓ Article 1: Objet (référence au devis, montant)
+✓ Article 2: Conditions de paiement (acompte/solde)
+✓ Article 3: Délais de validation
+✓ Article 4: Garantie
+✓ Article 5: Litiges et médiation
+✓ Date et lieu
+✓ Zones de signature (client et prestataire)
+
+═══════════════════════════════════════════════════════════════════
+🔧 INSTALLATION REQUISE
+═══════════════════════════════════════════════════════════════════
+
+Package npm:
+npm install react-signature-canvas
+npm install --save-dev @types/react-signature-canvas
+
+Script SQL:
+→ Exécuter: sql/create_trigger_contrat_auto.sql
+
+Bucket Supabase:
+→ Le bucket 'signatures' doit exister
+→ Créé par FIX_PAIEMENTS_ET_INSTALLER.sql
+
+═══════════════════════════════════════════════════════════════════
+✅ VÉRIFICATIONS
+═══════════════════════════════════════════════════════════════════
+
+✓ Trigger SQL créé
+✓ Page de signature créée
+✓ Route ajoutée
+✓ Canvas de signature intégré
+✓ Upload vers storage configuré
+✓ Redirection vers paiement préparée
+✓ Responsive mobile
+
+═══════════════════════════════════════════════════════════════════
+🎯 COMMENT TESTER
+═══════════════════════════════════════════════════════════════════
+
+1. Installe le package:
+   npm install react-signature-canvas @types/react-signature-canvas
+
+2. Exécute le script SQL:
+   sql/create_trigger_contrat_auto.sql
+
+3. Accepte un devis:
+   → Va sur /dashboard/client/devis/:devisId/accepter
+   → Accepte les conditions
+   → Clique "Accepter et continuer"
+
+4. Tu es redirigé vers /dashboard/client/contrat/:devisId
+
+5. Tu vois:
+   - Le contrat généré automatiquement
+   - Le canvas de signature
+   - Le bouton "Signer et continuer"
+
+6. Signe le contrat:
+   - Dessine ta signature sur le canvas
+   - Clique "Signer et continuer"
+
+7. La signature est uploadée
+
+8. Tu es redirigé vers /dashboard/client/paiement/:contratId/acompte
+   (Page à créer dans Phase 3)
+
+═══════════════════════════════════════════════════════════════════
+🚀 PROCHAINE PHASE
+═══════════════════════════════════════════════════════════════════
+
+Phase 3: Paiement de l'acompte
+──────────────────────────────
+□ Page de paiement
+□ Choix de la méthode (M-Pesa, Airtel Money, etc.)
+□ Formulaire de paiement
+□ Intégration API de paiement
+□ Confirmation et reçu
+□ Création de la mission
+□ Notification au prestataire
+
+═══════════════════════════════════════════════════════════════════
+📝 NOTES TECHNIQUES
+═══════════════════════════════════════════════════════════════════
+
+Trigger SQL:
+- Se déclenche sur UPDATE de devis_pro
+- Vérifie le changement de statut vers 'accepte'
+- Utilise la fonction generate_contrat_numero()
+- Récupère les configs pour les pourcentages
+- Génère un HTML formaté et stylisé
+
+Canvas de signature:
+- Bibliothèque: react-signature-canvas
+- Tactile et souris supportés
+- Export en base64 puis conversion en blob
+- Upload dans le bucket 'signatures'
+- URL publique stockée dans le contrat
+
+Sécurité:
+- Signature stockée de manière permanente
+- Date de signature enregistrée
+- Statut du contrat mis à jour
+- Traçabilité complète
+
+═══════════════════════════════════════════════════════════════════
+🎉 RÉSUMÉ
+═══════════════════════════════════════════════════════════════════
+
+✅ Génération automatique du contrat (trigger SQL)
+✅ Page de signature fonctionnelle
+✅ Upload de signature dans storage
+✅ Mise à jour du contrat
+✅ Redirection vers paiement
+✅ Flux complet acceptation → signature → paiement
+
+La Phase 2 est terminée! Le client peut maintenant signer le contrat
+électroniquement après avoir accepté le devis.
+
+Prochaine étape: Intégration du paiement (M-Pesa, Airtel Money) 💳
+
+═══════════════════════════════════════════════════════════════════

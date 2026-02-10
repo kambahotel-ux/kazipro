@@ -1,0 +1,161 @@
+═══════════════════════════════════════════════════════════════════
+✅ FLUX FINAL - CRÉATION DU CONTRAT AU CLIC SUR "VOIR LE CONTRAT"
+═══════════════════════════════════════════════════════════════════
+
+🎯 NOUVEAU COMPORTEMENT
+------------------------
+Le contrat est maintenant créé UNIQUEMENT quand le client clique sur
+le bouton "Voir le contrat", pas lors de l'acceptation du devis.
+
+═══════════════════════════════════════════════════════════════════
+📋 FLUX COMPLET ÉTAPE PAR ÉTAPE
+═══════════════════════════════════════════════════════════════════
+
+ÉTAPE 1: CLIENT ACCEPTE LE DEVIS
+---------------------------------
+Page: AccepterDevisPage.tsx
+
+Actions:
+1. Client coche les deux cases (conditions + paiement)
+2. Client clique "Accepter et continuer"
+3. Mise à jour du devis:
+   - statut → 'accepte'
+   - date_acceptation → maintenant
+4. Message: "Devis accepté avec succès! Cliquez sur 'Voir le contrat' pour continuer."
+5. Rechargement de la page
+6. Affichage du bouton "Voir le contrat" (devis accepté)
+
+❌ PAS de création de contrat à cette étape
+❌ PAS de redirection automatique
+
+ÉTAPE 2: CLIENT CLIQUE "VOIR LE CONTRAT"
+-----------------------------------------
+Bouton disponible sur:
+- AccepterDevisPage.tsx (si devis déjà accepté)
+- DemandeDetailPage.tsx (liste des devis acceptés)
+- DemandesPage.tsx (onglet "Devis acceptés")
+
+Action:
+→ Redirection vers: /dashboard/client/contrat/:devisId
+
+ÉTAPE 3: GÉNÉRATION DU CONTRAT
+-------------------------------
+Page: SignerContratPage.tsx
+
+Actions automatiques:
+1. Chargement du devis
+2. Recherche du contrat existant (maybeSingle)
+3. SI contrat n'existe pas:
+   ✅ Génération du numéro (CTR-timestamp)
+   ✅ Génération du contenu HTML
+   ✅ Calcul des montants (30/70)
+   ✅ Insertion dans la table contrats
+   ✅ Message: "Contrat généré avec succès!"
+4. SI contrat existe déjà:
+   ✅ Chargement direct
+5. Affichage de la page de signature
+
+ÉTAPE 4: CLIENT SIGNE LE CONTRAT
+---------------------------------
+Page: SignerContratPage.tsx
+
+Actions:
+1. Client dessine sa signature
+2. Client clique "Signer et continuer"
+3. Upload de la signature dans le bucket 'signatures'
+4. Mise à jour du contrat:
+   - signature_client_url → URL de la signature
+   - date_signature_client → maintenant
+   - statut → 'signe_client'
+5. Redirection vers: /dashboard/client/paiement/:contratId/acompte
+
+═══════════════════════════════════════════════════════════════════
+🔄 AVANTAGES DE CE FLUX
+═══════════════════════════════════════════════════════════════════
+
+✅ Création à la demande (lazy loading)
+✅ Pas de contrat créé inutilement
+✅ Le client contrôle quand voir le contrat
+✅ Pas de redirection forcée après acceptation
+✅ Le client peut accepter plusieurs devis avant de voir les contrats
+✅ Génération instantanée au moment du clic
+✅ Pas de dépendance à un trigger SQL
+
+═══════════════════════════════════════════════════════════════════
+📁 FICHIERS MODIFIÉS
+═══════════════════════════════════════════════════════════════════
+
+1. AccepterDevisPage.tsx
+   - Supprimé la création du contrat
+   - Supprimé la redirection automatique
+   - Ajouté rechargement pour afficher le bouton
+   - Message mis à jour
+
+2. SignerContratPage.tsx (déjà configuré)
+   - Création automatique si contrat n'existe pas
+   - Utilise maybeSingle() pour éviter les erreurs
+   - Gestion complète de la génération
+
+═══════════════════════════════════════════════════════════════════
+🧪 TESTER LE NOUVEAU FLUX
+═══════════════════════════════════════════════════════════════════
+
+1. Rafraîchir l'application (F5)
+
+2. Accepter un devis:
+   - Aller sur une demande
+   - Cliquer "Accepter" sur un devis
+   - Cocher les deux cases
+   - Cliquer "Accepter et continuer"
+   - ✅ Message: "Devis accepté avec succès! Cliquez sur 'Voir le contrat'..."
+   - ✅ Bouton "Voir le contrat" apparaît
+
+3. Voir le contrat:
+   - Cliquer sur "Voir le contrat"
+   - ✅ Redirection vers la page de signature
+   - ✅ Message: "Contrat généré avec succès!" (si nouveau)
+   - ✅ Contrat affiché immédiatement
+   - ✅ Zone de signature disponible
+
+4. Signer:
+   - Dessiner la signature
+   - Cliquer "Signer et continuer"
+   - ✅ Redirection vers le paiement
+
+═══════════════════════════════════════════════════════════════════
+💡 COMPORTEMENTS SPÉCIAUX
+═══════════════════════════════════════════════════════════════════
+
+CAS 1: Devis déjà accepté
+→ Le bouton "Voir le contrat" est visible immédiatement
+→ Cliquer dessus génère le contrat
+
+CAS 2: Contrat déjà créé
+→ Pas de régénération
+→ Affichage direct du contrat existant
+
+CAS 3: Plusieurs devis acceptés
+→ Chaque devis a son bouton "Voir le contrat"
+→ Les contrats sont créés indépendamment
+
+CAS 4: Erreur de création
+→ Message d'erreur affiché
+→ Le client peut réessayer
+
+═══════════════════════════════════════════════════════════════════
+📊 RÉSUMÉ
+═══════════════════════════════════════════════════════════════════
+
+AVANT (version précédente):
+- Acceptation → Création immédiate → Redirection
+
+MAINTENANT:
+- Acceptation → Affichage bouton
+- Clic "Voir le contrat" → Création → Affichage
+
+AVANTAGE:
+✅ Plus de contrôle pour le client
+✅ Création à la demande
+✅ Pas de contrats inutiles
+
+═══════════════════════════════════════════════════════════════════

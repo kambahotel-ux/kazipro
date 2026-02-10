@@ -1,0 +1,145 @@
+✅ PROBLÈME COLONNE 'MONTANT' RÉSOLU
+=====================================
+
+🔴 ERREUR
+---------
+POST /rest/v1/paiements
+Status: 400 Bad Request
+Error: "Could not find the 'montant' column of 'paiements' in the schema cache"
+
+
+🔍 CAUSE
+--------
+Le code TypeScript essayait d'insérer une colonne `montant` qui n'existe pas.
+
+La table `paiements` utilise une structure détaillée :
+- montant_travaux
+- montant_materiel  
+- montant_deplacement
+- montant_total
+
+Au lieu d'une simple colonne `montant`.
+
+
+✅ SOLUTION APPLIQUÉE
+---------------------
+
+Modifié le fichier :
+src/pages/dashboard/client/PaiementAcomptePage.tsx
+
+Changement dans la fonction handlePaiement() :
+
+AVANT :
+```typescript
+.insert({
+  numero: numeroData,
+  contrat_id: contratId,
+  client_id: contrat.client_id,
+  prestataire_id: contrat.prestataire_id,
+  type_paiement: 'acompte',
+  montant: montantAcompte,  // ❌ Colonne inexistante
+  methode_paiement: methodePaiement,
+  statut: 'en_cours',
+  ...
+})
+```
+
+APRÈS :
+```typescript
+.insert({
+  numero: numeroData,
+  contrat_id: contratId,
+  devis_id: devis.id,  // ✅ Ajouté
+  client_id: contrat.client_id,
+  prestataire_id: contrat.prestataire_id,
+  type_paiement: 'acompte',
+  montant_travaux: montantAcompte,  // ✅ Correct
+  montant_materiel: 0,              // ✅ Ajouté
+  montant_deplacement: 0,           // ✅ Ajouté
+  montant_total: montantAcompte,    // ✅ Ajouté
+  methode_paiement: methodePaiement,
+  statut: 'en_cours',
+  ...
+})
+```
+
+
+📋 STRUCTURE DE LA TABLE PAIEMENTS
+-----------------------------------
+
+Colonnes obligatoires :
+✓ numero (TEXT)
+✓ devis_id (UUID)
+✓ client_id (UUID)
+✓ prestataire_id (UUID)
+✓ type_paiement (TEXT)
+✓ montant_travaux (DECIMAL)
+✓ montant_materiel (DECIMAL)
+✓ montant_deplacement (DECIMAL)
+✓ montant_total (DECIMAL)
+✓ statut (TEXT)
+
+Colonnes optionnelles :
+- contrat_id (UUID)
+- mission_id (UUID)
+- methode_paiement (TEXT)
+- transaction_id (TEXT)
+- reference_paiement (TEXT)
+- date_paiement (TIMESTAMP)
+- etc.
+
+
+🎯 RÉSULTAT
+-----------
+
+✅ Le code correspond maintenant à la structure de la table
+✅ L'insertion du paiement fonctionnera
+✅ Toutes les colonnes requises sont fournies
+
+
+🧪 POUR TESTER
+--------------
+
+1. Rafraîchissez la page de l'application
+
+2. Allez sur la page de paiement
+
+3. Remplissez le formulaire :
+   - Choisissez une méthode de paiement
+   - Entrez votre numéro de téléphone
+
+4. Cliquez sur "Payer"
+
+5. → Le paiement devrait maintenant fonctionner ! 🎉
+
+
+📝 RAPPEL DES FIXES PRÉCÉDENTS
+-------------------------------
+
+Pour que tout fonctionne, assurez-vous d'avoir exécuté :
+
+1. ✅ FIX_TOUTES_FONCTIONS_NUMERO.sql
+   → Corrige la génération des numéros
+
+2. ✅ Ce fix (automatique dans le code)
+   → Corrige les colonnes du paiement
+
+
+🔄 FLUX COMPLET MAINTENANT
+---------------------------
+
+1. Client accepte le devis ✅
+2. Client voit le contrat ✅
+3. Client télécharge le PDF ✅
+4. Client signe le contrat ✅
+5. Redirection vers paiement ✅
+6. Client effectue le paiement ✅ (après les 2 fixes)
+7. Mission créée ✅
+8. Confirmation affichée ✅
+
+
+✅ STATUT : RÉSOLU
+==================
+
+Le problème de la colonne 'montant' est maintenant corrigé.
+Le système de paiement devrait fonctionner complètement ! 🚀

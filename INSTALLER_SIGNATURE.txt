@@ -1,0 +1,29 @@
+═══════════════════════════════════════════════════════════════════
+📦 INSTALLATION DU PACKAGE DE SIGNATURE
+═══════════════════════════════════════════════════════════════════
+
+Pour la fonctionnalité de signature électronique, il faut installer:
+
+npm install react-signature-canvas
+npm install --save-dev @types/react-signature-canvas
+
+OU avec yarn:
+
+yarn add react-signature-canvas
+yarn add -D @types/react-signature-canvas
+
+═══════════════════════════════════════════════════════════════════
+✅ APRÈS L'INSTALLATION
+═══════════════════════════════════════════════════════════════════
+
+La page de signature sera fonctionnelle:
+→ /dashboard/client/contrat/:devisId
+
+Fonctionnalités:
+✓ Canvas de signature tactile
+✓ Bouton effacer
+✓ Upload de la signature dans Supabase Storage
+✓ Mise à jour du contrat
+✓ Redirection vers le paiement
+
+═══════════════════════════════════════════════════════════════════

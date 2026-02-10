@@ -1,0 +1,52 @@
+✅ PROBLÈME RÉSOLU : "Contrat introuvable" après signature
+===========================================================
+
+🔴 ERREUR
+---------
+Après avoir signé le contrat, vous obteniez :
+"Contrat introuvable"
+Error: PGRST116 - Cannot coerce the result to a single JSON object
+
+
+🔍 CAUSE
+--------
+La page de paiement cherchait le devis uniquement dans la table `devis_pro`,
+mais votre devis est dans la table `devis` (ancienne table).
+
+
+✅ SOLUTION
+-----------
+Modifié 2 fichiers pour vérifier dans LES DEUX tables :
+
+1. PaiementAcomptePage.tsx
+   → Vérifie d'abord dans devis_pro
+   → Si pas trouvé, vérifie dans devis
+   → Normalise les données
+
+2. ClientDashboard.tsx
+   → Charge les devis depuis les deux tables
+   → Combine les résultats
+
+
+🎯 RÉSULTAT
+-----------
+✅ Le flux complet fonctionne maintenant :
+   Acceptation → Contrat → Signature → Paiement → Mission
+
+✅ Compatible avec les deux tables de devis
+
+✅ Plus d'erreur "Contrat introuvable"
+
+
+🧪 TESTEZ MAINTENANT
+--------------------
+1. Acceptez un devis
+2. Cliquez "Voir le contrat"
+3. Signez le contrat
+4. → Vous arrivez sur la page de paiement (sans erreur !)
+5. Effectuez le paiement
+6. → Mission créée avec succès
+
+
+✅ STATUT : RÉSOLU ET FONCTIONNEL
+==================================

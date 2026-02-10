@@ -1,0 +1,68 @@
+═══════════════════════════════════════════════════════════════════
+⚡ FIX URGENT - "DEVIS INTROUVABLE"
+═══════════════════════════════════════════════════════════════════
+
+Vous avez l'erreur "Devis introuvable" alors que le devis existe.
+
+CAUSE: Les permissions RLS bloquent l'accès au devis.
+
+SOLUTION: Exécuter un script SQL pour corriger les permissions.
+
+═══════════════════════════════════════════════════════════════════
+📝 FAIRE CECI MAINTENANT (2 MINUTES)
+═══════════════════════════════════════════════════════════════════
+
+1. Ouvrez Supabase (https://supabase.com)
+2. SQL Editor
+3. New query
+4. Copiez TOUT le fichier: FIX_RLS_DEVIS_URGENT.sql
+5. Collez
+6. Run
+
+RÉSULTAT ATTENDU:
+✅ "Policies devis_pro créées!"
+✅ "Policies contrats créées!"
+✅ "PERMISSIONS RLS CONFIGURÉES!"
+✅ Liste des policies affichée
+
+═══════════════════════════════════════════════════════════════════
+🧪 TESTER APRÈS LE FIX
+═══════════════════════════════════════════════════════════════════
+
+1. Rafraîchir l'application (F5)
+2. Aller sur "Mes Demandes"
+3. Cliquer sur une demande avec un devis accepté
+4. Cliquer sur "Voir le contrat"
+
+RÉSULTAT ATTENDU:
+✅ Redirection vers la page de signature
+✅ Contrat généré et affiché
+✅ PAS d'erreur "Devis introuvable"
+
+═══════════════════════════════════════════════════════════════════
+⚠️ SI ÇA NE MARCHE TOUJOURS PAS
+═══════════════════════════════════════════════════════════════════
+
+Vérifiez dans Supabase SQL Editor:
+
+-- Votre profil client existe?
+SELECT * FROM clients WHERE user_id = auth.uid();
+
+-- Le devis existe et vous appartient?
+SELECT 
+  d.id,
+  d.numero,
+  d.statut,
+  d.client_id,
+  c.user_id
+FROM devis_pro d
+JOIN clients c ON d.client_id = c.id
+WHERE c.user_id = auth.uid();
+
+Si ces requêtes retournent 0 lignes, dites-moi!
+
+═══════════════════════════════════════════════════════════════════
+
+👉 EXÉCUTEZ: FIX_RLS_DEVIS_URGENT.sql
+
+═══════════════════════════════════════════════════════════════════

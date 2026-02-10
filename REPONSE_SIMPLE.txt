@@ -1,0 +1,74 @@
+═══════════════════════════════════════════════════════════════
+   RÉPONSE À TA QUESTION
+═══════════════════════════════════════════════════════════════
+
+❓ TA QUESTION:
+"j'entre dans les devis à accepter je ne vois pas le bouton 
+pour le paiement ni contrat"
+
+
+✅ RÉPONSE:
+C'est NORMAL! Le bouton de paiement n'est pas sur cette page.
+
+
+🔄 LE FLUX EN 3 ÉTAPES:
+═══════════════════════════════════════════════════════════════
+
+1️⃣  PAGE ACCEPTATION DEVIS
+    → Tu coches 2 cases
+    → Tu cliques "Accepter et continuer"
+    → Tu es redirigé automatiquement vers l'étape 2
+
+2️⃣  PAGE SIGNATURE CONTRAT
+    → Tu dessines ta signature
+    → Tu cliques "Signer et continuer vers le paiement"
+    → Tu es redirigé automatiquement vers l'étape 3
+
+3️⃣  PAGE PAIEMENT ACOMPTE
+    → Tu choisis M-Pesa/Airtel/Orange
+    → Tu entres ton numéro
+    → Tu cliques "Payer l'acompte"
+    → C'EST ICI QUE TU PAIES! 💰
+
+
+📝 CE QUE TU DOIS FAIRE:
+═══════════════════════════════════════════════════════════════
+
+1. Exécuter ces 3 scripts SQL (dans Supabase):
+   ✅ sql/create_storage_signatures.sql
+   ✅ sql/create_trigger_contrat_auto.sql
+   ✅ FIX_RLS_PAIEMENTS.sql
+
+2. Créer un devis de test:
+   ✅ sql/create_test_devis_for_payment.sql
+
+3. Tester le flux:
+   ✅ Se connecter en tant que client
+   ✅ Dashboard → "Actions en attente" → "Accepter le devis"
+   ✅ Cocher les 2 cases → "Accepter et continuer"
+   ✅ Dessiner signature → "Signer et continuer"
+   ✅ Choisir méthode → Entrer numéro → "Payer"
+
+
+🎯 RÉSUMÉ:
+═══════════════════════════════════════════════════════════════
+
+Le bouton de paiement apparaît APRÈS avoir:
+1. Accepté le devis
+2. Signé le contrat
+
+C'est un flux séquentiel automatique.
+Chaque étape te redirige vers la suivante.
+
+
+📚 DOCUMENTS UTILES:
+═══════════════════════════════════════════════════════════════
+
+✓ EXPLICATION_FLUX_PAIEMENT.txt
+  → Explication détaillée avec schémas
+
+✓ GUIDE_TEST_FLUX_PAIEMENT.txt
+  → Guide complet de test étape par étape
+
+✓ sql/verify_payment_system.sql
+  → Script pour vérifier que tout est en place

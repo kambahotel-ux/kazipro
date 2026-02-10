@@ -1,0 +1,60 @@
+═══════════════════════════════════════════════════════════════════
+✅ MODIFICATION TERMINÉE
+═══════════════════════════════════════════════════════════════════
+
+🎯 CE QUI A ÉTÉ FAIT
+---------------------
+Modifié AccepterDevisPage.tsx pour créer le contrat DIRECTEMENT
+au moment de l'acceptation du devis par le client.
+
+AVANT:
+- Acceptation → Attente du trigger SQL → Polling → Redirection
+- ❌ Ne fonctionnait pas (trigger pas installé)
+
+APRÈS:
+- Acceptation → Création immédiate du contrat → Redirection
+- ✅ Fonctionne immédiatement, sans trigger SQL
+
+═══════════════════════════════════════════════════════════════════
+🚀 TESTER MAINTENANT
+═══════════════════════════════════════════════════════════════════
+
+1. Rafraîchir l'app (F5)
+2. Accepter un devis
+3. ✅ Le contrat est créé automatiquement
+4. ✅ Redirection vers la signature
+
+═══════════════════════════════════════════════════════════════════
+📁 FICHIER MODIFIÉ
+═══════════════════════════════════════════════════════════════════
+
+src/pages/dashboard/client/AccepterDevisPage.tsx
+
+Changements:
+- Ajouté fonction createContrat()
+- Création immédiate après acceptation
+- Supprimé le polling inutile
+- Gestion d'erreur sans bloquer le flux
+
+═══════════════════════════════════════════════════════════════════
+💡 AVANTAGES
+═══════════════════════════════════════════════════════════════════
+
+✅ Pas besoin de trigger SQL
+✅ Création instantanée
+✅ Contrôle total dans le code
+✅ Facile à déboguer
+✅ Fonctionne immédiatement
+
+═══════════════════════════════════════════════════════════════════
+⚠️ SI ERREUR DE PERMISSIONS
+═══════════════════════════════════════════════════════════════════
+
+Exécutez: INSTALLER_TRIGGER_SEULEMENT.sql
+→ Configure les permissions RLS nécessaires
+
+═══════════════════════════════════════════════════════════════════
+
+C'EST TOUT! Testez maintenant en acceptant un devis.
+
+═══════════════════════════════════════════════════════════════════

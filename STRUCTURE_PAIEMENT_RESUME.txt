@@ -1,0 +1,292 @@
+📊 RÉSUMÉ - STRUCTURE POUR SYSTÈME DE PAIEMENT & CONTRAT
+==========================================================
+
+🎯 TON BESOIN CLARIFIÉ
+----------------------
+✅ Les frais de déplacement sont OPTIONNELS
+✅ Le prestataire décide s'il veut les activer ou non
+✅ Par défaut: DÉSACTIVÉS pour les nouveaux prestataires
+✅ Si désactivés: pas de ligne de frais dans le devis
+
+📂 STRUCTURE ACTUELLE ANALYSÉE
+------------------------------
+
+TABLES EXISTANTES:
+1. ✅ devis_pro - Table principale des devis
+2. ✅ devis_pro_items - Lignes de devis (travaux)
+3. ✅ entreprise_info - Infos entreprise du prestataire
+4. ❌ paiements - Existe mais incomplète
+
+CE QUI MANQUE DANS devis_pro:
+- Colonne: montant_travaux_ht (séparé)
+- Colonne: frais_deplacement (optionnel)
+- Colonne: distance_km
+- Colonne: conditions_paiement_id
+- Nouveaux statuts: 'accepte_en_attente_contrat', 'accepte_avec_contrat'
+
+🆕 NOUVELLES TABLES À CRÉER
+----------------------------
+
+1. frais_deplacement_config
+   ├─ prestataire_id (UNIQUE)
+   ├─ actif (BOOLEAN) ⭐ IMPORTANT: false par défaut
+   ├─ mode_calcul (fixe, par_km, par_zone, gratuit)
+   ├─ montant_fixe
+   ├─ prix_par_km
+   ├─ distance_gratuite_km
+   ├─ zones (JSONB)
+   ├─ montant_minimum
+   └─ montant_maximum
+
+2. conditions_paiement_templates
+   ├─ prestataire_id
+   ├─ nom (ex: "Standard", "Grands travaux")
+   ├─ type_paiement (complet_avant, complet_apres, acompte_solde, echelonne)
+   ├─ pourcentage_acompte
+   ├─ pourcentage_solde
+   ├─ echeances (JSONB)
+   └─ est_defaut (BOOLEAN)
+
+3. contrats
+   ├─ numero (CONT-2026-0001)
+   ├─ devis_id
+   ├─ client_id
+   ├─ prestataire_id
+   ├─ contenu_html
+   ├─ contrat_pdf_url
+   ├─ signature_client_url
+   ├─ signature_prestataire_url
+   ├─ date_signature_client
+   ├─ date_signature_prestataire
+   ├─ statut (genere, signe_client, signe_complet, annule)
+   └─ conditions_paiement (JSONB)
+
+4. paiements (nouvelle version complète)
+   ├─ numero (PAY-2026-0001)
+   ├─ contrat_id
+   ├─ devis_id
+   ├─ mission_id
+   ├─ client_id
+   ├─ prestataire_id
+   ├─ type_paiement (acompte, solde, complet, echeance)
+   ├─ montant_travaux ⭐ SÉPARÉ
+   ├─ montant_deplacement ⭐ SÉPARÉ
+   ├─ montant_total
+   ├─ methode_paiement (mpesa, airtel_money, orange_money, carte, especes)
+   ├─ statut (en_attente, en_cours, valide, echoue, rembourse)
+   ├─ transaction_id
+   ├─ reference_paiement
+   ├─ recu_url
+   ├─ date_echeance
+   ├─ date_paiement
+   └─ date_validation
+
+🔧 FONCTIONS À CRÉER
+--------------------
+
+1. calculate_frais_deplacement(prestataire_id, distance_km)
+   → Retourne le montant des frais selon la config
+   → Retourne 0 si config.actif = false
+   → Applique les limites min/max
+
+2. calculate_devis_pro_montants(devis_id) - MODIFIER
+   → Calcule montant_travaux_ht (SUM des items)
+   → Ajoute frais_deplacement
+   → Calcule montant_ht = travaux + deplacement
+   → Calcule montant_ttc = montant_ht * (1 + tva/100)
+
+3. generate_contrat_numero()
+   → Génère CONT-2026-0001, CONT-2026-0002, etc.
+
+4. generate_paiement_numero()
+   → Génère PAY-2026-0001, PAY-2026-0002, etc.
+
+📦 STORAGE BUCKETS À CRÉER
+---------------------------
+
+1. contrats (private)
+   - Stocke les PDF des contrats
+   - Accessible par client et prestataire concernés
+
+2. signatures (private)
+   - Stocke les images de signatures
+   - Accessible uniquement par le propriétaire
+
+3. recus (private)
+   - Stocke les PDF des reçus
+   - Accessible par client et prestataire concernés
+
+🔄 EXEMPLE DE FLUX AVEC FRAIS OPTIONNELS
+-----------------------------------------
+
+CAS 1: Prestataire SANS frais de déplacement
+---------------------------------------------
+1. Prestataire n'active pas les frais (actif = false)
+2. Crée un devis:
+   ┌─────────────────────────────────┐
+   │ TRAVAUX                         │
+   │ - Installation: 50,000 FC       │
+   │ - Matériel: 30,000 FC           │
+   │ Sous-total: 80,000 FC           │
+   │                                 │
+   │ TVA (16%): 12,800 FC            │
+   │ TOTAL TTC: 92,800 FC            │
+   └─────────────────────────────────┘
+   
+   frais_deplacement = 0
+   montant_travaux_ht = 80,000
+   montant_ht = 80,000
+   montant_ttc = 92,800
+
+CAS 2: Prestataire AVEC frais de déplacement
+---------------------------------------------
+1. Prestataire active les frais (actif = true)
+2. Configure: 500 FC/km, 5 km gratuits
+3. Crée un devis pour client à 12 km:
+   ┌─────────────────────────────────┐
+   │ TRAVAUX                         │
+   │ - Installation: 50,000 FC       │
+   │ - Matériel: 30,000 FC           │
+   │ Sous-total: 80,000 FC           │
+   │                                 │
+   │ DÉPLACEMENT                     │
+   │ Distance: 12 km                 │
+   │ Frais: 3,500 FC (7 km × 500)   │
+   │                                 │
+   │ TOTAL HT: 83,500 FC             │
+   │ TVA (16%): 13,360 FC            │
+   │ TOTAL TTC: 96,860 FC            │
+   └─────────────────────────────────┘
+   
+   frais_deplacement = 3,500
+   montant_travaux_ht = 80,000
+   montant_ht = 83,500
+   montant_ttc = 96,860
+
+🎯 MODIFICATIONS DU requirements.md
+-----------------------------------
+
+✅ FAIT:
+1. Requirement 1: Ajouté "(si applicables)" pour frais
+2. Requirement 2: Renommé en "Configuration des Frais de Déplacement (Optionnel)"
+3. Ajouté critère: "activer ou désactiver les frais"
+4. Ajouté critère: "désactivés par défaut pour nouveaux prestataires"
+5. Ajouté critère: "ne pas afficher si désactivés"
+
+📋 ORDRE D'IMPLÉMENTATION RECOMMANDÉ
+-------------------------------------
+
+PHASE 1: Base de données (1-2 jours)
+├─ 1.1 Créer table frais_deplacement_config
+├─ 1.2 Créer table conditions_paiement_templates
+├─ 1.3 Créer table contrats
+├─ 1.4 Créer nouvelle table paiements
+├─ 1.5 Modifier table devis_pro (ajouter colonnes)
+├─ 1.6 Créer fonctions SQL
+└─ 1.7 Créer storage buckets + policies
+
+PHASE 2: Configuration prestataire (2 jours)
+├─ 2.1 Interface activation/désactivation frais
+├─ 2.2 Interface configuration frais (modes)
+├─ 2.3 Interface templates de paiement
+└─ 2.4 Tests
+
+PHASE 3: Devis améliorés (2 jours)
+├─ 3.1 Modifier création de devis (calcul frais)
+├─ 3.2 Affichage séparé travaux/déplacement
+├─ 3.3 Sélection template de paiement
+└─ 3.4 Tests
+
+PHASE 4: Contrats (3 jours)
+├─ 4.1 Génération automatique de contrat
+├─ 4.2 Interface de signature électronique
+├─ 4.3 Stockage et téléchargement
+└─ 4.4 Tests
+
+PHASE 5: Paiements (4 jours)
+├─ 5.1 Interface de paiement (acompte/solde)
+├─ 5.2 Intégration M-Pesa
+├─ 5.3 Intégration Airtel Money
+├─ 5.4 Génération de reçus
+├─ 5.5 Webhooks de confirmation
+└─ 5.6 Tests
+
+PHASE 6: Tests & Déploiement (2 jours)
+├─ 6.1 Tests d'intégration
+├─ 6.2 Tests utilisateurs
+└─ 6.3 Déploiement progressif
+
+TOTAL: ~2-3 semaines
+
+💡 POINTS CLÉS À RETENIR
+-------------------------
+
+1. FRAIS OPTIONNELS ⭐
+   ✅ Désactivés par défaut
+   ✅ Prestataire choisit d'activer ou non
+   ✅ Si désactivés: pas de ligne dans le devis
+
+2. SÉPARATION CLAIRE
+   ✅ montant_travaux_ht (items)
+   ✅ frais_deplacement (optionnel)
+   ✅ montant_ht = travaux + deplacement
+   ✅ montant_ttc = montant_ht * (1 + tva/100)
+
+3. RÉTROCOMPATIBILITÉ
+   ✅ Devis existants continuent de fonctionner
+   ✅ Nouvelles colonnes avec valeurs par défaut
+   ✅ Pas de migration de données nécessaire
+
+4. FLEXIBILITÉ
+   ✅ 4 modes de calcul (fixe, par_km, par_zone, gratuit)
+   ✅ Templates de paiement réutilisables
+   ✅ Paiements échelonnés possibles
+
+📂 DOCUMENTS CRÉÉS
+------------------
+
+1. requirements.md (mis à jour)
+   → User stories et acceptance criteria
+
+2. ANALYSE_STRUCTURE_ACTUELLE.md (nouveau)
+   → Analyse détaillée de la structure
+   → Tables existantes vs nécessaires
+   → Modifications à apporter
+   → Fonctions SQL complètes
+
+3. STRUCTURE_PAIEMENT_RESUME.txt (ce fichier)
+   → Résumé exécutif pour toi
+
+🚀 PROCHAINES ÉTAPES
+--------------------
+
+MAINTENANT:
+1. ✅ Lire ce résumé
+2. ✅ Valider l'approche (frais optionnels)
+3. ✅ Confirmer que c'est ce que tu veux
+
+ENSUITE (après ta validation):
+1. Créer design.md avec:
+   - Architecture technique détaillée
+   - Schémas SQL complets
+   - Diagrammes de flux
+   - Spécifications des APIs
+   
+2. Créer tasks.md avec:
+   - Liste des tâches d'implémentation
+   - Ordre d'exécution
+   - Estimation du temps
+
+3. Commencer l'implémentation
+
+❓ QUESTIONS POUR TOI
+---------------------
+
+1. ✅ Confirmes-tu que les frais de déplacement doivent être OPTIONNELS?
+2. Mode de calcul par défaut si activé: fixe ou par km?
+3. Pourcentage d'acompte standard: 30%, 40% ou 50%?
+4. Méthodes de paiement prioritaires: M-Pesa et Airtel Money?
+5. Signature électronique: dessinée ou code SMS?
+
+Une fois que tu réponds, je peux créer le design.md complet! 🚀
+

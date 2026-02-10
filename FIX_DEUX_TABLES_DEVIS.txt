@@ -1,0 +1,81 @@
+═══════════════════════════════════════════════════════════════════
+✅ FIX - COMPATIBILITÉ DEUX TABLES DE DEVIS
+═══════════════════════════════════════════════════════════════════
+
+🔍 PROBLÈME IDENTIFIÉ
+----------------------
+Votre système a DEUX tables de devis:
+- `devis` (ancienne table)
+- `devis_pro` (nouvelle table)
+
+Le devis ID bd14747a-7d59-4383-bebe-ad71d402030d existe dans la table
+`devis` mais PAS dans `devis_pro`.
+
+Quand vous cliquiez sur "Voir le contrat", le code cherchait seulement
+dans `devis_pro` et retournait un tableau vide [].
+
+═══════════════════════════════════════════════════════════════════
+✅ SOLUTION APPLIQUÉE
+═══════════════════════════════════════════════════════════════════
+
+Modifié SignerContratPage.tsx pour:
+1. Chercher d'abord dans `devis_pro` (nouvelle table)
+2. Si pas trouvé, chercher dans `devis` (ancienne table)
+3. Utiliser le devis trouvé pour créer le contrat
+
+COMPATIBILITÉ TOTALE:
+✅ Fonctionne avec les anciens devis (table `devis`)
+✅ Fonctionne avec les nouveaux devis (table `devis_pro`)
+✅ Pas besoin de migrer les données
+
+═══════════════════════════════════════════════════════════════════
+🧪 TESTER MAINTENANT
+═══════════════════════════════════════════════════════════════════
+
+1. Rafraîchir l'application (F5)
+2. Aller sur la demande avec le devis accepté
+3. Cliquer sur "Voir le contrat"
+
+RÉSULTAT ATTENDU:
+✅ Le devis est trouvé (dans la table `devis`)
+✅ Le contrat est généré
+✅ La page de signature s'affiche
+✅ Vous pouvez signer
+
+═══════════════════════════════════════════════════════════════════
+📊 DÉTAILS TECHNIQUES
+═══════════════════════════════════════════════════════════════════
+
+VOTRE DEVIS:
+- ID: bd14747a-7d59-4383-bebe-ad71d402030d
+- Table: `devis` (ancienne)
+- Statut: accepte
+- Montant: 636.26 CDF
+- Client ID: 06fbb61b-f2d1-453a-a65e-859c2e5ae5a3
+
+AVANT LE FIX:
+❌ Cherchait seulement dans `devis_pro`
+❌ Retournait []
+❌ Affichait "Devis introuvable"
+
+APRÈS LE FIX:
+✅ Cherche dans `devis_pro` d'abord
+✅ Si pas trouvé, cherche dans `devis`
+✅ Trouve le devis et crée le contrat
+
+═══════════════════════════════════════════════════════════════════
+💡 RECOMMANDATION FUTURE
+═══════════════════════════════════════════════════════════════════
+
+À long terme, vous devriez:
+1. Migrer tous les devis de `devis` vers `devis_pro`
+2. Utiliser uniquement `devis_pro`
+3. Supprimer l'ancienne table `devis`
+
+Mais pour l'instant, le système fonctionne avec les deux tables!
+
+═══════════════════════════════════════════════════════════════════
+
+👉 TESTEZ: Rafraîchissez (F5) et cliquez sur "Voir le contrat"
+
+═══════════════════════════════════════════════════════════════════

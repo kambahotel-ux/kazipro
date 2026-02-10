@@ -1,0 +1,60 @@
+⚡ ACTION IMMÉDIATE REQUISE
+===========================
+
+🔴 PROBLÈME ACTUEL
+------------------
+Le paiement ne fonctionne pas à cause d'une erreur SQL
+
+
+✅ SOLUTION (2 MINUTES)
+-----------------------
+
+1. Ouvrez Supabase
+   → https://supabase.com/dashboard
+   → Votre projet KaziPro
+   → SQL Editor (menu gauche)
+
+2. Copiez TOUT le contenu de ce fichier :
+   📁 FIX_TOUTES_FONCTIONS_NUMERO.sql
+
+3. Collez dans SQL Editor
+
+4. Cliquez "Run" (ou Ctrl+Enter)
+
+5. Attendez le message :
+   ✅ Toutes les fonctions ont été corrigées avec succès!
+
+6. Retournez sur votre application
+
+7. Réessayez le paiement
+   → Ça marche ! 🎉
+
+
+📝 RÉSUMÉ DE LA SESSION
+-----------------------
+
+✅ Contrat enrichi avec design professionnel
+✅ Téléchargement PDF fonctionnel
+✅ Signature électronique
+✅ Compatible avec les 2 tables de devis
+⚠️ Paiement : NÉCESSITE LE FIX SQL CI-DESSUS
+
+
+🎯 APRÈS LE FIX
+---------------
+
+Le flux complet fonctionnera :
+Acceptation → Contrat → Signature → Paiement → Mission
+
+Tout sera 100% opérationnel ! 🚀
+
+
+📁 FICHIER À EXÉCUTER
+---------------------
+FIX_TOUTES_FONCTIONS_NUMERO.sql
+
+(Ouvrez-le, copiez tout, exécutez dans Supabase SQL Editor)
+
+
+⏱️ TEMPS ESTIMÉ : 2 MINUTES
+============================

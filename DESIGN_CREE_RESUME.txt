@@ -1,0 +1,221 @@
+✅ DESIGN.MD CRÉÉ - RÉSUMÉ
+==========================
+
+## 📂 FICHIER CRÉÉ
+
+.kiro/specs/systeme-paiement-contrat/design.md
+
+## 📊 CONTENU ACTUEL
+
+### 1. Architecture Overview ✅
+- Diagramme des composants système
+- Frontend (React) → Backend (Supabase) → Database (PostgreSQL)
+- Couches: Payment Processing, Document Generation, Storage
+- Flux de données complet
+
+### 2. Database Schema ✅
+
+#### Nouvelles tables créées (7):
+
+1. **configuration_paiement_globale**
+   - Tous les paramètres modifiables par admin
+   - Commissions, acompte, délais, garantie
+   - Permissions prestataires
+   - Contraintes de validation
+   - RLS policies
+
+2. **historique_config_paiement**
+   - Traçabilité complète des modifications
+   - Admin, anciennes/nouvelles valeurs, raison
+   - IP address, user agent
+   - RLS policies
+
+3. **configuration_paiement_prestataire**
+   - Config individuelle par prestataire
+   - Activation paiement via KaziPro
+   - Choix des éléments
+   - Commissions personnalisées
+   - RLS policies
+
+4. **frais_deplacement_config**
+   - Activation optionnelle
+   - 4 modes: fixe, par_km, par_zone, gratuit
+   - Tarifs et limites
+   - RLS policies
+
+5. **conditions_paiement_templates**
+   - Templates réutilisables
+   - Types: complet_avant, complet_apres, acompte_solde, echelonne
+   - Pourcentages configurables
+   - RLS policies
+
+6. **contrats**
+   - Numéro unique (CONT-2026-0001)
+   - Contenu HTML + PDF
+   - Signatures électroniques
+   - Statuts: genere, signe_client, signe_complet, annule
+   - Conditions de paiement (JSONB)
+   - RLS policies
+
+7. **paiements** (enhanced)
+   - Numéro unique (PAY-2026-0001)
+   - Montants détaillés (travaux, matériel, déplacement)
+   - Commissions séparées
+   - Types: acompte, solde, complet, echeance, garantie
+   - Méthodes: mpesa, airtel_money, carte, direct
+   - Statuts: en_attente, en_cours, valide, echoue
+   - Preuve de paiement pour paiement direct
+   - RLS policies
+
+8. **litiges**
+   - Numéro unique (LIT-2026-0001)
+   - Ouvert par client ou prestataire
+   - Catégories: qualite_travaux, delai, paiement, materiel
+   - Preuves (JSONB)
+   - Résolution par admin
+   - Montants bloqués/remboursés
+   - RLS policies
+
+#### Tables modifiées (2):
+
+1. **devis_pro**
+   - Ajout: montant_travaux_ht
+   - Ajout: montant_materiel_ht
+   - Ajout: frais_deplacement
+   - Ajout: distance_km
+   - Ajout: conditions_paiement_id
+   - Ajout: configuration_paiement (JSONB)
+   - Nouveaux statuts: accepte_en_attente_contrat, accepte_avec_contrat
+
+2. **missions**
+   - Ajout: dates de validation
+   - Ajout: validation_auto
+   - Ajout: delai_validation_jours
+   - Ajout: problemes_signales
+   - Nouveaux statuts: terminee_en_attente_validation, validee, litige
+
+#### Storage Buckets (4):
+
+1. **contrats** (PDF, 10MB max)
+2. **signatures** (images, 1MB max)
+3. **recus** (PDF, 5MB max)
+4. **preuves-paiement** (images/PDF, 5MB max)
+
+Avec policies RLS complètes pour chaque bucket.
+
+### 3. SQL Functions ✅
+
+1. **generate_contrat_numero()**
+   - Génère CONT-2026-0001, CONT-2026-0002, etc.
+
+2. **generate_paiement_numero()**
+   - Génère PAY-2026-0001, PAY-2026-0002, etc.
+
+3. **generate_litige_numero()**
+   - Génère LIT-2026-0001, LIT-2026-0002, etc.
+
+4. **calculate_frais_deplacement(prestataire_id, distance_km)**
+   - Calcule selon config prestataire
+   - Retourne 0 si désactivé
+   - Applique limites min/max
+
+## 📋 CE QUI RESTE À AJOUTER AU DESIGN.MD
+
+### 4. Business Logic (à ajouter)
+- Fonction calculate_commission_kazipro()
+- Fonction calculate_devis_montants() (modifiée)
+- Logique de validation des travaux
+- Logique d'auto-validation
+- Logique de création de mission
+
+### 5. API Specifications (à ajouter)
+- POST /api/config/paiement (admin)
+- GET /api/config/paiement
+- POST /api/config/prestataire (prestataire)
+- POST /api/contrats/generate
+- POST /api/contrats/:id/sign
+- POST /api/paiements/initiate
+- POST /api/paiements/webhook
+- POST /api/litiges/create
+- POST /api/missions/:id/validate
+
+### 6. User Interfaces (à ajouter)
+- Interface admin (config globale)
+- Interface prestataire (config individuelle)
+- Interface création devis (avec frais)
+- Interface signature contrat
+- Interface paiement
+- Interface validation travaux
+- Interface litiges
+
+### 7. Integration Points (à ajouter)
+- M-Pesa API integration
+- Airtel Money API integration
+- PDF generation (jsPDF ou similaire)
+- Email notifications (Supabase)
+- SMS notifications (optionnel)
+
+### 8. Security & Validation (à ajouter)
+- Validation des montants
+- Validation des pourcentages
+- Validation des signatures
+- Protection contre fraude
+- Rate limiting
+
+### 9. Performance Considerations (à ajouter)
+- Indexation optimale
+- Caching strategy
+- Query optimization
+- File upload optimization
+
+## 🎯 ÉTAT ACTUEL
+
+✅ Architecture complète
+✅ Schémas de base de données complets
+✅ RLS policies complètes
+✅ Storage buckets configurés
+✅ Fonctions SQL de base
+
+⏳ À compléter:
+- Business logic détaillée
+- API specifications
+- User interfaces
+- Integrations
+- Security details
+- Performance optimization
+
+## 📊 STATISTIQUES
+
+- Tables créées: 8
+- Tables modifiées: 2
+- Storage buckets: 4
+- Fonctions SQL: 4
+- RLS policies: ~30
+- Lignes de code SQL: ~800
+
+## 🚀 PROCHAINES ÉTAPES
+
+1. Compléter le design.md avec les sections restantes
+2. Créer tasks.md avec:
+   - Liste détaillée des tâches
+   - Ordre d'implémentation
+   - Estimation du temps
+   - Dépendances
+3. Commencer l'implémentation
+
+## 💡 POINTS CLÉS
+
+Le design.md contient déjà:
+✅ Architecture complète du système
+✅ Tous les schémas de tables avec contraintes
+✅ Toutes les policies RLS
+✅ Storage buckets configurés
+✅ Fonctions SQL essentielles
+✅ Relations entre tables
+✅ Indexes pour performance
+
+C'est une base solide pour l'implémentation!
+
+Veux-tu que je complète le design.md avec les sections restantes
+ou préfères-tu passer directement au tasks.md?
+

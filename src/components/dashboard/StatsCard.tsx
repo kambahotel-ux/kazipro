@@ -16,13 +16,13 @@ interface StatsCardProps {
 export function StatsCard({ title, value, subtitle, icon, trend, className }: StatsCardProps) {
   return (
     <Card className={cn("", className)}>
-      <CardContent className="p-6">
+      <CardContent className="p-3 md:p-6">
         <div className="flex items-start justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-2xl font-bold mt-1">{value}</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs md:text-sm text-muted-foreground truncate">{title}</p>
+            <p className="text-lg md:text-2xl font-bold mt-1">{value}</p>
             {subtitle && (
-              <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+              <p className="text-xs text-muted-foreground mt-1 truncate">{subtitle}</p>
             )}
             {trend && (
               <p className={cn(
@@ -33,7 +33,7 @@ export function StatsCard({ title, value, subtitle, icon, trend, className }: St
               </p>
             )}
           </div>
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+          <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0 ml-2">
             {icon}
           </div>
         </div>

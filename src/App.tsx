@@ -23,6 +23,7 @@ import DemandesPage from "./pages/dashboard/client/DemandesPage";
 import AccepterDevisPage from "./pages/dashboard/client/AccepterDevisPage";
 import SignerContratPage from "./pages/dashboard/client/SignerContratPage";
 import PaiementAcomptePage from "./pages/dashboard/client/PaiementAcomptePage";
+import PaiementSoldePage from "./pages/dashboard/client/PaiementSoldePage";
 import PaiementConfirmationPage from "./pages/dashboard/client/PaiementConfirmationPage";
 import MissionDetailPage from "./pages/dashboard/client/MissionDetailPage";
 import NouvelleDemandePages from "./pages/dashboard/client/NouvelleDemandePages";
@@ -95,6 +96,7 @@ const App = () => (
           <Route path="/dashboard/client/devis/:devisId/accepter" element={<ProtectedRoute><AccepterDevisPage /></ProtectedRoute>} />
           <Route path="/dashboard/client/contrat/:devisId" element={<ProtectedRoute><SignerContratPage /></ProtectedRoute>} />
           <Route path="/dashboard/client/paiement/:contratId/acompte" element={<ProtectedRoute><PaiementAcomptePage /></ProtectedRoute>} />
+          <Route path="/dashboard/client/paiement/:contratId/solde" element={<ProtectedRoute><PaiementSoldePage /></ProtectedRoute>} />
           <Route path="/dashboard/client/paiement/:paiementId/confirmation" element={<ProtectedRoute><PaiementConfirmationPage /></ProtectedRoute>} />
           <Route path="/dashboard/client/missions/:missionId" element={<ProtectedRoute><MissionDetailPage /></ProtectedRoute>} />
           <Route path="/dashboard/client/paiements" element={<ProtectedRoute><PaiementsPage /></ProtectedRoute>} />

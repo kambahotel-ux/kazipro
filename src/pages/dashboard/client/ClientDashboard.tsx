@@ -131,6 +131,7 @@ export default function ClientDashboard() {
           id,
           numero,
           statut,
+          statut_paiement,
           created_at
         `)
         .eq('client_id', clientId)
@@ -138,15 +139,9 @@ export default function ClientDashboard() {
 
       if (contratsSignesData) {
         for (const contrat of contratsSignesData) {
-          // Vérifier si le paiement d'acompte existe
-          const { data: paiementData } = await supabase
-            .from('paiements')
-            .select('id')
-            .eq('contrat_id', contrat.id)
-            .eq('type_paiement', 'acompte')
-            .single();
-
-          if (!paiementData) {
+          // Vérifier si le paiement d'acompte existe mais pas le solde
+          if (contrat.statut_paiement === 'non_paye') {
+            // Acompte pas encore payé
             actions.push({
               type: 'paiement',
               id: contrat.id,
@@ -154,6 +149,17 @@ export default function ClientDashboard() {
               description: 'Paiement de l\'acompte requis',
               action: 'Payer l\'acompte',
               link: `/dashboard/client/paiement/${contrat.id}/acompte`,
+              date: contrat.created_at
+            });
+          } else if (contrat.statut_paiement === 'acompte_paye') {
+            // Acompte payé mais solde pas encore payé
+            actions.push({
+              type: 'paiement_solde',
+              id: contrat.id,
+              title: `Paiement solde - Contrat N° ${contrat.numero}`,
+              description: 'Paiement du solde requis (travaux terminés)',
+              action: 'Payer le solde',
+              link: `/dashboard/client/paiement/${contrat.id}/solde`,
               date: contrat.created_at
             });
           }
@@ -229,21 +235,23 @@ export default function ClientDashboard() {
 
   return (
     <DashboardLayout role="client" userName={clientName} userRole="Client">
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="space-y-4 md:space-y-6">
+        {/* Header - Mobile Optimized */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Bonjour, {clientName} 👋</h1>
-            <p className="text-muted-foreground">Voici un aperçu de vos demandes de service</p>
+            <h1 className="text-xl md:text-2xl font-bold">Bonjour, {clientName} 👋</h1>
+            <p className="text-sm md:text-base text-muted-foreground">Voici un aperçu de vos demandes de service</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" asChild>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
               <Link to="/dashboard/client/recherche">
                 <Search className="w-4 h-4 mr-2" />
-                Trouver un prestataire
+                <span className="hidden sm:inline">Trouver un prestataire</span>
+                <span className="sm:hidden">Trouver un pro</span>
               </Link>
             </Button>
-            <Button asChild>
-              <Link to="/services">
+            <Button size="sm" asChild className="w-full sm:w-auto">
+              <Link to="/dashboard/client/demandes/nouvelle">
                 <Plus className="w-4 h-4 mr-2" />
                 Nouvelle demande
               </Link>
@@ -251,52 +259,53 @@ export default function ClientDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Stats Cards - Mobile First Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           <StatsCard
             title="Demandes actives"
             value={stats.active}
-            icon={<FileText className="w-5 h-5" />}
+            icon={<FileText className="w-4 h-4 md:w-5 md:h-5" />}
           />
           <StatsCard
             title="En attente de devis"
             value={stats.pending}
-            icon={<Clock className="w-5 h-5" />}
+            icon={<Clock className="w-4 h-4 md:w-5 md:h-5" />}
           />
           <StatsCard
             title="En cours"
             value={stats.inProgress}
-            icon={<Clock className="w-5 h-5" />}
+            icon={<Clock className="w-4 h-4 md:w-5 md:h-5" />}
           />
           <StatsCard
             title="Terminées"
             value={stats.completed}
             subtitle="Ce mois"
-            icon={<CheckCircle className="w-5 h-5" />}
+            icon={<CheckCircle className="w-4 h-4 md:w-5 md:h-5" />}
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Actions en attente */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+          {/* Actions en attente - Mobile Optimized */}
           {pendingActions.length > 0 && (
             <Card className="lg:col-span-2 border-orange-200 bg-orange-50/50">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-orange-600" />
+              <CardHeader className="pb-3 md:pb-6">
+                <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                  <Clock className="w-4 h-4 md:w-5 md:h-5 text-orange-600" />
                   Actions en attente
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
+                <div className="space-y-2 md:space-y-3">
                   {pendingActions.map((action, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 rounded-lg bg-white border border-orange-200">
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">{action.title}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{action.description}</p>
+                    <div key={index} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 md:p-4 rounded-lg bg-white border border-orange-200">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{action.title}</p>
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{action.description}</p>
                       </div>
-                      <Button asChild size="sm">
+                      <Button asChild size="sm" className="w-full sm:w-auto shrink-0">
                         <Link to={action.link}>
-                          {action.action}
-                          <ArrowRight className="w-4 h-4 ml-2" />
+                          <span className="truncate">{action.action}</span>
+                          <ArrowRight className="w-4 h-4 ml-2 shrink-0" />
                         </Link>
                       </Button>
                     </div>
@@ -306,35 +315,39 @@ export default function ClientDashboard() {
             </Card>
           )}
 
+          {/* Demandes récentes - Mobile Optimized */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Demandes récentes</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between pb-3 md:pb-6">
+              <CardTitle className="text-base md:text-lg">Demandes récentes</CardTitle>
               <Button variant="ghost" size="sm" asChild>
                 <Link to="/dashboard/client/demandes">
-                  Voir tout <ArrowRight className="w-4 h-4 ml-1" />
+                  <span className="hidden sm:inline">Voir tout</span>
+                  <span className="sm:hidden">Tout</span>
+                  <ArrowRight className="w-4 h-4 ml-1" />
                 </Link>
               </Button>
             </CardHeader>
             <CardContent>
               {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                <div className="flex items-center justify-center py-6 md:py-8">
+                  <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin text-muted-foreground" />
                 </div>
               ) : recentRequests.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-6 md:py-8 text-muted-foreground text-sm">
                   Aucune demande pour le moment
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3 md:space-y-4">
                   {recentRequests.map((request) => (
-                    <div key={request.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                      <div>
-                        <p className="font-medium text-sm">{request.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {request.prestataire || "En recherche de prestataire"} • {new Date(request.created_at).toLocaleDateString("fr-FR")}
+                    <div key={request.id} className="flex items-start justify-between gap-3 p-3 rounded-lg bg-muted/50">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{request.title}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          <span className="hidden sm:inline">{request.prestataire || "En recherche de prestataire"} • </span>
+                          {new Date(request.created_at).toLocaleDateString("fr-FR")}
                         </p>
                       </div>
-                      <Badge variant={statusLabels[request.status]?.variant || "outline"}>
+                      <Badge variant={statusLabels[request.status]?.variant || "outline"} className="shrink-0 text-xs">
                         {statusLabels[request.status]?.label || request.status}
                       </Badge>
                     </div>
@@ -344,39 +357,40 @@ export default function ClientDashboard() {
             </CardContent>
           </Card>
 
+          {/* Actions rapides - Mobile Optimized */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Actions rapides</CardTitle>
+            <CardHeader className="pb-3 md:pb-6">
+              <CardTitle className="text-base md:text-lg">Actions rapides</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-3">
-              <Button variant="outline" className="h-auto py-4 flex-col" asChild>
+            <CardContent className="grid grid-cols-2 gap-2 md:gap-3">
+              <Button variant="outline" className="h-auto py-3 md:py-4 flex-col text-xs" asChild>
                 <Link to="/dashboard/client/recherche">
-                  <Search className="w-5 h-5 mb-2" />
-                  <span className="text-sm">Trouver un prestataire</span>
+                  <Search className="w-4 h-4 md:w-5 md:h-5 mb-1 md:mb-2" />
+                  <span className="text-center leading-tight">Trouver un prestataire</span>
                 </Link>
               </Button>
-              <Button variant="outline" className="h-auto py-4 flex-col" asChild>
-                <Link to="/services">
-                  <Plus className="w-5 h-5 mb-2" />
-                  <span className="text-sm">Nouvelle demande</span>
+              <Button variant="outline" className="h-auto py-3 md:py-4 flex-col text-xs" asChild>
+                <Link to="/dashboard/client/demandes/nouvelle">
+                  <Plus className="w-4 h-4 md:w-5 md:h-5 mb-1 md:mb-2" />
+                  <span className="text-center leading-tight">Nouvelle demande</span>
                 </Link>
               </Button>
-              <Button variant="outline" className="h-auto py-4 flex-col" asChild>
+              <Button variant="outline" className="h-auto py-3 md:py-4 flex-col text-xs" asChild>
                 <Link to="/dashboard/client/messages">
-                  <FileText className="w-5 h-5 mb-2" />
-                  <span className="text-sm">Mes messages</span>
+                  <FileText className="w-4 h-4 md:w-5 md:h-5 mb-1 md:mb-2" />
+                  <span className="text-center leading-tight">Mes messages</span>
                 </Link>
               </Button>
-              <Button variant="outline" className="h-auto py-4 flex-col" asChild>
+              <Button variant="outline" className="h-auto py-3 md:py-4 flex-col text-xs" asChild>
                 <Link to="/dashboard/client/paiements">
-                  <Clock className="w-5 h-5 mb-2" />
-                  <span className="text-sm">Paiements</span>
+                  <Clock className="w-4 h-4 md:w-5 md:h-5 mb-1 md:mb-2" />
+                  <span className="text-center leading-tight">Paiements</span>
                 </Link>
               </Button>
-              <Button variant="outline" className="h-auto py-4 flex-col" asChild>
+              <Button variant="outline" className="h-auto py-3 md:py-4 flex-col text-xs col-span-2" asChild>
                 <Link to="/dashboard/client/avis">
-                  <CheckCircle className="w-5 h-5 mb-2" />
-                  <span className="text-sm">Mes avis</span>
+                  <CheckCircle className="w-4 h-4 md:w-5 md:h-5 mb-1 md:mb-2" />
+                  <span className="text-center leading-tight">Mes avis</span>
                 </Link>
               </Button>
             </CardContent>

@@ -239,36 +239,38 @@ export default function DisputesPage() {
 
   const DisputeCard = ({ dispute }: { dispute: Dispute }) => (
     <Card className="hover:shadow-lg transition-shadow">
-      <CardContent className="pt-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertCircle className="w-5 h-5 text-red-500" />
-              <h3 className="font-semibold">{dispute.titre}</h3>
-              <Badge variant="outline" className={getPriorityColor(dispute.priorite)}>
+      <CardContent className="p-4 sm:pt-6">
+        <div className="flex items-start justify-between gap-3 sm:gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 flex-shrink-0" />
+              <h3 className="font-semibold text-sm sm:text-base truncate">{dispute.titre}</h3>
+              <Badge variant="outline" className={`${getPriorityColor(dispute.priorite)} text-xs`}>
                 {getPriorityLabel(dispute.priorite)}
               </Badge>
-              <Badge variant="secondary">{getTypeLabel(dispute.type)}</Badge>
+              <Badge variant="secondary" className="text-xs">{getTypeLabel(dispute.type)}</Badge>
             </div>
-            <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{dispute.description}</p>
-            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <User className="w-3 h-3" />
-                {dispute.client_name} vs {dispute.prestataire_name}
-              </span>
-              {dispute.montant_litige && (
+            <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2 mb-3">{dispute.description}</p>
+            <div className="space-y-2 sm:space-y-1">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
                 <span className="flex items-center gap-1">
-                  <DollarSign className="w-3 h-3" />
-                  {dispute.montant_litige.toLocaleString("fr-FR")} FC
+                  <User className="w-3 h-3 flex-shrink-0" />
+                  <span className="truncate">{dispute.client_name} vs {dispute.prestataire_name}</span>
                 </span>
-              )}
-              <span className="flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                {new Date(dispute.created_at).toLocaleDateString("fr-FR")}
-              </span>
+                {dispute.montant_litige && (
+                  <span className="flex items-center gap-1">
+                    <DollarSign className="w-3 h-3 flex-shrink-0" />
+                    {dispute.montant_litige.toLocaleString("fr-FR")} FC
+                  </span>
+                )}
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3 h-3 flex-shrink-0" />
+                  {new Date(dispute.created_at).toLocaleDateString("fr-FR")}
+                </span>
+              </div>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-shrink-0">
             <Button
               variant="outline"
               size="sm"
@@ -276,8 +278,10 @@ export default function DisputesPage() {
                 setSelectedDispute(dispute);
                 setShowDetailsModal(true);
               }}
+              className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
             >
               <Eye className="w-4 h-4" />
+              <span className="hidden sm:inline ml-1">Voir</span>
             </Button>
           </div>
         </div>
@@ -289,16 +293,41 @@ export default function DisputesPage() {
     <DashboardLayout role="admin" userName="Admin" userRole="Administrateur">
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-display font-bold">Résolution des Litiges</h1>
-          <p className="text-muted-foreground">Gérez les litiges entre clients et prestataires</p>
+          <h1 className="text-xl sm:text-2xl font-display font-bold">Résolution des Litiges</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Gérez les litiges entre clients et prestataires</p>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Stats - Mobile: Single card with 2x2 grid, Desktop: Separate cards */}
+        <div className="block sm:hidden">
+          <Card>
+            <CardContent className="p-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <p className="text-xl font-bold">{disputes.length}</p>
+                  <p className="text-xs text-muted-foreground">Total litiges</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl font-bold text-red-600">{openDisputes.length}</p>
+                  <p className="text-xs text-muted-foreground">Ouverts</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl font-bold text-green-600">{resolvedDisputes.length}</p>
+                  <p className="text-xs text-muted-foreground">Résolus</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl font-bold text-yellow-600">{escalatedDisputes.length}</p>
+                  <p className="text-xs text-muted-foreground">Escaladés</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
+        <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">
-                <p className="text-3xl font-bold">{disputes.length}</p>
+                <p className="text-2xl lg:text-3xl font-bold">{disputes.length}</p>
                 <p className="text-sm text-muted-foreground">Total litiges</p>
               </div>
             </CardContent>
@@ -306,7 +335,7 @@ export default function DisputesPage() {
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">
-                <p className="text-3xl font-bold text-red-600">{openDisputes.length}</p>
+                <p className="text-2xl lg:text-3xl font-bold text-red-600">{openDisputes.length}</p>
                 <p className="text-sm text-muted-foreground">Ouverts</p>
               </div>
             </CardContent>
@@ -314,7 +343,7 @@ export default function DisputesPage() {
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">
-                <p className="text-3xl font-bold text-green-600">{resolvedDisputes.length}</p>
+                <p className="text-2xl lg:text-3xl font-bold text-green-600">{resolvedDisputes.length}</p>
                 <p className="text-sm text-muted-foreground">Résolus</p>
               </div>
             </CardContent>
@@ -322,7 +351,7 @@ export default function DisputesPage() {
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">
-                <p className="text-3xl font-bold text-yellow-600">{escalatedDisputes.length}</p>
+                <p className="text-2xl lg:text-3xl font-bold text-yellow-600">{escalatedDisputes.length}</p>
                 <p className="text-sm text-muted-foreground">Escaladés</p>
               </div>
             </CardContent>
@@ -331,15 +360,21 @@ export default function DisputesPage() {
 
         {/* Tabs */}
         <Tabs defaultValue="open" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="open">
-              Ouverts ({openDisputes.length})
+          <TabsList className="grid w-full grid-cols-3 h-auto">
+            <TabsTrigger value="open" className="text-xs sm:text-sm p-2 sm:p-3">
+              <span className="hidden sm:inline">Ouverts</span>
+              <span className="sm:hidden">Ouverts</span>
+              <span className="ml-1">({openDisputes.length})</span>
             </TabsTrigger>
-            <TabsTrigger value="resolved">
-              Résolus ({resolvedDisputes.length})
+            <TabsTrigger value="resolved" className="text-xs sm:text-sm p-2 sm:p-3">
+              <span className="hidden sm:inline">Résolus</span>
+              <span className="sm:hidden">Résolus</span>
+              <span className="ml-1">({resolvedDisputes.length})</span>
             </TabsTrigger>
-            <TabsTrigger value="escalated">
-              Escaladés ({escalatedDisputes.length})
+            <TabsTrigger value="escalated" className="text-xs sm:text-sm p-2 sm:p-3">
+              <span className="hidden sm:inline">Escaladés</span>
+              <span className="sm:hidden">Escaladés</span>
+              <span className="ml-1">({escalatedDisputes.length})</span>
             </TabsTrigger>
           </TabsList>
 
@@ -406,50 +441,50 @@ export default function DisputesPage() {
 
         {/* Details Modal */}
         {showDetailsModal && selectedDispute && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-auto">
-            <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-              <CardHeader>
-                <CardTitle>{selectedDispute.titre}</CardTitle>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-auto">
+            <Card className="w-full max-w-3xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="text-lg sm:text-xl">{selectedDispute.titre}</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6 pt-0">
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Description du litige</p>
                   <p className="text-sm bg-muted p-3 rounded-lg">{selectedDispute.description}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Client</p>
-                    <p className="font-medium">{selectedDispute.client_name}</p>
+                    <p className="font-medium text-sm sm:text-base">{selectedDispute.client_name}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Prestataire</p>
-                    <p className="font-medium">{selectedDispute.prestataire_name}</p>
+                    <p className="font-medium text-sm sm:text-base">{selectedDispute.prestataire_name}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Mission</p>
-                    <p className="font-medium">{selectedDispute.mission_title}</p>
+                    <p className="font-medium text-sm sm:text-base">{selectedDispute.mission_title}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Type</p>
-                    <Badge variant="secondary">{getTypeLabel(selectedDispute.type)}</Badge>
+                    <Badge variant="secondary" className="text-xs">{getTypeLabel(selectedDispute.type)}</Badge>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Priorité</p>
-                    <Badge variant="outline" className={getPriorityColor(selectedDispute.priorite)}>
+                    <Badge variant="outline" className={`${getPriorityColor(selectedDispute.priorite)} text-xs`}>
                       {getPriorityLabel(selectedDispute.priorite)}
                     </Badge>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Statut</p>
-                    <Badge variant="outline">
+                    <Badge variant="outline" className="text-xs">
                       {getStatusLabel(selectedDispute.statut)}
                     </Badge>
                   </div>
                   {selectedDispute.montant_litige && (
                     <div>
                       <p className="text-sm text-muted-foreground">Montant du litige</p>
-                      <p className="font-medium flex items-center gap-1">
+                      <p className="font-medium flex items-center gap-1 text-sm sm:text-base">
                         <DollarSign className="w-4 h-4" />
                         {selectedDispute.montant_litige.toLocaleString("fr-FR")} FC
                       </p>
@@ -457,14 +492,14 @@ export default function DisputesPage() {
                   )}
                   <div>
                     <p className="text-sm text-muted-foreground">Créé le</p>
-                    <p className="font-medium">
+                    <p className="font-medium text-sm sm:text-base">
                       {new Date(selectedDispute.created_at).toLocaleDateString("fr-FR")}
                     </p>
                   </div>
                   {selectedDispute.resolved_at && (
-                    <div className="col-span-2">
+                    <div className="sm:col-span-2">
                       <p className="text-sm text-muted-foreground">Résolu le</p>
-                      <p className="font-medium">
+                      <p className="font-medium text-sm sm:text-base">
                         {new Date(selectedDispute.resolved_at).toLocaleDateString("fr-FR")}
                       </p>
                     </div>
@@ -489,10 +524,10 @@ export default function DisputesPage() {
                   </div>
                 )}
 
-                <div className="flex gap-2 pt-4 border-t border-border">
+                <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-border">
                   <Button
                     variant="outline"
-                    className="flex-1"
+                    className="flex-1 text-sm"
                     onClick={() => setShowDetailsModal(false)}
                   >
                     Fermer
@@ -501,34 +536,38 @@ export default function DisputesPage() {
                     <>
                       <Button
                         variant="secondary"
+                        className="text-sm"
                         onClick={() => {
                           handleEscalate(selectedDispute.id);
                           setShowDetailsModal(false);
                         }}
                       >
                         <AlertCircle className="w-4 h-4 mr-2" />
-                        Escalader
+                        <span className="hidden sm:inline">Escalader</span>
+                        <span className="sm:hidden">Escalader</span>
                       </Button>
                       <Button
-                        className="flex-1"
+                        className="flex-1 text-sm"
                         onClick={() => {
                           handleResolve(selectedDispute.id, "refund_client");
                           setShowDetailsModal(false);
                         }}
                       >
                         <CheckCircle className="w-4 h-4 mr-2" />
-                        Rembourser Client
+                        <span className="hidden sm:inline">Rembourser Client</span>
+                        <span className="sm:hidden">Rembourser</span>
                       </Button>
                       <Button
                         variant="default"
-                        className="flex-1"
+                        className="flex-1 text-sm"
                         onClick={() => {
                           handleResolve(selectedDispute.id, "pay_prestataire");
                           setShowDetailsModal(false);
                         }}
                       >
                         <CheckCircle className="w-4 h-4 mr-2" />
-                        Payer Prestataire
+                        <span className="hidden sm:inline">Payer Prestataire</span>
+                        <span className="sm:hidden">Payer</span>
                       </Button>
                     </>
                   )}

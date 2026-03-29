@@ -59,7 +59,7 @@ const GoogleAuthButton = ({ mode, className = "" }: GoogleAuthButtonProps) => {
       type="button"
       variant="outline"
       size="lg"
-      className={`w-full ${className}`}
+      className={`w-full h-10 sm:h-12 text-sm sm:text-base ${className}`}
       onClick={handleGoogleAuth}
       disabled={loading}
     >

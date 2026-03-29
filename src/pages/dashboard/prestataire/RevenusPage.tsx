@@ -154,19 +154,41 @@ export default function RevenusPage() {
   return (
     <DashboardLayout role="prestataire" userName={providerName} userRole="Prestataire">
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
           <div>
-            <h1 className="text-2xl font-display font-bold text-foreground">Mes Revenus</h1>
-            <p className="text-muted-foreground">Suivi de vos revenus et paiements</p>
+            <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">Mes Revenus</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">Suivi de vos revenus et paiements</p>
           </div>
-          <Button variant="outline">
+          <Button variant="outline" className="text-sm">
             <Download className="w-4 h-4 mr-2" />
-            Exporter
+            <span className="hidden sm:inline">Exporter</span>
+            <span className="sm:hidden">Export</span>
           </Button>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Stats - Mobile: Single card with horizontal layout, Desktop: Separate cards */}
+        <div className="block sm:hidden">
+          <Card>
+            <CardContent className="p-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center">
+                  <p className="text-lg font-bold">{getStats()[0].value}</p>
+                  <p className="text-xs text-muted-foreground">{getStats()[0].title}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold">{getStats()[1].value}</p>
+                  <p className="text-xs text-muted-foreground">{getStats()[1].title}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold">{getStats()[2].value}</p>
+                  <p className="text-xs text-muted-foreground">{getStats()[2].title}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
+        <div className="hidden sm:grid sm:grid-cols-1 md:grid-cols-3 gap-4">
           {getStats().map((stat) => (
             <StatsCard key={stat.title} {...stat} />
           ))}
@@ -174,30 +196,30 @@ export default function RevenusPage() {
 
         {/* Monthly Revenue Card */}
         <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Revenus ce mois</p>
-                <p className="text-3xl font-bold text-primary">{monthlyRevenue().toLocaleString()} FC</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-1">Revenus ce mois</p>
+                <p className="text-2xl sm:text-3xl font-bold text-primary">{monthlyRevenue().toLocaleString()} FC</p>
               </div>
-              <TrendingUp className="w-12 h-12 text-primary/20" />
+              <TrendingUp className="w-8 h-8 sm:w-12 sm:h-12 text-primary/20" />
             </div>
           </CardContent>
         </Card>
 
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
             <Input 
               placeholder="Rechercher une transaction..." 
-              className="pl-10"
+              className="pl-10 text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-full sm:w-[150px]">
+            <SelectTrigger className="w-full sm:w-[150px] text-sm">
               <SelectValue placeholder="Statut" />
             </SelectTrigger>
             <SelectContent>

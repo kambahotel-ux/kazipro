@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
   ArrowLeft, MapPin, Calendar, FileText, Eye, CheckCircle, 
-  XCircle, Clock, Loader, AlertCircle, Image as ImageIcon, User
+  XCircle, Clock, Loader, AlertCircle, Image as ImageIcon, User,
+  ChevronLeft, ChevronRight, X, ZoomIn
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -57,6 +58,8 @@ export default function ClientDemandeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [selectedDevis, setSelectedDevis] = useState<Devis | null>(null);
   const [showDevisModal, setShowDevisModal] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [showImageModal, setShowImageModal] = useState(false);
 
   useEffect(() => {
     if (user && demandeId) {
@@ -190,6 +193,85 @@ export default function ClientDemandeDetailPage() {
     }
   };
 
+  const openImageModal = (index: number) => {
+    setSelectedImageIndex(index);
+    setShowImageModal(true);
+  };
+
+  const closeImageModal = () => {
+    setShowImageModal(false);
+    setSelectedImageIndex(null);
+  };
+
+  const navigateImage = (direction: 'prev' | 'next') => {
+    if (!demande.images || selectedImageIndex === null) return;
+    
+    const totalImages = demande.images.length;
+    let newIndex;
+    
+    if (direction === 'prev') {
+      newIndex = selectedImageIndex === 0 ? totalImages - 1 : selectedImageIndex - 1;
+    } else {
+      newIndex = selectedImageIndex === totalImages - 1 ? 0 : selectedImageIndex + 1;
+    }
+    
+    setSelectedImageIndex(newIndex);
+  };
+
+  // Handle keyboard navigation and touch events
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (!showImageModal) return;
+      
+      if (e.key === 'Escape') {
+        closeImageModal();
+      } else if (e.key === 'ArrowLeft') {
+        navigateImage('prev');
+      } else if (e.key === 'ArrowRight') {
+        navigateImage('next');
+      }
+    };
+
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (!showImageModal) return;
+      touchStartX = e.changedTouches[0].screenX;
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (!showImageModal) return;
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipe();
+    };
+
+    const handleSwipe = () => {
+      const swipeThreshold = 50;
+      const diff = touchStartX - touchEndX;
+      
+      if (Math.abs(diff) > swipeThreshold) {
+        if (diff > 0) {
+          // Swipe left - next image
+          navigateImage('next');
+        } else {
+          // Swipe right - previous image
+          navigateImage('prev');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    window.addEventListener('touchstart', handleTouchStart);
+    window.addEventListener('touchend', handleTouchEnd);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [showImageModal, selectedImageIndex]);
+
   const getStatusBadge = (statut: string) => {
     const badges: Record<string, JSX.Element> = {
       brouillon: <Badge variant="secondary">Brouillon</Badge>,
@@ -239,57 +321,61 @@ export default function ClientDemandeDetailPage() {
 
   return (
     <DashboardLayout role="client" userName="Client" userRole="Client">
-      <div className="space-y-6 max-w-6xl mx-auto">
-        {/* Header */}
+      <div className="space-y-4 md:space-y-6 max-w-6xl mx-auto p-3 md:p-0">
+        {/* Header - Mobile Optimized */}
         <div>
           <Button
             variant="ghost"
             onClick={() => navigate('/dashboard/client/demandes')}
-            className="mb-4"
+            className="mb-3 md:mb-4 -ml-2"
+            size="sm"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Retour aux demandes
+            <span className="hidden sm:inline">Retour aux demandes</span>
+            <span className="sm:hidden">Retour</span>
           </Button>
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-3xl font-bold">{demande.title || demande.titre}</h1>
-              <p className="text-muted-foreground mt-1">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl md:text-2xl lg:text-3xl font-bold break-words line-clamp-2">{demande.title || demande.titre}</h1>
+              <p className="text-muted-foreground mt-1 text-sm md:text-base">
                 Créée le {new Date(demande.created_at).toLocaleDateString('fr-FR')}
               </p>
             </div>
-            {getDemandeStatusBadge(demande.status)}
+            <div className="shrink-0">
+              {getDemandeStatusBadge(demande.status)}
+            </div>
           </div>
         </div>
 
-        {/* Détails de la demande */}
+        {/* Détails de la demande - Mobile Optimized */}
         <Card>
-          <CardHeader>
-            <CardTitle>Détails de la demande</CardTitle>
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="text-base md:text-lg">Détails de la demande</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 md:space-y-4">
             <div>
-              <h3 className="font-semibold mb-2">Description</h3>
-              <p className="text-sm text-muted-foreground whitespace-pre-line">
+              <h3 className="font-semibold mb-2 text-sm md:text-base">Description</h3>
+              <p className="text-xs md:text-sm text-muted-foreground whitespace-pre-line break-words">
                 {demande.description}
               </p>
             </div>
 
             <Separator />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
               <div className="flex items-start gap-2">
-                <MapPin className="w-4 h-4 mt-1 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Localisation</p>
-                  <p className="text-sm text-muted-foreground">{demande.location || demande.localisation}</p>
+                <MapPin className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs md:text-sm font-medium">Localisation</p>
+                  <p className="text-xs md:text-sm text-muted-foreground break-words">{demande.location || demande.localisation}</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-2">
-                <Calendar className="w-4 h-4 mt-1 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Date souhaitée</p>
-                  <p className="text-sm text-muted-foreground">
+                <Calendar className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs md:text-sm font-medium">Date souhaitée</p>
+                  <p className="text-xs md:text-sm text-muted-foreground">
                     {demande.preferred_date 
                       ? new Date(demande.preferred_date).toLocaleDateString('fr-FR')
                       : demande.deadline
@@ -303,20 +389,20 @@ export default function ClientDemandeDetailPage() {
 
               {demande.budget && (
                 <div className="flex items-start gap-2">
-                  <FileText className="w-4 h-4 mt-1 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Budget indicatif</p>
-                    <p className="text-sm text-muted-foreground">{demande.budget} FC</p>
+                  <FileText className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs md:text-sm font-medium">Budget indicatif</p>
+                    <p className="text-xs md:text-sm text-muted-foreground">{demande.budget} FC</p>
                   </div>
                 </div>
               )}
 
               {(demande.urgency || demande.urgence) && (
                 <div className="flex items-start gap-2">
-                  <Clock className="w-4 h-4 mt-1 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Urgence</p>
-                    <p className="text-sm text-muted-foreground capitalize">
+                  <Clock className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs md:text-sm font-medium">Urgence</p>
+                    <p className="text-xs md:text-sm text-muted-foreground capitalize">
                       {demande.urgency || demande.urgence}
                     </p>
                   </div>
@@ -324,26 +410,29 @@ export default function ClientDemandeDetailPage() {
               )}
             </div>
 
-            {/* Images de la demande */}
+            {/* Images de la demande - Mobile Optimized */}
             {demande.images && Array.isArray(demande.images) && demande.images.length > 0 && (
               <>
                 <Separator />
                 <div>
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm md:text-base">
                     <ImageIcon className="w-4 h-4" />
                     Images ({demande.images.length})
                   </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4">
                     {demande.images.map((imageUrl: string, index: number) => (
-                      <div key={index} className="relative group">
+                      <div key={index} className="relative group cursor-pointer">
                         <img
                           src={imageUrl}
                           alt={`Image ${index + 1}`}
-                          className="w-full h-32 object-cover rounded-lg border border-border hover:border-primary transition-colors cursor-pointer"
-                          onClick={() => window.open(imageUrl, '_blank')}
+                          className="w-full h-24 md:h-32 object-cover rounded-lg border border-border hover:border-primary transition-colors"
+                          onClick={() => openImageModal(index)}
                         />
                         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                          <Eye className="w-6 h-6 text-white" />
+                          <ZoomIn className="w-4 h-4 md:w-6 md:h-6 text-white" />
+                        </div>
+                        <div className="absolute top-1 right-1 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded">
+                          {index + 1}/{demande.images.length}
                         </div>
                       </div>
                     ))}
@@ -662,6 +751,83 @@ export default function ClientDemandeDetailPage() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {/* Image Modal - Full Screen Viewer */}
+        {showImageModal && selectedImageIndex !== null && demande.images && (
+          <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-50">
+            {/* Close Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={closeImageModal}
+              className="absolute top-4 right-4 z-10 text-white hover:bg-white/20"
+            >
+              <X className="w-6 h-6" />
+            </Button>
+
+            {/* Image Counter */}
+            <div className="absolute top-4 left-4 z-10 bg-black/70 text-white px-3 py-1 rounded-full text-sm">
+              {selectedImageIndex + 1} / {demande.images.length}
+            </div>
+
+            {/* Navigation Buttons */}
+            {demande.images.length > 1 && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigateImage('prev')}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 z-10 text-white hover:bg-white/20 h-12 w-12 rounded-full"
+                >
+                  <ChevronLeft className="w-8 h-8" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigateImage('next')}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 z-10 text-white hover:bg-white/20 h-12 w-12 rounded-full"
+                >
+                  <ChevronRight className="w-8 h-8" />
+                </Button>
+              </>
+            )}
+
+            {/* Main Image */}
+            <div className="relative max-w-[95vw] max-h-[95vh] flex items-center justify-center">
+              <img
+                src={demande.images[selectedImageIndex]}
+                alt={`Image ${selectedImageIndex + 1}`}
+                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+
+            {/* Click outside to close */}
+            <div 
+              className="absolute inset-0 -z-10" 
+              onClick={closeImageModal}
+            />
+
+            {/* Mobile swipe indicators */}
+            {demande.images.length > 1 && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+                {demande.images.map((_, index) => (
+                  <div
+                    key={index}
+                    className={`w-2 h-2 rounded-full transition-colors ${
+                      index === selectedImageIndex ? 'bg-white' : 'bg-white/40'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Instructions */}
+            <div className="absolute bottom-4 right-4 text-white/70 text-xs hidden md:block">
+              <p>Utilisez ← → pour naviguer • Échap pour fermer</p>
+            </div>
           </div>
         )}
       </div>

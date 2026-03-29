@@ -79,8 +79,8 @@ export default function PrestataireProfilPage() {
   if (loading) {
     return (
       <DashboardLayout role="client" userName={clientName} userRole="Client">
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="flex items-center justify-center h-48 md:h-64 px-4">
+          <Loader2 className="w-6 h-6 md:w-8 md:h-8 animate-spin text-primary" />
         </div>
       </DashboardLayout>
     );
@@ -89,42 +89,48 @@ export default function PrestataireProfilPage() {
   if (!prestataire) {
     return (
       <DashboardLayout role="client" userName={clientName} userRole="Client">
-        <Card>
-          <CardContent className="p-12 text-center">
-            <p className="text-muted-foreground">Prestataire non trouvé</p>
-            <Button
-              variant="outline"
-              className="mt-4"
-              onClick={() => navigate("/dashboard/client")}
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Retour
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="p-3 md:p-6">
+          <Card>
+            <CardContent className="p-6 md:p-12 text-center">
+              <p className="text-sm md:text-base text-muted-foreground">Prestataire non trouvé</p>
+              <Button
+                variant="outline"
+                className="mt-3 md:mt-4"
+                onClick={() => navigate("/dashboard/client")}
+                size="sm"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Retour
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </DashboardLayout>
     );
   }
 
   return (
     <DashboardLayout role="client" userName={clientName} userRole="Client">
-      <div className="space-y-6">
-        {/* Header avec bouton retour */}
-        <div className="flex items-center justify-between">
+      <div className="space-y-4 md:space-y-6 p-3 md:p-0">
+        {/* Header avec bouton retour - Mobile Optimized */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Button
             variant="ghost"
             onClick={() => navigate(-1)}
+            size="sm"
+            className="w-fit"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Retour
           </Button>
-          <Button onClick={handleContactPrestataire}>
+          <Button onClick={handleContactPrestataire} size="sm" className="w-full sm:w-auto">
             <MessageSquare className="w-4 h-4 mr-2" />
-            Contacter ce prestataire
+            <span className="hidden sm:inline">Contacter ce prestataire</span>
+            <span className="sm:hidden">Contacter</span>
           </Button>
         </div>
 
-        {/* Profil complet avec portfolio */}
+        {/* Profil complet avec portfolio - Mobile Optimized */}
         <PrestataireInfoCard
           prestataire={prestataire}
           showDetails={true}

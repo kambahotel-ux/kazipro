@@ -115,41 +115,68 @@ export default function UsersPage() {
     <DashboardLayout role="admin" userName="Admin" userRole="Administrateur">
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-display font-bold">Gestion des Utilisateurs</h1>
-          <p className="text-muted-foreground">Gérez tous les utilisateurs de la plateforme</p>
+          <h1 className="text-xl sm:text-2xl font-display font-bold">Gestion des Utilisateurs</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Gérez tous les utilisateurs de la plateforme</p>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="block sm:hidden">
+          {/* Version mobile compacte */}
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <p className="text-lg font-bold">{users.length}</p>
+                  <p className="text-xs text-muted-foreground">Total</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold">{users.filter(u => u.type === "client").length}</p>
+                  <p className="text-xs text-muted-foreground">Clients</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold">{users.filter(u => u.type === "prestataire").length}</p>
+                  <p className="text-xs text-muted-foreground">Prestataires</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold">{users.filter(u => u.status === "active").length}</p>
+                  <p className="text-xs text-muted-foreground">Actifs</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="hidden sm:grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {/* Version desktop */}
+          <Card>
+            <CardContent className="pt-4 sm:pt-6">
               <div className="text-center">
-                <p className="text-3xl font-bold">{users.length}</p>
-                <p className="text-sm text-muted-foreground">Total utilisateurs</p>
+                <p className="text-2xl sm:text-3xl font-bold">{users.length}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Total utilisateurs</p>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 sm:pt-6">
               <div className="text-center">
-                <p className="text-3xl font-bold">{users.filter(u => u.type === "client").length}</p>
-                <p className="text-sm text-muted-foreground">Clients</p>
+                <p className="text-2xl sm:text-3xl font-bold">{users.filter(u => u.type === "client").length}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Clients</p>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 sm:pt-6">
               <div className="text-center">
-                <p className="text-3xl font-bold">{users.filter(u => u.type === "prestataire").length}</p>
-                <p className="text-sm text-muted-foreground">Prestataires</p>
+                <p className="text-2xl sm:text-3xl font-bold">{users.filter(u => u.type === "prestataire").length}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Prestataires</p>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 sm:pt-6">
               <div className="text-center">
-                <p className="text-3xl font-bold">{users.filter(u => u.status === "active").length}</p>
-                <p className="text-sm text-muted-foreground">Actifs</p>
+                <p className="text-2xl sm:text-3xl font-bold">{users.filter(u => u.status === "active").length}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Actifs</p>
               </div>
             </CardContent>
           </Card>
@@ -157,135 +184,208 @@ export default function UsersPage() {
 
         {/* Filters */}
         <Card>
-          <CardHeader>
-            <CardTitle>Filtres</CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base sm:text-lg">Filtres</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <CardContent className="space-y-3 sm:space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:gap-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
                   placeholder="Rechercher par nom ou email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 h-10 sm:h-11 text-sm sm:text-base"
                 />
               </div>
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value as any)}
-                className="px-3 py-2 rounded-lg border border-input bg-background"
-              >
-                <option value="all">Tous les types</option>
-                <option value="client">Clients</option>
-                <option value="prestataire">Prestataires</option>
-              </select>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as any)}
-                className="px-3 py-2 rounded-lg border border-input bg-background"
-              >
-                <option value="all">Tous les statuts</option>
-                <option value="active">Actif</option>
-                <option value="inactive">Inactif</option>
-                <option value="suspended">Suspendu</option>
-              </select>
+              <div className="grid grid-cols-2 gap-3">
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value as any)}
+                  className="px-3 py-2 rounded-lg border border-input bg-background text-sm sm:text-base h-10 sm:h-11"
+                >
+                  <option value="all">Tous les types</option>
+                  <option value="client">Clients</option>
+                  <option value="prestataire">Prestataires</option>
+                </select>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value as any)}
+                  className="px-3 py-2 rounded-lg border border-input bg-background text-sm sm:text-base h-10 sm:h-11"
+                >
+                  <option value="all">Tous les statuts</option>
+                  <option value="active">Actif</option>
+                  <option value="inactive">Inactif</option>
+                  <option value="suspended">Suspendu</option>
+                </select>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Users Table */}
         <Card>
-          <CardHeader>
-            <CardTitle>Utilisateurs ({filteredUsers.length})</CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base sm:text-lg">Utilisateurs ({filteredUsers.length})</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex items-center justify-center py-12">
+              <div className="flex items-center justify-center py-8 sm:py-12">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
             ) : filteredUsers.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
+              <div className="text-center py-8 sm:py-12 text-muted-foreground text-sm sm:text-base">
                 Aucun utilisateur trouvé
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 font-medium">Utilisateur</th>
-                      <th className="text-left py-3 px-4 font-medium">Type</th>
-                      <th className="text-left py-3 px-4 font-medium">Email</th>
-                      <th className="text-left py-3 px-4 font-medium">Statut</th>
-                      <th className="text-left py-3 px-4 font-medium">Inscrit</th>
-                      <th className="text-left py-3 px-4 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.map((u) => (
-                      <tr key={u.id} className="border-b border-border hover:bg-muted/50">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-3">
-                            <Avatar>
-                              <AvatarFallback>{u.name.split(" ").map(n => n[0]).join("")}</AvatarFallback>
-                            </Avatar>
-                            <span className="font-medium">{u.name}</span>
+              <>
+                {/* Version mobile - Cards */}
+                <div className="block sm:hidden space-y-3">
+                  {filteredUsers.map((u) => (
+                    <div key={u.id} className="bg-muted/30 p-3 rounded-lg">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Avatar className="w-8 h-8">
+                            <AvatarFallback className="text-xs">{u.name.split(" ").map(n => n[0]).join("")}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium text-sm">{u.name}</p>
+                            <Badge variant={u.type === "client" ? "default" : "secondary"} className="text-xs">
+                              {u.type === "client" ? "Client" : "Prestataire"}
+                            </Badge>
                           </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge variant={u.type === "client" ? "default" : "secondary"}>
-                            {u.type === "client" ? "Client" : "Prestataire"}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground flex items-center gap-2">
-                          <Mail className="w-4 h-4" />
-                          {u.email}
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge
-                            variant="outline"
-                            className={
-                              u.status === "active"
-                                ? "bg-green-500/10 text-green-600 border-green-500/20"
-                                : u.status === "suspended"
-                                ? "bg-red-500/10 text-red-600 border-red-500/20"
-                                : "bg-gray-500/10 text-gray-600 border-gray-500/20"
-                            }
-                          >
-                            {u.status === "active" ? "Actif" : u.status === "suspended" ? "Suspendu" : "Inactif"}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground flex items-center gap-2">
-                          <Calendar className="w-4 h-4" />
-                          {new Date(u.created_at).toLocaleDateString("fr-FR")}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex gap-2">
-                            <Button variant="ghost" size="sm">
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleSuspend(u.id)}
-                            >
-                              <Ban className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => handleDelete(u.id)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </td>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={`text-xs ${
+                            u.status === "active"
+                              ? "bg-green-500/10 text-green-600 border-green-500/20"
+                              : u.status === "suspended"
+                              ? "bg-red-500/10 text-red-600 border-red-500/20"
+                              : "bg-gray-500/10 text-gray-600 border-gray-500/20"
+                          }`}
+                        >
+                          {u.status === "active" ? "Actif" : u.status === "suspended" ? "Suspendu" : "Inactif"}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1 text-xs text-muted-foreground mb-3">
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-3 h-3" />
+                          <span className="truncate">{u.email}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-3 h-3" />
+                          <span>{new Date(u.created_at).toLocaleDateString("fr-FR")}</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" className="h-8 px-2">
+                          <Eye className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2"
+                          onClick={() => handleSuspend(u.id)}
+                        >
+                          <Ban className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-destructive hover:text-destructive"
+                          onClick={() => handleDelete(u.id)}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Version desktop - Table */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full min-w-[800px]">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-3 px-4 font-medium text-sm">Utilisateur</th>
+                        <th className="text-left py-3 px-4 font-medium text-sm">Type</th>
+                        <th className="text-left py-3 px-4 font-medium text-sm">Email</th>
+                        <th className="text-left py-3 px-4 font-medium text-sm">Statut</th>
+                        <th className="text-left py-3 px-4 font-medium text-sm">Inscrit</th>
+                        <th className="text-left py-3 px-4 font-medium text-sm">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {filteredUsers.map((u) => (
+                        <tr key={u.id} className="border-b border-border hover:bg-muted/50">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3">
+                              <Avatar>
+                                <AvatarFallback>{u.name.split(" ").map(n => n[0]).join("")}</AvatarFallback>
+                              </Avatar>
+                              <span className="font-medium text-sm">{u.name}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge variant={u.type === "client" ? "default" : "secondary"}>
+                              {u.type === "client" ? "Client" : "Prestataire"}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <Mail className="w-4 h-4" />
+                              <span className="truncate max-w-[200px]">{u.email}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge
+                              variant="outline"
+                              className={
+                                u.status === "active"
+                                  ? "bg-green-500/10 text-green-600 border-green-500/20"
+                                  : u.status === "suspended"
+                                  ? "bg-red-500/10 text-red-600 border-red-500/20"
+                                  : "bg-gray-500/10 text-gray-600 border-gray-500/20"
+                              }
+                            >
+                              {u.status === "active" ? "Actif" : u.status === "suspended" ? "Suspendu" : "Inactif"}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4" />
+                              <span>{new Date(u.created_at).toLocaleDateString("fr-FR")}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex gap-2">
+                              <Button variant="ghost" size="sm">
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleSuspend(u.id)}
+                              >
+                                <Ban className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => handleDelete(u.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

@@ -783,19 +783,45 @@ export default function DevisPage() {
     <DashboardLayout role="prestataire" userName={providerName} userRole="Prestataire">
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
           <div>
-            <h1 className="text-2xl font-display font-bold">Mes Devis</h1>
-            <p className="text-muted-foreground">Créez et gérez vos devis professionnels</p>
+            <h1 className="text-xl sm:text-2xl font-display font-bold">Mes Devis</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">Créez et gérez vos devis professionnels</p>
           </div>
-          <Button onClick={() => setShowCreateModal(true)}>
+          <Button onClick={() => setShowCreateModal(true)} className="text-sm">
             <Plus className="w-4 h-4 mr-2" />
-            Nouveau devis
+            <span className="hidden sm:inline">Nouveau devis</span>
+            <span className="sm:hidden">Nouveau</span>
           </Button>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Stats - Mobile: Single card with 2x2 grid (4 stats), Desktop: Separate cards */}
+        <div className="block sm:hidden">
+          <Card>
+            <CardContent className="p-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="text-center">
+                  <p className="text-lg font-bold">{getStats()[0].value}</p>
+                  <p className="text-xs text-muted-foreground">{getStats()[0].title}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold">{getStats()[1].value}</p>
+                  <p className="text-xs text-muted-foreground">{getStats()[1].title}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold">{getStats()[2].value}</p>
+                  <p className="text-xs text-muted-foreground">{getStats()[2].title}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-bold">{getStats()[3].value}</p>
+                  <p className="text-xs text-muted-foreground">{getStats()[3].title}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
+        <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {getStats().map((stat) => (
             <StatsCard key={stat.title} {...stat} />
           ))}

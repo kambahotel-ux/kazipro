@@ -25,7 +25,7 @@ const Header = () => {
             <div className="w-10 h-10 rounded-xl gradient-accent flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
               <Wrench className="w-5 h-5 text-secondary-foreground" />
             </div>
-            <span className="font-display font-bold text-xl text-foreground">
+            <span className="font-display font-bold text-lg sm:text-xl text-foreground">
               Kazi<span className="text-secondary">Pro</span>
             </span>
           </Link>

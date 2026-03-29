@@ -855,8 +855,8 @@ export default function ProfilPage() {
         isVerified={false}
         isProfileComplete={false}
       >
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="flex items-center justify-center h-48 md:h-64 px-4">
+          <Loader2 className="w-6 h-6 md:w-8 md:h-8 animate-spin text-primary" />
         </div>
       </DashboardLayout>
     );
@@ -919,123 +919,125 @@ export default function ProfilPage() {
       isVerified={profile.verified}
       isProfileComplete={profile.profile_completed}
     >
-      <div className="space-y-6">
-        {/* Profile header */}
+      <div className="space-y-4 md:space-y-6 p-3 md:p-0">
+        {/* Profile header - Mobile Optimized */}
         <Card>
-          <CardContent className="p-6">
-            <div className="flex flex-col md:flex-row gap-6">
-              <div className="relative">
-                <Avatar className="w-32 h-32">
-                  <AvatarImage src={(profile as any).photo_url || ""} />
-                  <AvatarFallback className="text-3xl">{getInitials(profile.full_name)}</AvatarFallback>
-                </Avatar>
-                <input
-                  type="file"
-                  id="photo-upload"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handlePhotoUpload}
-                  disabled={uploadingPhoto}
-                />
-                <Button 
-                  size="icon" 
-                  variant="secondary" 
-                  className="absolute bottom-0 right-0 rounded-full"
-                  onClick={() => document.getElementById('photo-upload')?.click()}
-                  disabled={uploadingPhoto}
-                  title="Changer la photo de profil"
-                >
-                  {uploadingPhoto ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Camera className="w-4 h-4" />
-                  )}
-                </Button>
-              </div>
-              
-              <div className="flex-1 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h1 className="text-2xl font-display font-bold">{profile.full_name}</h1>
-                      {profile.verified && (
-                        <Badge variant="default" className="flex items-center gap-1">
-                          <Shield className="w-3 h-3" />
-                          Vérifié
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-muted-foreground">{profile.profession}</p>
-                  </div>
-                  <div className="flex gap-2 flex-wrap">
-                    {isEditing ? (
-                      <>
-                        <Button variant="outline" size="sm" onClick={handleCancel} disabled={saving}>
-                          <X className="w-4 h-4 mr-2" />
-                          Annuler
-                        </Button>
-                        <Button size="sm" onClick={handleSave} disabled={saving}>
-                          {saving ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          ) : (
-                            <Save className="w-4 h-4 mr-2" />
-                          )}
-                          Enregistrer
-                        </Button>
-                      </>
+          <CardContent className="p-4 md:p-6">
+            <div className="flex flex-col gap-4 md:gap-6">
+              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                <div className="relative shrink-0">
+                  <Avatar className="w-24 h-24 md:w-32 md:h-32">
+                    <AvatarImage src={(profile as any).photo_url || ""} />
+                    <AvatarFallback className="text-xl md:text-3xl">{getInitials(profile.full_name)}</AvatarFallback>
+                  </Avatar>
+                  <input
+                    type="file"
+                    id="photo-upload"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoUpload}
+                    disabled={uploadingPhoto}
+                  />
+                  <Button 
+                    size="icon" 
+                    variant="secondary" 
+                    className="absolute bottom-0 right-0 rounded-full w-8 h-8 md:w-10 md:h-10"
+                    onClick={() => document.getElementById('photo-upload')?.click()}
+                    disabled={uploadingPhoto}
+                    title="Changer la photo de profil"
+                  >
+                    {uploadingPhoto ? (
+                      <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" />
                     ) : (
-                      <>
-                        <Button variant="outline" size="sm">
-                          <Share2 className="w-4 h-4 mr-2" />
-                          Partager
-                        </Button>
-                        <Button size="sm" onClick={() => setIsEditing(true)}>
-                          <Edit className="w-4 h-4 mr-2" />
-                          Modifier
-                        </Button>
-                      </>
+                      <Camera className="w-3 h-3 md:w-4 md:h-4" />
                     )}
-                  </div>
+                  </Button>
                 </div>
                 
-                <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <MapPin className="w-4 h-4" />
-                    {profile.city || "Non renseigné"}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Phone className="w-4 h-4" />
-                    {(profile as any).telephone || profile.phone || "Non renseigné"}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Mail className="w-4 h-4" />
-                    {profile.email}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-4 h-4" />
-                    Membre depuis {new Date(profile.created_at).toLocaleDateString("fr-FR", { year: "numeric", month: "short" })}
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap gap-6">
-                  <div className="text-center">
-                    <div className="flex items-center gap-1">
-                      <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-                      <span className="text-2xl font-bold">{stats.rating || "-"}</span>
+                <div className="flex-1 space-y-3 md:space-y-4 text-center sm:text-left">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 md:gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                        <h1 className="text-lg md:text-2xl font-display font-bold truncate">{profile.full_name}</h1>
+                        {profile.verified && (
+                          <Badge variant="default" className="flex items-center gap-1 text-xs">
+                            <Shield className="w-3 h-3" />
+                            Vérifié
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm md:text-base text-muted-foreground truncate">{profile.profession}</p>
                     </div>
-                    <p className="text-xs text-muted-foreground">Note moyenne</p>
+                    <div className="flex gap-2 flex-wrap justify-center sm:justify-end">
+                      {isEditing ? (
+                        <>
+                          <Button variant="outline" size="sm" onClick={handleCancel} disabled={saving} className="text-xs">
+                            <X className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+                            Annuler
+                          </Button>
+                          <Button size="sm" onClick={handleSave} disabled={saving} className="text-xs">
+                            {saving ? (
+                              <Loader2 className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2 animate-spin" />
+                            ) : (
+                              <Save className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+                            )}
+                            Enregistrer
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button variant="outline" size="sm" className="text-xs">
+                            <Share2 className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+                            <span className="hidden sm:inline">Partager</span>
+                          </Button>
+                          <Button size="sm" onClick={() => setIsEditing(true)} className="text-xs">
+                            <Edit className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+                            Modifier
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold">{stats.missionsCompleted}</p>
-                    <p className="text-xs text-muted-foreground">Missions</p>
+                  
+                  <div className="flex flex-wrap justify-center sm:justify-start gap-3 md:gap-4 text-xs md:text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3 md:w-4 md:h-4 shrink-0" />
+                      <span className="truncate">{profile.city || "Non renseigné"}</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Phone className="w-3 h-3 md:w-4 md:h-4 shrink-0" />
+                      <span className="truncate">{(profile as any).telephone || profile.phone || "Non renseigné"}</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Mail className="w-3 h-3 md:w-4 md:h-4 shrink-0" />
+                      <span className="truncate">{profile.email}</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3 md:w-4 md:h-4 shrink-0" />
+                      <span className="truncate">Membre depuis {new Date(profile.created_at).toLocaleDateString("fr-FR", { year: "numeric", month: "short" })}</span>
+                    </span>
                   </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold">{stats.satisfactionRate}%</p>
-                    <p className="text-xs text-muted-foreground">Satisfaction</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold">{profile.experience_years || 0} ans</p>
-                    <p className="text-xs text-muted-foreground">Expérience</p>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <Star className="w-4 h-4 md:w-5 md:h-5 text-yellow-500 fill-yellow-500" />
+                        <span className="text-lg md:text-2xl font-bold">{stats.rating || "-"}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Note moyenne</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-lg md:text-2xl font-bold">{stats.missionsCompleted}</p>
+                      <p className="text-xs text-muted-foreground">Missions</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-lg md:text-2xl font-bold">{stats.satisfactionRate}%</p>
+                      <p className="text-xs text-muted-foreground">Satisfaction</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-lg md:text-2xl font-bold">{profile.experience_years || 0} ans</p>
+                      <p className="text-xs text-muted-foreground">Expérience</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1043,14 +1045,14 @@ export default function ProfilPage() {
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="about" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="about">À propos</TabsTrigger>
-            <TabsTrigger value="services">Services ({services.length})</TabsTrigger>
-            <TabsTrigger value="portfolio">Portfolio ({portfolio.length})</TabsTrigger>
-            <TabsTrigger value="info">Informations</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-            <TabsTrigger value="reviews">Avis ({stats.reviewsCount})</TabsTrigger>
+        <Tabs defaultValue="about" className="space-y-3 md:space-y-4">
+          <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 text-xs md:text-sm">
+            <TabsTrigger value="about" className="text-xs md:text-sm">À propos</TabsTrigger>
+            <TabsTrigger value="services" className="text-xs md:text-sm">Services ({services.length})</TabsTrigger>
+            <TabsTrigger value="portfolio" className="text-xs md:text-sm">Portfolio ({portfolio.length})</TabsTrigger>
+            <TabsTrigger value="info" className="text-xs md:text-sm">Infos</TabsTrigger>
+            <TabsTrigger value="documents" className="text-xs md:text-sm">Docs</TabsTrigger>
+            <TabsTrigger value="reviews" className="text-xs md:text-sm">Avis ({stats.reviewsCount})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="about" className="space-y-6">

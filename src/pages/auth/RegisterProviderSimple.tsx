@@ -111,8 +111,8 @@ const RegisterProviderSimple = () => {
   return (
     <div className="min-h-screen bg-muted/30 flex">
       {/* Left Side - Form */}
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
-        <div className="w-full max-w-md">
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-12">
+        <div className="w-full max-w-sm sm:max-w-md px-2 sm:px-0">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 mb-8">
             <div className="w-10 h-10 rounded-xl gradient-accent flex items-center justify-center shadow-md">
@@ -124,17 +124,17 @@ const RegisterProviderSimple = () => {
           </Link>
 
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-2xl lg:text-3xl font-display font-bold text-foreground mb-2">
+          <div className="mb-6 sm:mb-8">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-display font-bold text-foreground mb-2">
               Devenir prestataire
             </h1>
-            <p className="text-muted-foreground">
+            <p className="text-sm sm:text-base text-muted-foreground">
               Créez votre compte et complétez votre profil ensuite
             </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
             {/* Full Name */}
             <div className="space-y-2">
               <Label htmlFor="fullName">Nom complet</Label>
@@ -147,7 +147,7 @@ const RegisterProviderSimple = () => {
                   placeholder="Jean Dupont"
                   value={formData.fullName}
                   onChange={handleChange}
-                  className="pl-10 h-12"
+                  className="pl-10 h-10 sm:h-12 text-sm sm:text-base"
                   required
                   disabled={loading}
                 />
@@ -166,7 +166,7 @@ const RegisterProviderSimple = () => {
                   placeholder="votre@email.com"
                   value={formData.email}
                   onChange={handleChange}
-                  className="pl-10 h-12"
+                  className="pl-10 h-10 sm:h-12 text-sm sm:text-base"
                   required
                   disabled={loading}
                 />
@@ -185,7 +185,7 @@ const RegisterProviderSimple = () => {
                   placeholder="Kinshasa"
                   value={formData.city}
                   onChange={handleChange}
-                  className="pl-10 h-12"
+                  className="pl-10 h-10 sm:h-12 text-sm sm:text-base"
                   disabled={loading}
                 />
               </div>
@@ -203,7 +203,7 @@ const RegisterProviderSimple = () => {
                   placeholder="Minimum 6 caractères"
                   value={formData.password}
                   onChange={handleChange}
-                  className="pl-10 pr-10 h-12"
+                  className="pl-10 pr-10 h-10 sm:h-12 text-sm sm:text-base"
                   required
                   disabled={loading}
                 />
@@ -230,7 +230,7 @@ const RegisterProviderSimple = () => {
                   placeholder="Confirmez votre mot de passe"
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className="pl-10 pr-10 h-12"
+                  className="pl-10 pr-10 h-10 sm:h-12 text-sm sm:text-base"
                   required
                   disabled={loading}
                 />
@@ -250,7 +250,7 @@ const RegisterProviderSimple = () => {
               type="submit" 
               variant="secondary" 
               size="lg" 
-              className="w-full group mt-6"
+              className="w-full group mt-4 sm:mt-6 h-10 sm:h-12 text-sm sm:text-base"
               disabled={loading}
             >
               {loading ? "Inscription en cours..." : "Créer mon compte"}
@@ -259,7 +259,7 @@ const RegisterProviderSimple = () => {
           </form>
 
           {/* Divider */}
-          <div className="relative my-6">
+          <div className="relative my-4 sm:my-6">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-border"></div>
             </div>
@@ -272,14 +272,14 @@ const RegisterProviderSimple = () => {
           <GoogleAuthButton mode="signup-provider" />
 
           {/* Info */}
-          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-            <p className="text-sm text-blue-900 dark:text-blue-100">
+          <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+            <p className="text-xs sm:text-sm text-blue-900 dark:text-blue-100">
               💡 Après l'inscription, vous pourrez compléter votre profil avec vos informations professionnelles
             </p>
           </div>
 
           {/* Login Link */}
-          <p className="mt-6 text-center text-muted-foreground">
+          <p className="mt-4 sm:mt-6 text-center text-sm sm:text-base text-muted-foreground">
             Vous avez déjà un compte ?{" "}
             <Link to="/connexion" className="text-secondary font-medium hover:underline">
               Se connecter
@@ -287,7 +287,7 @@ const RegisterProviderSimple = () => {
           </p>
 
           {/* Register as Client Link */}
-          <p className="mt-4 text-center text-sm text-muted-foreground">
+          <p className="mt-3 sm:mt-4 text-center text-xs sm:text-sm text-muted-foreground">
             Vous êtes client ?{" "}
             <Link to="/inscription/client" className="text-secondary font-medium hover:underline">
               S'inscrire comme client

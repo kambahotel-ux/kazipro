@@ -64,6 +64,7 @@ export default function RecherchePrestatairesPage() {
   const [searchParams] = useSearchParams();
   
   const [prestataires, setPrestataires] = useState<Prestataire[]>([]);
+  const [totalPrestataires, setTotalPrestataires] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [clientName, setClientName] = useState("Client");
   
@@ -109,6 +110,16 @@ export default function RecherchePrestatairesPage() {
         showVerifiedOnly, 
         showAvailableOnly 
       });
+
+      // D'abord, récupérer le nombre total de prestataires disponibles (sans filtres)
+      const { count: totalCount } = await supabase
+        .from("prestataires")
+        .select("*", { count: "exact", head: true })
+        .eq("profile_completed", true);
+
+      if (totalCount !== null) {
+        setTotalPrestataires(totalCount);
+      }
 
       let query = supabase
         .from("prestataires")
@@ -213,52 +224,60 @@ export default function RecherchePrestatairesPage() {
 
   return (
     <DashboardLayout role="client" userName={clientName} userRole="Client">
-      <div className="space-y-6">
-        {/* Header */}
+      <div className="space-y-4 md:space-y-6 p-3 md:p-0">
+        {/* Header - Mobile Optimized */}
         <div>
-          <h1 className="text-3xl font-bold">Trouver un prestataire</h1>
-          <p className="text-muted-foreground mt-1">
-            Recherchez parmi {prestataires.length} prestataires qualifiés
+          <h1 className="text-lg md:text-2xl lg:text-3xl font-bold">Trouver un prestataire</h1>
+          <p className="text-xs md:text-sm lg:text-base text-muted-foreground mt-1">
+            {loading ? (
+              "Chargement des prestataires..."
+            ) : hasActiveFilters || searchQuery ? (
+              `${filteredPrestataires.length} prestataire${filteredPrestataires.length > 1 ? 's' : ''} trouvé${filteredPrestataires.length > 1 ? 's' : ''} sur ${totalPrestataires} disponible${totalPrestataires > 1 ? 's' : ''}`
+            ) : (
+              `Recherchez parmi ${totalPrestataires} prestataire${totalPrestataires > 1 ? 's' : ''} qualifié${totalPrestataires > 1 ? 's' : ''}`
+            )}
           </p>
         </div>
 
-        {/* Barre de recherche et filtres */}
+        {/* Barre de recherche et filtres - Mobile Optimized */}
         <Card>
-          <CardContent className="p-6 space-y-4">
+          <CardContent className="p-3 md:p-6 space-y-3 md:space-y-4">
             {/* Recherche */}
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder="Rechercher par nom, profession, ville..."
+                  placeholder="Rechercher par nom, profession..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 text-sm md:text-base h-10"
                 />
               </div>
               <Button
                 variant={showFilters ? "default" : "outline"}
                 onClick={() => setShowFilters(!showFilters)}
+                size="sm"
+                className="w-full sm:w-auto h-10"
               >
                 <Filter className="w-4 h-4 mr-2" />
-                Filtres
+                <span className="text-sm">Filtres</span>
                 {hasActiveFilters && (
-                  <Badge variant="secondary" className="ml-2">
+                  <Badge variant="secondary" className="ml-2 text-xs px-1.5 py-0.5">
                     {[selectedProfession, selectedCity, showVerifiedOnly, showAvailableOnly].filter(Boolean).length}
                   </Badge>
                 )}
               </Button>
             </div>
 
-            {/* Filtres avancés */}
+            {/* Filtres avancés - Mobile Optimized */}
             {showFilters && (
-              <div className="border-t pt-4 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="border-t pt-3 md:pt-4 space-y-3 md:space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                   {/* Profession */}
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Profession</label>
+                    <label className="text-xs md:text-sm font-medium mb-2 block">Profession</label>
                     <Select value={selectedProfession} onValueChange={(value) => setSelectedProfession(value === "all" ? "" : value)}>
-                      <SelectTrigger>
+                      <SelectTrigger className="text-sm h-10">
                         <SelectValue placeholder="Toutes" />
                       </SelectTrigger>
                       <SelectContent>
@@ -274,9 +293,9 @@ export default function RecherchePrestatairesPage() {
 
                   {/* Ville */}
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Commune</label>
+                    <label className="text-xs md:text-sm font-medium mb-2 block">Commune</label>
                     <Select value={selectedCity} onValueChange={(value) => setSelectedCity(value === "all" ? "" : value)}>
-                      <SelectTrigger>
+                      <SelectTrigger className="text-sm h-10">
                         <SelectValue placeholder="Toutes" />
                       </SelectTrigger>
                       <SelectContent>
@@ -289,36 +308,35 @@ export default function RecherchePrestatairesPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
 
-                  {/* Vérifiés uniquement */}
-                  <div className="flex items-end">
-                    <Button
-                      variant={showVerifiedOnly ? "default" : "outline"}
-                      onClick={() => setShowVerifiedOnly(!showVerifiedOnly)}
-                      className="w-full"
-                    >
-                      <Shield className="w-4 h-4 mr-2" />
-                      Vérifiés uniquement
-                    </Button>
-                  </div>
+                {/* Boutons de filtre - Mobile Optimized */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Button
+                    variant={showVerifiedOnly ? "default" : "outline"}
+                    onClick={() => setShowVerifiedOnly(!showVerifiedOnly)}
+                    className="w-full text-xs md:text-sm h-10"
+                    size="sm"
+                  >
+                    <Shield className="w-3 h-3 md:w-4 md:h-4 mr-2" />
+                    Vérifiés uniquement
+                  </Button>
 
-                  {/* Disponibles uniquement */}
-                  <div className="flex items-end">
-                    <Button
-                      variant={showAvailableOnly ? "default" : "outline"}
-                      onClick={() => setShowAvailableOnly(!showAvailableOnly)}
-                      className="w-full"
-                    >
-                      Disponibles uniquement
-                    </Button>
-                  </div>
+                  <Button
+                    variant={showAvailableOnly ? "default" : "outline"}
+                    onClick={() => setShowAvailableOnly(!showAvailableOnly)}
+                    className="w-full text-xs md:text-sm h-10"
+                    size="sm"
+                  >
+                    Disponibles uniquement
+                  </Button>
                 </div>
 
                 {/* Bouton réinitialiser */}
                 {hasActiveFilters && (
-                  <div className="flex justify-end">
-                    <Button variant="ghost" size="sm" onClick={handleClearFilters}>
-                      <X className="w-4 h-4 mr-2" />
+                  <div className="flex justify-center sm:justify-end pt-2 border-t">
+                    <Button variant="ghost" size="sm" onClick={handleClearFilters} className="text-xs md:text-sm">
+                      <X className="w-3 h-3 md:w-4 md:h-4 mr-2" />
                       Réinitialiser les filtres
                     </Button>
                   </div>
@@ -328,99 +346,99 @@ export default function RecherchePrestatairesPage() {
           </CardContent>
         </Card>
 
-        {/* Résultats */}
+        {/* Résultats - Mobile Optimized */}
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <div className="flex items-center justify-center py-8 md:py-12">
+            <Loader2 className="w-6 h-6 md:w-8 md:h-8 animate-spin text-primary" />
           </div>
         ) : filteredPrestataires.length === 0 ? (
           <Card>
-            <CardContent className="p-12 text-center">
-              <User className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <h3 className="text-lg font-semibold mb-2">Aucun prestataire trouvé</h3>
-              <p className="text-muted-foreground mb-4">
+            <CardContent className="p-6 md:p-12 text-center">
+              <User className="w-8 h-8 md:w-12 md:h-12 mx-auto mb-3 md:mb-4 text-muted-foreground opacity-50" />
+              <h3 className="text-base md:text-lg font-semibold mb-2">Aucun prestataire trouvé</h3>
+              <p className="text-sm text-muted-foreground mb-3 md:mb-4">
                 Essayez de modifier vos critères de recherche
               </p>
               {hasActiveFilters && (
-                <Button variant="outline" onClick={handleClearFilters}>
+                <Button variant="outline" onClick={handleClearFilters} size="sm">
                   Réinitialiser les filtres
                 </Button>
               )}
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
             {filteredPrestataires.map((prestataire) => (
               <Card
                 key={prestataire.id}
                 className="hover:shadow-lg transition-shadow cursor-pointer"
                 onClick={() => navigate(`/dashboard/client/prestataire/${prestataire.id}`)}
               >
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    {/* Avatar */}
-                    <Avatar className="w-16 h-16">
+                <CardContent className="p-3 md:p-6">
+                  <div className="flex items-start gap-3 md:gap-4">
+                    {/* Avatar - Mobile Optimized */}
+                    <Avatar className="w-10 h-10 md:w-16 md:h-16 shrink-0">
                       <AvatarImage src={prestataire.photo_url || ""} />
-                      <AvatarFallback className="text-lg">
+                      <AvatarFallback className="text-xs md:text-lg">
                         {getInitials(prestataire.full_name)}
                       </AvatarFallback>
                     </Avatar>
 
-                    {/* Info */}
+                    {/* Info - Mobile Optimized */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-semibold text-lg truncate">
+                        <h3 className="font-semibold text-sm md:text-base lg:text-lg truncate">
                           {prestataire.full_name}
                         </h3>
                         {prestataire.verified && (
-                          <Shield className="w-4 h-4 text-primary flex-shrink-0" />
+                          <Shield className="w-3 h-3 md:w-4 md:h-4 text-primary flex-shrink-0" />
                         )}
                       </div>
 
-                      <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                        <Briefcase className="w-3 h-3" />
-                        {prestataire.profession}
+                      <p className="text-xs md:text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                        <Briefcase className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{prestataire.profession}</span>
                       </p>
 
                       {prestataire.city && (
-                        <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                          <MapPin className="w-3 h-3" />
-                          {prestataire.city}
+                        <p className="text-xs md:text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                          <MapPin className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{prestataire.city}</span>
                         </p>
                       )}
 
-                      {/* Rating */}
+                      {/* Rating - Mobile Optimized */}
                       {prestataire.reviews_count && prestataire.reviews_count > 0 && (
                         <div className="flex items-center gap-1 mt-2">
-                          <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                          <span className="text-sm font-medium">{prestataire.rating}</span>
-                          <span className="text-xs text-muted-foreground">
+                          <Star className="w-3 h-3 md:w-4 md:h-4 fill-yellow-400 text-yellow-400 shrink-0" />
+                          <span className="text-xs md:text-sm font-medium">{prestataire.rating}</span>
+                          <span className="text-xs text-muted-foreground truncate">
                             ({prestataire.reviews_count} avis)
                           </span>
                         </div>
                       )}
 
-                      {/* Bio */}
+                      {/* Bio - Mobile Optimized */}
                       {prestataire.bio && (
-                        <p className="text-sm text-muted-foreground line-clamp-2 mt-2">
+                        <p className="text-xs md:text-sm text-muted-foreground line-clamp-2 mt-2 break-words">
                           {prestataire.bio}
                         </p>
                       )}
 
-                      {/* Badges */}
-                      <div className="flex flex-wrap gap-2 mt-3">
+                      {/* Badges - Mobile Optimized */}
+                      <div className="flex flex-wrap gap-1 md:gap-2 mt-2 md:mt-3">
                         {prestataire.experience_years && prestataire.experience_years > 0 && (
-                          <Badge variant="secondary" className="text-xs">
-                            {prestataire.experience_years} ans d'exp.
+                          <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                            {prestataire.experience_years} ans
                           </Badge>
                         )}
                         {prestataire.disponible && (
-                          <Badge variant="default" className="text-xs bg-green-600">
+                          <Badge variant="default" className="text-xs bg-green-600 px-2 py-0.5">
                             Disponible
                           </Badge>
                         )}
                         {prestataire.hourly_rate && (
-                          <Badge variant="outline" className="text-xs">
+                          <Badge variant="outline" className="text-xs px-2 py-0.5">
                             {prestataire.hourly_rate} FC/h
                           </Badge>
                         )}
@@ -428,9 +446,9 @@ export default function RecherchePrestatairesPage() {
                     </div>
                   </div>
 
-                  {/* Bouton */}
-                  <Button className="w-full mt-4" size="sm">
-                    Voir le profil
+                  {/* Bouton - Mobile Optimized */}
+                  <Button className="w-full mt-3 md:mt-4 h-9" size="sm">
+                    <span className="text-xs md:text-sm">Voir le profil</span>
                   </Button>
                 </CardContent>
               </Card>

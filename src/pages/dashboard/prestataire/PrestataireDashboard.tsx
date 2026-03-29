@@ -283,83 +283,94 @@ export default function PrestataireDashboard() {
       isVerified={providerVerified}
       isProfileComplete={isProfileComplete}
     >
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Profile Status Alerts */}
         {isProfileComplete === false && <ProfileIncompleteAlert />}
         {isProfileComplete === true && !providerVerified && <ProfilePendingAlert />}
 
-        <div>
-          <h1 className="text-2xl font-bold">Bonjour, {providerName.split(' ')[0]} 👋</h1>
-          <p className="text-muted-foreground">Voici vos opportunités et missions du jour</p>
+        {/* Header - Mobile Optimized */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold">Bonjour, {providerName.split(' ')[0]} 👋</h1>
+            <p className="text-sm md:text-base text-muted-foreground">Voici vos opportunités et missions du jour</p>
+          </div>
+          {/* Availability Toggle - Mobile Optimized */}
+          <div className="w-full sm:w-auto">
+            <AvailabilityToggle providerId={providerId} />
+          </div>
         </div>
 
-        {/* Availability Toggle */}
-        <AvailabilityToggle providerId={providerId} />
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Stats Cards - Mobile First Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           <StatsCard
             title="Missions ce mois"
             value={missionsCount.toString()}
             subtitle={missionsCount > 0 ? "Actives" : "Aucune mission"}
-            icon={<Briefcase className="w-5 h-5" />}
+            icon={<Briefcase className="w-4 h-4 md:w-5 md:h-5" />}
           />
           <StatsCard
             title="Revenus du mois"
             value={formatBudget(monthlyRevenue)}
             subtitle="Devis acceptés"
-            icon={<DollarSign className="w-5 h-5" />}
+            icon={<DollarSign className="w-4 h-4 md:w-5 md:h-5" />}
           />
           <StatsCard
             title="Note moyenne"
             value={averageRating > 0 ? averageRating.toString() : "-"}
             subtitle={reviewsCount > 0 ? `Sur ${reviewsCount} avis` : "Aucun avis"}
-            icon={<Star className="w-5 h-5" />}
+            icon={<Star className="w-4 h-4 md:w-5 md:h-5" />}
           />
           <StatsCard
             title="Taux acceptation"
             value={acceptanceRate > 0 ? `${acceptanceRate}%` : "-"}
             subtitle="Devis acceptés"
-            icon={<TrendingUp className="w-5 h-5" />}
+            icon={<TrendingUp className="w-4 h-4 md:w-5 md:h-5" />}
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+          {/* Nouvelles opportunités - Mobile Optimized */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Nouvelles opportunités</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between pb-3 md:pb-6">
+              <CardTitle className="text-base md:text-lg">Nouvelles opportunités</CardTitle>
               <Button variant="ghost" size="sm" asChild>
                 <Link to="/dashboard/prestataire/opportunites">
-                  Voir tout <ArrowRight className="w-4 h-4 ml-1" />
+                  <span className="hidden sm:inline">Voir tout</span>
+                  <span className="sm:hidden">Tout</span>
+                  <ArrowRight className="w-4 h-4 ml-1" />
                 </Link>
               </Button>
             </CardHeader>
             <CardContent>
               {availableDemandes.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Briefcase className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>Aucune nouvelle opportunité pour le moment</p>
-                  <p className="text-sm mt-1">Revenez plus tard pour voir les nouvelles demandes</p>
+                <div className="text-center py-6 md:py-8 text-muted-foreground">
+                  <Briefcase className="w-10 h-10 md:w-12 md:h-12 mx-auto mb-3 opacity-50" />
+                  <p className="text-sm">Aucune nouvelle opportunité pour le moment</p>
+                  <p className="text-xs mt-1">Revenez plus tard pour voir les nouvelles demandes</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 md:space-y-3">
                   {availableDemandes.map((demande) => (
-                    <div key={demande.id} className="p-4 rounded-lg border border-border hover:border-primary/50 transition-colors">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">{demande.titre}</p>
+                    <div key={demande.id} className="p-3 md:p-4 rounded-lg border border-border hover:border-primary/50 transition-colors">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-medium text-sm truncate">{demande.titre}</p>
                             {demande.urgence === 'urgent' && (
-                              <Badge variant="destructive" className="text-xs">Urgent</Badge>
+                              <Badge variant="destructive" className="text-xs shrink-0">Urgent</Badge>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                            <MapPin className="w-3 h-3" /> {demande.localisation}
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <MapPin className="w-3 h-3 shrink-0" /> 
+                            <span className="truncate">{demande.localisation}</span>
                           </p>
                         </div>
-                        <p className="font-semibold text-primary">{formatBudget(demande.budget)}</p>
+                        <p className="font-semibold text-primary text-sm shrink-0">{formatBudget(demande.budget)}</p>
                       </div>
                       <Button size="sm" className="w-full mt-2" asChild>
-                        <Link to={`/dashboard/prestataire/demandes/${demande.id}`}>Voir les détails</Link>
+                        <Link to={`/dashboard/prestataire/demandes/${demande.id}`}>
+                          <span className="text-xs">Voir les détails</span>
+                        </Link>
                       </Button>
                     </div>
                   ))}
@@ -368,33 +379,34 @@ export default function PrestataireDashboard() {
             </CardContent>
           </Card>
 
+          {/* Missions en cours - Mobile Optimized */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Missions en cours</CardTitle>
-              <Badge variant="secondary">{activeMissions.length} actives</Badge>
+            <CardHeader className="flex flex-row items-center justify-between pb-3 md:pb-6">
+              <CardTitle className="text-base md:text-lg">Missions en cours</CardTitle>
+              <Badge variant="secondary" className="text-xs">{activeMissions.length} actives</Badge>
             </CardHeader>
             <CardContent>
               {activeMissions.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Briefcase className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>Aucune mission en cours</p>
-                  <p className="text-sm mt-1">Vos missions actives apparaîtront ici</p>
+                <div className="text-center py-6 md:py-8 text-muted-foreground">
+                  <Briefcase className="w-10 h-10 md:w-12 md:h-12 mx-auto mb-3 opacity-50" />
+                  <p className="text-sm">Aucune mission en cours</p>
+                  <p className="text-xs mt-1">Vos missions actives apparaîtront ici</p>
                 </div>
               ) : (
                 <>
-                  <div className="space-y-3">
+                  <div className="space-y-2 md:space-y-3">
                     {activeMissions.map((mission) => (
-                      <div key={mission.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                        <div>
-                          <p className="font-medium text-sm">{mission.demandes?.titre || "Mission"}</p>
-                          <p className="text-xs text-muted-foreground">
+                      <div key={mission.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 rounded-lg bg-muted/50">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{mission.demandes?.titre || "Mission"}</p>
+                          <p className="text-xs text-muted-foreground truncate">
                             {mission.demandes?.clients?.full_name || "Client"}
                           </p>
                         </div>
-                        <div className="text-right">
-                          <Badge variant="default">En cours</Badge>
+                        <div className="flex flex-col sm:items-end gap-1">
+                          <Badge variant="default" className="text-xs w-fit">En cours</Badge>
                           {mission.end_date && (
-                            <p className="text-xs text-muted-foreground mt-1">
+                            <p className="text-xs text-muted-foreground">
                               Échéance: {formatDate(mission.end_date)}
                             </p>
                           )}
@@ -402,9 +414,9 @@ export default function PrestataireDashboard() {
                       </div>
                     ))}
                   </div>
-                  <Button variant="outline" className="w-full mt-4" asChild>
+                  <Button variant="outline" className="w-full mt-3 md:mt-4" asChild>
                     <Link to="/dashboard/prestataire/calendrier">
-                      Voir mon calendrier
+                      <span className="text-sm">Voir mon calendrier</span>
                     </Link>
                   </Button>
                 </>

@@ -79,13 +79,13 @@ export const AvailabilityToggle = ({ providerId }: AvailabilityToggleProps) => {
   if (!providerId || loading) {
     return (
       <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <div className="h-4 w-32 bg-muted animate-pulse rounded"></div>
-              <div className="h-3 w-48 bg-muted animate-pulse rounded"></div>
+        <CardContent className="p-3 md:p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="space-y-1 flex-1 min-w-0">
+              <div className="h-3 md:h-4 w-24 md:w-32 bg-muted animate-pulse rounded"></div>
+              <div className="h-2 md:h-3 w-32 md:w-48 bg-muted animate-pulse rounded"></div>
             </div>
-            <div className="h-6 w-11 bg-muted animate-pulse rounded-full"></div>
+            <div className="h-5 md:h-6 w-9 md:w-11 bg-muted animate-pulse rounded-full shrink-0"></div>
           </div>
         </CardContent>
       </Card>
@@ -94,30 +94,30 @@ export const AvailabilityToggle = ({ providerId }: AvailabilityToggleProps) => {
 
   return (
     <Card className={`transition-all ${isAvailable ? 'border-green-200 bg-green-50/50' : 'border-gray-200'}`}>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+      <CardContent className="p-3 md:p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
+            <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shrink-0 ${
               isAvailable ? 'bg-green-100' : 'bg-gray-100'
             }`}>
               {updating ? (
-                <Loader2 className="w-5 h-5 animate-spin text-gray-600" />
+                <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin text-gray-600" />
               ) : isAvailable ? (
-                <CheckCircle className="w-5 h-5 text-green-600" />
+                <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-green-600" />
               ) : (
-                <XCircle className="w-5 h-5 text-gray-600" />
+                <XCircle className="w-4 h-4 md:w-5 md:h-5 text-gray-600" />
               )}
             </div>
-            <div className="space-y-0.5">
+            <div className="space-y-0.5 flex-1 min-w-0">
               <Label 
                 htmlFor="availability-toggle" 
-                className={`text-sm font-medium cursor-pointer ${
+                className={`text-xs md:text-sm font-medium cursor-pointer block truncate ${
                   isAvailable ? 'text-green-700' : 'text-foreground'
                 }`}
               >
                 {isAvailable ? 'Vous êtes disponible' : 'Vous êtes indisponible'}
               </Label>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground line-clamp-2">
                 {isAvailable 
                   ? 'Les clients peuvent voir que vous êtes en ligne'
                   : 'Les clients ne verront pas votre statut en ligne'
@@ -130,15 +130,15 @@ export const AvailabilityToggle = ({ providerId }: AvailabilityToggleProps) => {
             checked={isAvailable}
             onCheckedChange={handleToggle}
             disabled={updating}
-            className="data-[state=checked]:bg-green-600"
+            className="data-[state=checked]:bg-green-600 shrink-0"
           />
         </div>
         
         {isAvailable && (
-          <div className="mt-3 pt-3 border-t border-green-200">
+          <div className="mt-2 md:mt-3 pt-2 md:pt-3 border-t border-green-200">
             <div className="flex items-center gap-2 text-xs text-green-700">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-              <span>Visible par les clients maintenant</span>
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shrink-0"></div>
+              <span className="truncate">Visible par les clients maintenant</span>
             </div>
           </div>
         )}

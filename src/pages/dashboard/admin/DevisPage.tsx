@@ -226,12 +226,37 @@ export default function AdminDevisPage() {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-display font-bold">Gestion des Devis</h1>
-          <p className="text-muted-foreground">Visualisez et gérez tous les devis de la plateforme</p>
+          <h1 className="text-xl sm:text-2xl font-display font-bold">Gestion des Devis</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Visualisez et gérez tous les devis de la plateforme</p>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Stats - Mobile: Single card with 2x2 grid, Desktop: Separate cards */}
+        <div className="block sm:hidden">
+          <Card>
+            <CardContent className="p-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <p className="text-xl font-bold">{getStats()[0].value}</p>
+                  <p className="text-xs text-muted-foreground">{getStats()[0].title}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl font-bold">{getStats()[1].value}</p>
+                  <p className="text-xs text-muted-foreground">{getStats()[1].title}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl font-bold">{getStats()[2].value}</p>
+                  <p className="text-xs text-muted-foreground">{getStats()[2].title}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold">{getStats()[3].value}</p>
+                  <p className="text-xs text-muted-foreground">{getStats()[3].title}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
+        <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {getStats().map((stat) => (
             <StatsCard key={stat.title} {...stat} />
           ))}
@@ -242,15 +267,17 @@ export default function AdminDevisPage() {
           <Button
             variant="outline"
             onClick={() => setShowFilters(!showFilters)}
-            className="gap-2"
+            className="gap-2 text-sm"
           >
             <Search className="w-4 h-4" />
-            {showFilters ? 'Masquer les filtres' : 'Afficher les filtres'}
+            <span className="hidden sm:inline">{showFilters ? 'Masquer les filtres' : 'Afficher les filtres'}</span>
+            <span className="sm:hidden">{showFilters ? 'Masquer' : 'Filtres'}</span>
           </Button>
           
           {hasActiveFilters && !showFilters && (
-            <Badge variant="secondary">
-              Filtres actifs: {filteredDevis.length} résultat(s)
+            <Badge variant="secondary" className="text-xs">
+              <span className="hidden sm:inline">Filtres actifs: {filteredDevis.length} résultat(s)</span>
+              <span className="sm:hidden">{filteredDevis.length} résultat(s)</span>
             </Badge>
           )}
         </div>
@@ -258,14 +285,14 @@ export default function AdminDevisPage() {
         {/* Filters */}
         {showFilters && (
           <Card>
-            <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <CardContent className="p-4 sm:pt-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input 
                   placeholder="Rechercher..." 
-                  className="pl-10"
+                  className="pl-10 text-sm"
                   value={filters.search}
                   onChange={(e) => setFilters({...filters, search: e.target.value})}
                 />
@@ -273,7 +300,7 @@ export default function AdminDevisPage() {
               
               {/* Status */}
               <Select value={filters.status} onValueChange={(v) => setFilters({...filters, status: v})}>
-                <SelectTrigger>
+                <SelectTrigger className="text-sm">
                   <SelectValue placeholder="Statut" />
                 </SelectTrigger>
                 <SelectContent>
@@ -289,7 +316,7 @@ export default function AdminDevisPage() {
               
               {/* Devise */}
               <Select value={filters.devise} onValueChange={(v) => setFilters({...filters, devise: v})}>
-                <SelectTrigger>
+                <SelectTrigger className="text-sm">
                   <SelectValue placeholder="Devise" />
                 </SelectTrigger>
                 <SelectContent>
@@ -304,6 +331,7 @@ export default function AdminDevisPage() {
               <Input
                 type="number"
                 placeholder="Montant min..."
+                className="text-sm"
                 value={filters.montantMin}
                 onChange={(e) => setFilters({...filters, montantMin: e.target.value})}
                 min="0"
@@ -313,6 +341,7 @@ export default function AdminDevisPage() {
               <Input
                 type="number"
                 placeholder="Montant max..."
+                className="text-sm"
                 value={filters.montantMax}
                 onChange={(e) => setFilters({...filters, montantMax: e.target.value})}
                 min="0"
@@ -332,14 +361,15 @@ export default function AdminDevisPage() {
             
             {/* Results bar */}
             <div className="flex items-center justify-between">
-              <Badge variant="secondary">
+              <Badge variant="secondary" className="text-xs">
                 {filteredDevis.length} résultat(s)
               </Badge>
               
               {hasActiveFilters && (
-                <Button variant="ghost" size="sm" onClick={resetFilters}>
+                <Button variant="ghost" size="sm" onClick={resetFilters} className="text-sm">
                   <X className="w-4 h-4 mr-2" />
-                  Réinitialiser les filtres
+                  <span className="hidden sm:inline">Réinitialiser les filtres</span>
+                  <span className="sm:hidden">Réinitialiser</span>
                 </Button>
               )}
             </div>
@@ -367,19 +397,21 @@ export default function AdminDevisPage() {
           <div className="space-y-4">
             {filteredDevis.map((devis) => (
               <Card key={devis.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
+                <CardContent className="p-4 sm:p-6">
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                    <div className="space-y-3 flex-1">
+                    <div className="space-y-3 flex-1 min-w-0">
                       <div className="flex items-start gap-3 flex-wrap">
-                        <div>
-                          <h3 className="font-semibold text-lg">{devis.titre || 'Sans titre'}</h3>
-                          <p className="text-sm text-muted-foreground">{devis.numero || 'N/A'}</p>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-base sm:text-lg truncate">{devis.titre || 'Sans titre'}</h3>
+                          <p className="text-xs sm:text-sm text-muted-foreground">{devis.numero || 'N/A'}</p>
                         </div>
-                        {getStatusBadge(devis.statut)}
+                        <div className="flex-shrink-0">
+                          {getStatusBadge(devis.statut)}
+                        </div>
                       </div>
                       
                       <div className="space-y-1">
-                        <p className="text-sm">
+                        <p className="text-xs sm:text-sm">
                           <span className="text-muted-foreground">Prestataire: </span>
                           <span className="font-medium">{devis.prestataire?.full_name || 'N/A'}</span>
                           {devis.prestataire?.profession && (
@@ -387,14 +419,14 @@ export default function AdminDevisPage() {
                           )}
                         </p>
                         {devis.demande && (
-                          <p className="text-sm">
+                          <p className="text-xs sm:text-sm">
                             <span className="text-muted-foreground">Demande: </span>
-                            <span>{devis.demande.title || devis.demande.titre}</span>
+                            <span className="truncate">{devis.demande.title || devis.demande.titre}</span>
                           </p>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-4 text-sm">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs sm:text-sm">
                         <div>
                           <span className="text-muted-foreground">Montant HT: </span>
                           <span className="font-medium">{devis.montant_ht.toLocaleString()} {devis.devise || 'FC'}</span>
@@ -405,11 +437,11 @@ export default function AdminDevisPage() {
                         </div>
                       </div>
                       
-                      <div className="text-lg font-bold text-primary">
+                      <div className="text-base sm:text-lg font-bold text-primary">
                         Total TTC: {devis.montant_ttc.toLocaleString()} {devis.devise || 'FC'}
                       </div>
                       
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-xs text-muted-foreground">
                         <span>Créé le {new Date(devis.created_at).toLocaleDateString('fr-FR')}</span>
                         {devis.date_envoi && (
                           <span>• Envoyé le {new Date(devis.date_envoi).toLocaleDateString('fr-FR')}</span>
@@ -420,7 +452,7 @@ export default function AdminDevisPage() {
                       </div>
                     </div>
                     
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 flex-shrink-0">
                       <Button 
                         variant="outline"
                         size="sm"
@@ -428,9 +460,11 @@ export default function AdminDevisPage() {
                           setSelectedDevis(devis);
                           setShowPreviewModal(true);
                         }}
+                        className="text-sm"
                       >
                         <Eye className="w-4 h-4 mr-1" />
-                        Voir détails
+                        <span className="hidden sm:inline">Voir détails</span>
+                        <span className="sm:hidden">Détails</span>
                       </Button>
                     </div>
                   </div>
@@ -442,52 +476,52 @@ export default function AdminDevisPage() {
 
         {/* Preview Modal */}
         {showPreviewModal && selectedDevis && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Détails du Devis</CardTitle>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+            <Card className="w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+              <CardHeader className="flex flex-row items-center justify-between p-4 sm:p-6">
+                <CardTitle className="text-lg sm:text-xl">Détails du Devis</CardTitle>
                 <Button variant="ghost" size="sm" onClick={() => { setShowPreviewModal(false); setSelectedDevis(null); }}>
                   <XCircle className="w-4 h-4" />
                 </Button>
               </CardHeader>
-              <CardContent>
-                <div className="bg-white border rounded-lg p-8 space-y-6">
+              <CardContent className="p-4 sm:p-6 pt-0">
+                <div className="bg-white border rounded-lg p-4 sm:p-8 space-y-4 sm:space-y-6">
                   {/* Header */}
-                  <div className="flex justify-between items-start border-b pb-4">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start border-b pb-4 gap-4">
                     <div>
-                      <h2 className="text-2xl font-bold text-primary">KAZIPRO</h2>
-                      <p className="text-sm text-muted-foreground">Plateforme de services professionnels</p>
+                      <h2 className="text-xl sm:text-2xl font-bold text-primary">KAZIPRO</h2>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Plateforme de services professionnels</p>
                     </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold">DEVIS</div>
-                      <div className="text-sm text-muted-foreground">{selectedDevis.numero || 'N/A'}</div>
+                    <div className="text-left sm:text-right">
+                      <div className="text-xl sm:text-2xl font-bold">DEVIS</div>
+                      <div className="text-xs sm:text-sm text-muted-foreground">{selectedDevis.numero || 'N/A'}</div>
                       {getStatusBadge(selectedDevis.statut)}
                     </div>
                   </div>
 
                   {/* Info */}
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div>
-                      <h3 className="font-semibold mb-2">Prestataire</h3>
-                      <p className="text-sm">{selectedDevis.prestataire?.full_name || 'N/A'}</p>
+                      <h3 className="font-semibold mb-2 text-sm sm:text-base">Prestataire</h3>
+                      <p className="text-xs sm:text-sm">{selectedDevis.prestataire?.full_name || 'N/A'}</p>
                       {selectedDevis.prestataire?.profession && (
-                        <p className="text-sm text-muted-foreground">{selectedDevis.prestataire.profession}</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground">{selectedDevis.prestataire.profession}</p>
                       )}
                     </div>
                     <div>
-                      <h3 className="font-semibold mb-2">Dates</h3>
-                      <p className="text-sm">
+                      <h3 className="font-semibold mb-2 text-sm sm:text-base">Dates</h3>
+                      <p className="text-xs sm:text-sm">
                         <span className="text-muted-foreground">Créé le: </span>
                         {new Date(selectedDevis.date_creation).toLocaleDateString('fr-FR')}
                       </p>
                       {selectedDevis.date_envoi && (
-                        <p className="text-sm">
+                        <p className="text-xs sm:text-sm">
                           <span className="text-muted-foreground">Envoyé le: </span>
                           {new Date(selectedDevis.date_envoi).toLocaleDateString('fr-FR')}
                         </p>
                       )}
                       {selectedDevis.date_expiration && (
-                        <p className="text-sm">
+                        <p className="text-xs sm:text-sm">
                           <span className="text-muted-foreground">Valable jusqu'au: </span>
                           {new Date(selectedDevis.date_expiration).toLocaleDateString('fr-FR')}
                         </p>
@@ -498,21 +532,45 @@ export default function AdminDevisPage() {
                   {/* Demande */}
                   {selectedDevis.demande && (
                     <div>
-                      <h3 className="font-semibold mb-2">Demande associée</h3>
-                      <p className="text-sm">{selectedDevis.demande.title || selectedDevis.demande.titre}</p>
+                      <h3 className="font-semibold mb-2 text-sm sm:text-base">Demande associée</h3>
+                      <p className="text-xs sm:text-sm">{selectedDevis.demande.title || selectedDevis.demande.titre}</p>
                     </div>
                   )}
 
                   {/* Titre et description */}
                   <div>
-                    <h3 className="text-xl font-bold mb-2">{selectedDevis.titre || 'Sans titre'}</h3>
+                    <h3 className="text-lg sm:text-xl font-bold mb-2">{selectedDevis.titre || 'Sans titre'}</h3>
                     {selectedDevis.description && (
-                      <p className="text-sm text-muted-foreground whitespace-pre-line">{selectedDevis.description}</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground whitespace-pre-line">{selectedDevis.description}</p>
                     )}
                   </div>
 
-                  {/* Items */}
-                  <div className="border rounded-lg overflow-hidden">
+                  {/* Items - Mobile: Cards, Desktop: Table */}
+                  <div className="block sm:hidden space-y-3">
+                    <h4 className="font-semibold text-sm">Articles</h4>
+                    {selectedDevis.items && selectedDevis.items.length > 0 ? (
+                      selectedDevis.items.map((item, index) => (
+                        <Card key={index} className="p-3">
+                          <div className="space-y-2">
+                            <p className="font-medium text-sm">{item.designation}</p>
+                            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                              <span>Qté: {item.quantite} {item.unite || 'unité'}</span>
+                              <span>P.U.: {item.prix_unitaire.toLocaleString()} {selectedDevis.devise || 'FC'}</span>
+                            </div>
+                            <div className="text-sm font-medium text-right">
+                              {item.montant.toLocaleString()} {selectedDevis.devise || 'FC'}
+                            </div>
+                          </div>
+                        </Card>
+                      ))
+                    ) : (
+                      <p className="text-center text-xs text-muted-foreground py-4">
+                        Aucun article détaillé pour ce devis
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="hidden sm:block border rounded-lg overflow-hidden">
                     <table className="w-full">
                       <thead className="bg-muted">
                         <tr>
@@ -547,22 +605,22 @@ export default function AdminDevisPage() {
 
                   {/* Totaux */}
                   <div className="flex justify-end">
-                    <div className="w-80 space-y-2">
-                      <div className="flex justify-between text-sm">
+                    <div className="w-full sm:w-80 space-y-2">
+                      <div className="flex justify-between text-xs sm:text-sm">
                         <span>Montant HT:</span>
                         <span className="font-medium">{selectedDevis.montant_ht.toLocaleString()} {selectedDevis.devise || 'FC'}</span>
                       </div>
                       {selectedDevis.frais_deplacement && selectedDevis.frais_deplacement > 0 && (
-                        <div className="flex justify-between text-sm">
+                        <div className="flex justify-between text-xs sm:text-sm">
                           <span>Frais de déplacement:</span>
                           <span className="font-medium">{selectedDevis.frais_deplacement.toLocaleString()} {selectedDevis.devise || 'FC'}</span>
                         </div>
                       )}
-                      <div className="flex justify-between text-sm">
+                      <div className="flex justify-between text-xs sm:text-sm">
                         <span>TVA ({selectedDevis.tva}%):</span>
                         <span className="font-medium">{(selectedDevis.montant_ttc - selectedDevis.montant_ht).toLocaleString()} {selectedDevis.devise || 'FC'}</span>
                       </div>
-                      <div className="flex justify-between text-lg font-bold border-t pt-2">
+                      <div className="flex justify-between text-base sm:text-lg font-bold border-t pt-2">
                         <span>Total TTC:</span>
                         <span className="text-primary">{selectedDevis.montant_ttc.toLocaleString()} {selectedDevis.devise || 'FC'}</span>
                       </div>
@@ -576,8 +634,8 @@ export default function AdminDevisPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex justify-end gap-2 mt-6">
-                  <Button variant="outline" onClick={() => { setShowPreviewModal(false); setSelectedDevis(null); }}>
+                <div className="flex justify-end gap-2 mt-4 sm:mt-6">
+                  <Button variant="outline" onClick={() => { setShowPreviewModal(false); setSelectedDevis(null); }} className="text-sm">
                     Fermer
                   </Button>
                 </div>

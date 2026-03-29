@@ -216,10 +216,10 @@ export default function PaiementSoldePage() {
   if (loading) {
     return (
       <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
-        <div className="flex items-center justify-center h-96">
+        <div className="flex items-center justify-center h-64 md:h-96 px-4">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Chargement...</p>
+            <div className="animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-b-2 border-primary mx-auto mb-3 md:mb-4"></div>
+            <p className="text-sm md:text-base text-muted-foreground">Chargement...</p>
           </div>
         </div>
       </DashboardLayout>
@@ -229,10 +229,12 @@ export default function PaiementSoldePage() {
   if (!contrat || !devis) {
     return (
       <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>Contrat introuvable</AlertDescription>
-        </Alert>
+        <div className="p-3 md:p-6">
+          <Alert variant="destructive">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <AlertDescription className="text-sm">Contrat introuvable</AlertDescription>
+          </Alert>
+        </div>
       </DashboardLayout>
     );
   }
@@ -241,126 +243,128 @@ export default function PaiementSoldePage() {
 
   return (
     <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
-      <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-4xl">
-        {/* Header */}
-        <div className="flex items-center gap-4">
+      <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6 max-w-4xl">
+        {/* Header - Mobile Optimized */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => navigate(-1)}
+            className="w-fit"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Retour
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold">Paiement du solde</h1>
-            <p className="text-muted-foreground mt-1">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl md:text-3xl font-bold truncate">Paiement du solde</h1>
+            <p className="text-sm md:text-base text-muted-foreground mt-1 truncate">
               Contrat N° {contrat.numero}
             </p>
           </div>
         </div>
 
-        {/* Alert sécurité */}
+        {/* Alert sécurité - Mobile Optimized */}
         <Alert className="bg-green-50 border-green-200">
-          <Shield className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-900">
+          <Shield className="w-4 h-4 md:w-5 md:h-5 text-green-600 shrink-0" />
+          <AlertDescription className="text-green-900 text-sm">
             <strong>Paiement final sécurisé</strong>
-            <br />
+            <br className="hidden sm:block" />
+            <span className="sm:hidden"> - </span>
             Ce paiement finalise le contrat. Le prestataire recevra le montant total 
             après validation des travaux.
           </AlertDescription>
         </Alert>
 
-        {/* Résumé */}
+        {/* Résumé - Mobile Optimized */}
         <Card>
-          <CardHeader>
-            <CardTitle>Résumé</CardTitle>
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="text-base md:text-lg">Résumé</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Prestataire</span>
-              <span className="font-medium">{devis.prestataires?.full_name}</span>
+          <CardContent className="space-y-2 md:space-y-3">
+            <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
+              <span className="text-sm text-muted-foreground">Prestataire</span>
+              <span className="font-medium text-sm truncate">{devis.prestataires?.full_name}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Profession</span>
-              <span className="font-medium">{devis.prestataires?.profession}</span>
+            <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
+              <span className="text-sm text-muted-foreground">Profession</span>
+              <span className="font-medium text-sm truncate">{devis.prestataires?.profession}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Montant total du contrat</span>
-              <span className="font-medium">{devis.montant_ttc.toLocaleString()} FC</span>
+            <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
+              <span className="text-sm text-muted-foreground">Montant total du contrat</span>
+              <span className="font-medium text-sm">{devis.montant_ttc.toLocaleString()} FC</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Acompte déjà payé</span>
-              <span className="font-medium text-green-600">- {montantAcomptePaye.toLocaleString()} FC</span>
+            <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
+              <span className="text-xs md:text-sm text-muted-foreground">Acompte déjà payé</span>
+              <span className="font-medium text-xs md:text-sm text-green-600">- {montantAcomptePaye.toLocaleString()} FC</span>
             </div>
-            <div className="border-t pt-3 flex justify-between text-lg font-semibold text-primary">
-              <span>Solde à payer ({pourcentageSolde}%)</span>
-              <span>{montantSolde.toLocaleString()} FC</span>
+            <div className="border-t pt-2 md:pt-3 flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0 text-base md:text-lg font-semibold text-primary">
+              <span className="text-sm md:text-base">Solde à payer ({pourcentageSolde}%)</span>
+              <span className="text-lg md:text-xl">{montantSolde.toLocaleString()} FC</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* Méthode de paiement */}
+        {/* Méthode de paiement - Mobile Optimized */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="w-5 h-5" />
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+              <CreditCard className="w-4 h-4 md:w-5 md:h-5" />
               Méthode de paiement
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-sm">
               Choisissez votre méthode de paiement mobile
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-4 md:space-y-6">
             <RadioGroup value={methodePaiement} onValueChange={(value) => setMethodePaiement(value as MethodePaiement)}>
-              <div className="space-y-3">
-                {/* M-Pesa */}
-                <div className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
-                  <RadioGroupItem value="mpesa" id="mpesa" />
-                  <Label htmlFor="mpesa" className="flex items-center gap-3 cursor-pointer flex-1">
-                    <div className="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center">
-                      <Smartphone className="w-6 h-6 text-green-600" />
+              <div className="space-y-2 md:space-y-3">
+                {/* M-Pesa - Mobile Optimized */}
+                <div className="flex items-center space-x-2 md:space-x-3 p-3 md:p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
+                  <RadioGroupItem value="mpesa" id="mpesa" className="shrink-0" />
+                  <Label htmlFor="mpesa" className="flex items-center gap-2 md:gap-3 cursor-pointer flex-1 min-w-0">
+                    <div className="w-10 h-10 md:w-12 md:h-12 bg-green-500/10 rounded-lg flex items-center justify-center shrink-0">
+                      <Smartphone className="w-5 h-5 md:w-6 md:h-6 text-green-600" />
                     </div>
-                    <div>
-                      <p className="font-semibold">M-Pesa</p>
-                      <p className="text-sm text-muted-foreground">Vodacom M-Pesa</p>
-                    </div>
-                  </Label>
-                </div>
-
-                {/* Airtel Money */}
-                <div className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
-                  <RadioGroupItem value="airtel_money" id="airtel" />
-                  <Label htmlFor="airtel" className="flex items-center gap-3 cursor-pointer flex-1">
-                    <div className="w-12 h-12 bg-red-500/10 rounded-lg flex items-center justify-center">
-                      <Smartphone className="w-6 h-6 text-red-600" />
-                    </div>
-                    <div>
-                      <p className="font-semibold">Airtel Money</p>
-                      <p className="text-sm text-muted-foreground">Airtel Money</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm md:text-base">M-Pesa</p>
+                      <p className="text-xs md:text-sm text-muted-foreground truncate">Vodacom M-Pesa</p>
                     </div>
                   </Label>
                 </div>
 
-                {/* Orange Money */}
-                <div className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
-                  <RadioGroupItem value="orange_money" id="orange" />
-                  <Label htmlFor="orange" className="flex items-center gap-3 cursor-pointer flex-1">
-                    <div className="w-12 h-12 bg-orange-500/10 rounded-lg flex items-center justify-center">
-                      <Smartphone className="w-6 h-6 text-orange-600" />
+                {/* Airtel Money - Mobile Optimized */}
+                <div className="flex items-center space-x-2 md:space-x-3 p-3 md:p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
+                  <RadioGroupItem value="airtel_money" id="airtel" className="shrink-0" />
+                  <Label htmlFor="airtel" className="flex items-center gap-2 md:gap-3 cursor-pointer flex-1 min-w-0">
+                    <div className="w-10 h-10 md:w-12 md:h-12 bg-red-500/10 rounded-lg flex items-center justify-center shrink-0">
+                      <Smartphone className="w-5 h-5 md:w-6 md:h-6 text-red-600" />
                     </div>
-                    <div>
-                      <p className="font-semibold">Orange Money</p>
-                      <p className="text-sm text-muted-foreground">Orange Money</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm md:text-base">Airtel Money</p>
+                      <p className="text-xs md:text-sm text-muted-foreground truncate">Airtel Money</p>
+                    </div>
+                  </Label>
+                </div>
+
+                {/* Orange Money - Mobile Optimized */}
+                <div className="flex items-center space-x-2 md:space-x-3 p-3 md:p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
+                  <RadioGroupItem value="orange_money" id="orange" className="shrink-0" />
+                  <Label htmlFor="orange" className="flex items-center gap-2 md:gap-3 cursor-pointer flex-1 min-w-0">
+                    <div className="w-10 h-10 md:w-12 md:h-12 bg-orange-500/10 rounded-lg flex items-center justify-center shrink-0">
+                      <Smartphone className="w-5 h-5 md:w-6 md:h-6 text-orange-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm md:text-base">Orange Money</p>
+                      <p className="text-xs md:text-sm text-muted-foreground truncate">Orange Money</p>
                     </div>
                   </Label>
                 </div>
               </div>
             </RadioGroup>
 
-            {/* Numéro de téléphone */}
+            {/* Numéro de téléphone - Mobile Optimized */}
             <div className="space-y-2">
-              <Label htmlFor="phone">Numéro de téléphone</Label>
+              <Label htmlFor="phone" className="text-sm md:text-base">Numéro de téléphone</Label>
               <Input
                 id="phone"
                 type="tel"
@@ -368,36 +372,37 @@ export default function PaiementSoldePage() {
                 value={numeroTelephone}
                 onChange={(e) => setNumeroTelephone(e.target.value)}
                 disabled={processing}
+                className="text-sm md:text-base"
               />
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs md:text-sm text-muted-foreground">
                 Vous recevrez une notification pour confirmer le paiement
               </p>
             </div>
 
-            {/* Bouton payer */}
+            {/* Bouton payer - Mobile Optimized */}
             <Button
               onClick={handlePaiement}
               disabled={processing || !numeroTelephone}
               size="lg"
-              className="w-full"
+              className="w-full h-12 md:h-14 text-sm md:text-base"
             >
               {processing ? (
                 <>
                   <Loader className="w-4 h-4 mr-2 animate-spin" />
-                  Traitement en cours...
+                  <span className="truncate">Traitement en cours...</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
-                  Payer {montantSolde.toLocaleString()} FC
+                  <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5 mr-2 shrink-0" />
+                  <span className="truncate">Payer {montantSolde.toLocaleString()} FC</span>
                 </>
               )}
             </Button>
 
-            {/* Info */}
+            {/* Info - Mobile Optimized */}
             <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <AlertDescription className="text-xs md:text-sm">
                 <strong>Mode simulation:</strong> Le paiement est actuellement simulé. 
                 L'intégration réelle avec M-Pesa/Airtel Money sera ajoutée prochainement.
               </AlertDescription>

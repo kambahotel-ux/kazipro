@@ -65,8 +65,8 @@ const Login = () => {
   return (
     <div className="min-h-screen bg-muted/30 flex">
       {/* Left Side - Form */}
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
-        <div className="w-full max-w-md">
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-12">
+        <div className="w-full max-w-sm sm:max-w-md px-2 sm:px-0">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 mb-8">
             <div className="w-10 h-10 rounded-xl gradient-accent flex items-center justify-center shadow-md">
@@ -78,17 +78,17 @@ const Login = () => {
           </Link>
 
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-2xl lg:text-3xl font-display font-bold text-foreground mb-2">
+          <div className="mb-6 sm:mb-8">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-display font-bold text-foreground mb-2">
               Bon retour parmi nous
             </h1>
-            <p className="text-muted-foreground">
+            <p className="text-sm sm:text-base text-muted-foreground">
               Connectez-vous pour accéder à votre espace
             </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <div className="relative">
@@ -99,7 +99,7 @@ const Login = () => {
                   placeholder="votre@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 h-12"
+                  className="pl-10 h-10 sm:h-12 text-sm sm:text-base"
                   required
                   disabled={loading}
                 />
@@ -109,7 +109,7 @@ const Login = () => {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Mot de passe</Label>
-                <Link to="/mot-de-passe-oublie" className="text-sm text-secondary hover:underline">
+                <Link to="/mot-de-passe-oublie" className="text-xs sm:text-sm text-secondary hover:underline">
                   Mot de passe oublié ?
                 </Link>
               </div>
@@ -121,7 +121,7 @@ const Login = () => {
                   placeholder="Votre mot de passe"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10 h-12"
+                  className="pl-10 pr-10 h-10 sm:h-12 text-sm sm:text-base"
                   required
                 />
                 <button
@@ -134,14 +134,14 @@ const Login = () => {
               </div>
             </div>
 
-            <Button type="submit" variant="secondary" size="lg" className="w-full group" disabled={loading}>
+            <Button type="submit" variant="secondary" size="lg" className="w-full group h-10 sm:h-12 text-sm sm:text-base" disabled={loading}>
               {loading ? "Connexion en cours..." : "Se connecter"}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Button>
           </form>
 
           {/* Divider */}
-          <div className="relative my-6">
+          <div className="relative my-4 sm:my-6">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-border"></div>
             </div>
@@ -154,7 +154,7 @@ const Login = () => {
           <GoogleAuthButton mode="signin" />
 
           {/* Sign Up Link */}
-          <p className="mt-8 text-center text-muted-foreground">
+          <p className="mt-6 sm:mt-8 text-center text-sm sm:text-base text-muted-foreground">
             Pas encore de compte ?{" "}
             <Link to="/inscription/client" className="text-secondary font-medium hover:underline">
               Créer un compte

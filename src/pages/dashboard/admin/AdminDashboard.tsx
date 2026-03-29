@@ -300,8 +300,8 @@ export default function AdminDashboard() {
     <DashboardLayout role="admin" userName="Admin" userRole="Administrateur">
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-display font-bold">Tableau de Bord Admin</h1>
-          <p className="text-muted-foreground">Bienvenue dans l'espace d'administration KaziPro</p>
+          <h1 className="text-xl sm:text-2xl font-display font-bold">Tableau de Bord Admin</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Bienvenue dans l'espace d'administration KaziPro</p>
         </div>
 
         {loading ? (
@@ -311,48 +311,48 @@ export default function AdminDashboard() {
         ) : stats ? (
           <>
             {/* Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               <Card>
-                <CardContent className="pt-6">
+                <CardContent className="pt-4 sm:pt-6">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">Utilisateurs Totaux</p>
-                      <p className="text-3xl font-bold mt-2">{stats.totalUsers}</p>
-                      <p className="text-xs text-muted-foreground mt-2">
+                      <p className="text-xs sm:text-sm text-muted-foreground">Utilisateurs Totaux</p>
+                      <p className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">{stats.totalUsers}</p>
+                      <p className="text-xs text-muted-foreground mt-1 sm:mt-2">
                         {stats.totalProviders} prestataires
                       </p>
                     </div>
-                    <Users className="w-8 h-8 text-blue-500 opacity-20" />
+                    <Users className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500 opacity-20" />
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardContent className="pt-6">
+                <CardContent className="pt-4 sm:pt-6">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">Revenus Totaux</p>
-                      <p className="text-3xl font-bold mt-2">
+                      <p className="text-xs sm:text-sm text-muted-foreground">Revenus Totaux</p>
+                      <p className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">
                         {(stats.totalRevenue / 1000000).toFixed(1)}M
                       </p>
-                      <p className="text-xs text-muted-foreground mt-2">FC</p>
+                      <p className="text-xs text-muted-foreground mt-1 sm:mt-2">FC</p>
                     </div>
-                    <DollarSign className="w-8 h-8 text-green-500 opacity-20" />
+                    <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-green-500 opacity-20" />
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardContent className="pt-6">
+                <CardContent className="pt-4 sm:pt-6">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">Missions Actives</p>
-                      <p className="text-3xl font-bold mt-2">{stats.activeMissions}</p>
-                      <p className="text-xs text-muted-foreground mt-2">
+                      <p className="text-xs sm:text-sm text-muted-foreground">Missions Actives</p>
+                      <p className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">{stats.activeMissions}</p>
+                      <p className="text-xs text-muted-foreground mt-1 sm:mt-2">
                         {stats.totalRequests} demandes
                       </p>
                     </div>
-                    <Briefcase className="w-8 h-8 text-purple-500 opacity-20" />
+                    <Briefcase className="w-6 h-6 sm:w-8 sm:h-8 text-purple-500 opacity-20" />
                   </div>
                 </CardContent>
               </Card>
@@ -361,17 +361,18 @@ export default function AdminDashboard() {
             {/* Alerts */}
             {stats.pendingVerifications > 0 && (
               <Card className="border-yellow-500/20 bg-yellow-500/5">
-                <CardContent className="pt-6 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <AlertCircle className="w-5 h-5 text-yellow-600" />
+                <CardContent className="pt-4 sm:pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-medium">{stats.pendingVerifications} prestataires en attente de vérification</p>
-                      <p className="text-sm text-muted-foreground">Veuillez vérifier les nouveaux prestataires</p>
+                      <p className="font-medium text-sm sm:text-base">{stats.pendingVerifications} prestataires en attente de vérification</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Veuillez vérifier les nouveaux prestataires</p>
                     </div>
                   </div>
                   <Button
                     size="sm"
                     onClick={() => navigate("/dashboard/admin/prestataires")}
+                    className="w-full sm:w-auto"
                   >
                     Vérifier
                   </Button>
@@ -383,40 +384,45 @@ export default function AdminDashboard() {
          
 
             {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
               {/* User Growth Chart */}
               <Card>
-                <CardHeader>
-                  <CardTitle>Croissance des Utilisateurs</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base sm:text-lg">Croissance des Utilisateurs</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer width="100%" height={250}>
                     <LineChart data={userGrowthData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis 
                         dataKey="month" 
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 10 }}
                         stroke="#6b7280"
+                        interval={0}
+                        angle={-45}
+                        textAnchor="end"
+                        height={60}
                       />
                       <YAxis 
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 10 }}
                         stroke="#6b7280"
                       />
                       <Tooltip 
                         contentStyle={{ 
                           backgroundColor: '#fff', 
                           border: '1px solid #e5e7eb',
-                          borderRadius: '8px'
+                          borderRadius: '8px',
+                          fontSize: '12px'
                         }}
                       />
-                      <Legend />
+                      <Legend wrapperStyle={{ fontSize: '12px' }} />
                       <Line 
                         type="monotone" 
                         dataKey="clients" 
                         stroke="#3b82f6" 
                         strokeWidth={2}
                         name="Clients"
-                        dot={{ fill: '#3b82f6', r: 4 }}
+                        dot={{ fill: '#3b82f6', r: 3 }}
                       />
                       <Line 
                         type="monotone" 
@@ -424,7 +430,7 @@ export default function AdminDashboard() {
                         stroke="#8b5cf6" 
                         strokeWidth={2}
                         name="Prestataires"
-                        dot={{ fill: '#8b5cf6', r: 4 }}
+                        dot={{ fill: '#8b5cf6', r: 3 }}
                       />
                     </LineChart>
                   </ResponsiveContainer>
@@ -433,34 +439,39 @@ export default function AdminDashboard() {
 
               {/* Revenue Chart */}
               <Card>
-                <CardHeader>
-                  <CardTitle>Revenus Mensuels (en milliers FC)</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base sm:text-lg">Revenus Mensuels (en milliers FC)</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={revenueData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis 
                         dataKey="month" 
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 10 }}
                         stroke="#6b7280"
+                        interval={0}
+                        angle={-45}
+                        textAnchor="end"
+                        height={60}
                       />
                       <YAxis 
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 10 }}
                         stroke="#6b7280"
                       />
                       <Tooltip 
                         contentStyle={{ 
                           backgroundColor: '#fff', 
                           border: '1px solid #e5e7eb',
-                          borderRadius: '8px'
+                          borderRadius: '8px',
+                          fontSize: '12px'
                         }}
                       />
                       <Bar 
                         dataKey="revenue" 
                         fill="#10b981" 
                         name="Revenus"
-                        radius={[8, 8, 0, 0]}
+                        radius={[4, 4, 0, 0]}
                       />
                     </BarChart>
                   </ResponsiveContainer>
@@ -469,11 +480,11 @@ export default function AdminDashboard() {
 
               {/* Mission Status Distribution */}
               <Card>
-                <CardHeader>
-                  <CardTitle>Distribution des Missions</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base sm:text-lg">Distribution des Missions</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer width="100%" height={250}>
                     <PieChart>
                       <Pie
                         data={missionStatusData}
@@ -481,7 +492,7 @@ export default function AdminDashboard() {
                         cy="50%"
                         labelLine={false}
                         label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                        outerRadius={100}
+                        outerRadius={80}
                         fill="#8884d8"
                         dataKey="value"
                       >
@@ -493,7 +504,8 @@ export default function AdminDashboard() {
                         contentStyle={{ 
                           backgroundColor: '#fff', 
                           border: '1px solid #e5e7eb',
-                          borderRadius: '8px'
+                          borderRadius: '8px',
+                          fontSize: '12px'
                         }}
                       />
                     </PieChart>
@@ -503,30 +515,35 @@ export default function AdminDashboard() {
 
               {/* Platform Activity Chart */}
               <Card>
-                <CardHeader>
-                  <CardTitle>Activité de la Plateforme</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base sm:text-lg">Activité de la Plateforme</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer width="100%" height={250}>
                     <AreaChart data={userGrowthData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis 
                         dataKey="month" 
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 10 }}
                         stroke="#6b7280"
+                        interval={0}
+                        angle={-45}
+                        textAnchor="end"
+                        height={60}
                       />
                       <YAxis 
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 10 }}
                         stroke="#6b7280"
                       />
                       <Tooltip 
                         contentStyle={{ 
                           backgroundColor: '#fff', 
                           border: '1px solid #e5e7eb',
-                          borderRadius: '8px'
+                          borderRadius: '8px',
+                          fontSize: '12px'
                         }}
                       />
-                      <Legend />
+                      <Legend wrapperStyle={{ fontSize: '12px' }} />
                       <Area 
                         type="monotone" 
                         dataKey="total" 
@@ -543,12 +560,13 @@ export default function AdminDashboard() {
 
             {/* Statistiques par Profession */}
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Statistiques par Profession (Top 10)</CardTitle>
+              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3">
+                <CardTitle className="text-base sm:text-lg">Statistiques par Profession (Top 10)</CardTitle>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => navigate("/dashboard/admin/professions")}
+                  className="w-full sm:w-auto"
                 >
                   Gérer les professions
                 </Button>
@@ -557,94 +575,134 @@ export default function AdminDashboard() {
                 {professionStats.length > 0 ? (
                   <div className="space-y-4">
                     {/* Graphique à barres */}
-                    <ResponsiveContainer width="100%" height={300}>
+                    <ResponsiveContainer width="100%" height={250}>
                       <BarChart data={professionStats} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis type="number" tick={{ fontSize: 12 }} stroke="#6b7280" />
+                        <XAxis type="number" tick={{ fontSize: 10 }} stroke="#6b7280" />
                         <YAxis 
                           dataKey="profession" 
                           type="category" 
-                          width={100}
-                          tick={{ fontSize: 12 }}
+                          width={80}
+                          tick={{ fontSize: 10 }}
                           stroke="#6b7280"
                         />
                         <Tooltip 
                           contentStyle={{ 
                             backgroundColor: '#fff', 
                             border: '1px solid #e5e7eb',
-                            borderRadius: '8px'
+                            borderRadius: '8px',
+                            fontSize: '12px'
                           }}
                         />
-                        <Legend />
+                        <Legend wrapperStyle={{ fontSize: '12px' }} />
                         <Bar 
                           dataKey="total_prestataires" 
                           fill="#8b5cf6" 
                           name="Prestataires"
-                          radius={[0, 4, 4, 0]}
+                          radius={[0, 2, 2, 0]}
                         />
                         <Bar 
                           dataKey="total_demandes" 
                           fill="#3b82f6" 
                           name="Demandes"
-                          radius={[0, 4, 4, 0]}
+                          radius={[0, 2, 2, 0]}
                         />
                       </BarChart>
                     </ResponsiveContainer>
 
-                    {/* Tableau détaillé */}
-                    <div className="border border-border rounded-lg overflow-hidden">
-                      <table className="w-full">
-                        <thead className="bg-muted">
-                          <tr>
-                            <th className="text-left p-3 font-medium">Profession</th>
-                            <th className="text-center p-3 font-medium">Prestataires</th>
-                            <th className="text-center p-3 font-medium">Vérifiés</th>
-                            <th className="text-center p-3 font-medium">Demandes</th>
-                            <th className="text-center p-3 font-medium">Ratio D/P</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {professionStats.map((stat, index) => {
-                            const ratio = stat.total_prestataires > 0 
-                              ? (stat.total_demandes / stat.total_prestataires).toFixed(1)
-                              : '0';
-                            const ratioValue = parseFloat(ratio);
-                            const ratioColor = ratioValue > 3 ? 'text-red-600' : ratioValue > 1.5 ? 'text-yellow-600' : 'text-green-600';
-                            
-                            return (
-                              <tr key={index} className="border-t border-border hover:bg-muted/50">
-                                <td className="p-3 font-medium">{stat.profession}</td>
-                                <td className="text-center p-3">
-                                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-medium">
-                                    {stat.total_prestataires}
-                                  </span>
-                                </td>
-                                <td className="text-center p-3">
-                                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-100 text-green-700 font-medium">
-                                    {stat.prestataires_verifies}
-                                  </span>
-                                </td>
-                                <td className="text-center p-3">
-                                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-medium">
-                                    {stat.total_demandes}
-                                  </span>
-                                </td>
-                                <td className="text-center p-3">
-                                  <span className={`font-bold ${ratioColor}`}>
-                                    {ratio}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                    {/* Tableau détaillé - Version mobile */}
+                    <div className="block sm:hidden">
+                      <div className="space-y-3">
+                        {professionStats.map((stat, index) => {
+                          const ratio = stat.total_prestataires > 0 
+                            ? (stat.total_demandes / stat.total_prestataires).toFixed(1)
+                            : '0';
+                          const ratioValue = parseFloat(ratio);
+                          const ratioColor = ratioValue > 3 ? 'text-red-600' : ratioValue > 1.5 ? 'text-yellow-600' : 'text-green-600';
+                          
+                          return (
+                            <div key={index} className="bg-muted/30 p-3 rounded-lg">
+                              <h4 className="font-medium mb-2">{stat.profession}</h4>
+                              <div className="grid grid-cols-2 gap-2 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Prestataires:</span>
+                                  <span className="font-medium">{stat.total_prestataires}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Vérifiés:</span>
+                                  <span className="font-medium">{stat.prestataires_verifies}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Demandes:</span>
+                                  <span className="font-medium">{stat.total_demandes}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Ratio:</span>
+                                  <span className={`font-bold ${ratioColor}`}>{ratio}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Tableau détaillé - Version desktop */}
+                    <div className="hidden sm:block border border-border rounded-lg overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[600px]">
+                          <thead className="bg-muted">
+                            <tr>
+                              <th className="text-left p-3 font-medium">Profession</th>
+                              <th className="text-center p-3 font-medium">Prestataires</th>
+                              <th className="text-center p-3 font-medium">Vérifiés</th>
+                              <th className="text-center p-3 font-medium">Demandes</th>
+                              <th className="text-center p-3 font-medium">Ratio D/P</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {professionStats.map((stat, index) => {
+                              const ratio = stat.total_prestataires > 0 
+                                ? (stat.total_demandes / stat.total_prestataires).toFixed(1)
+                                : '0';
+                              const ratioValue = parseFloat(ratio);
+                              const ratioColor = ratioValue > 3 ? 'text-red-600' : ratioValue > 1.5 ? 'text-yellow-600' : 'text-green-600';
+                              
+                              return (
+                                <tr key={index} className="border-t border-border hover:bg-muted/50">
+                                  <td className="p-3 font-medium">{stat.profession}</td>
+                                  <td className="text-center p-3">
+                                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-medium">
+                                      {stat.total_prestataires}
+                                    </span>
+                                  </td>
+                                  <td className="text-center p-3">
+                                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-100 text-green-700 font-medium">
+                                      {stat.prestataires_verifies}
+                                    </span>
+                                  </td>
+                                  <td className="text-center p-3">
+                                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-medium">
+                                      {stat.total_demandes}
+                                    </span>
+                                  </td>
+                                  <td className="text-center p-3">
+                                    <span className={`font-bold ${ratioColor}`}>
+                                      {ratio}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
 
                     {/* Légende */}
-                    <div className="bg-muted/50 p-4 rounded-lg">
-                      <p className="text-sm font-medium mb-2">💡 Ratio Demandes/Prestataires:</p>
-                      <div className="flex flex-wrap gap-4 text-sm">
+                    <div className="bg-muted/50 p-3 sm:p-4 rounded-lg">
+                      <p className="text-xs sm:text-sm font-medium mb-2">💡 Ratio Demandes/Prestataires:</p>
+                      <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm">
                         <div className="flex items-center gap-2">
                           <span className="w-3 h-3 rounded-full bg-green-600"></span>
                           <span className="text-muted-foreground">≤ 1.5: Équilibré</span>
@@ -661,12 +719,12 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <p>Aucune donnée disponible</p>
+                  <div className="text-center py-6 sm:py-8 text-muted-foreground">
+                    <p className="text-sm sm:text-base">Aucune donnée disponible</p>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="mt-4"
+                      className="mt-3 sm:mt-4"
                       onClick={() => navigate("/dashboard/admin/professions")}
                     >
                       Créer des professions
@@ -677,53 +735,53 @@ export default function AdminDashboard() {
             </Card>
 
             {/* Recent Activity */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               <Card>
-                <CardHeader>
-                  <CardTitle>Activité Récente</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base sm:text-lg">Activité Récente</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex items-center justify-between py-2 border-b border-border">
-                    <span className="text-sm">Nouvel utilisateur inscrit</span>
+                    <span className="text-xs sm:text-sm">Nouvel utilisateur inscrit</span>
                     <span className="text-xs text-muted-foreground">Il y a 2h</span>
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-border">
-                    <span className="text-sm">Nouvelle demande créée</span>
+                    <span className="text-xs sm:text-sm">Nouvelle demande créée</span>
                     <span className="text-xs text-muted-foreground">Il y a 4h</span>
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-border">
-                    <span className="text-sm">Paiement complété</span>
+                    <span className="text-xs sm:text-sm">Paiement complété</span>
                     <span className="text-xs text-muted-foreground">Il y a 6h</span>
                   </div>
                   <div className="flex items-center justify-between py-2">
-                    <span className="text-sm">Prestataire vérifié</span>
+                    <span className="text-xs sm:text-sm">Prestataire vérifié</span>
                     <span className="text-xs text-muted-foreground">Il y a 8h</span>
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle>Statistiques Clés</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base sm:text-lg">Statistiques Clés</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Taux de Conversion</span>
-                    <span className="font-bold">
+                    <span className="text-xs sm:text-sm text-muted-foreground">Taux de Conversion</span>
+                    <span className="font-bold text-sm sm:text-base">
                       {stats.totalRequests > 0 ? ((stats.activeMissions / stats.totalRequests) * 100).toFixed(1) : 0}%
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Utilisateurs Actifs</span>
-                    <span className="font-bold">{Math.round(stats.totalUsers * 0.75)}</span>
+                    <span className="text-xs sm:text-sm text-muted-foreground">Utilisateurs Actifs</span>
+                    <span className="font-bold text-sm sm:text-base">{Math.round(stats.totalUsers * 0.75)}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Satisfaction Moyenne</span>
-                    <span className="font-bold">4.6/5</span>
+                    <span className="text-xs sm:text-sm text-muted-foreground">Satisfaction Moyenne</span>
+                    <span className="font-bold text-sm sm:text-base">4.6/5</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Temps Réponse Moyen</span>
-                    <span className="font-bold">2.3h</span>
+                    <span className="text-xs sm:text-sm text-muted-foreground">Temps Réponse Moyen</span>
+                    <span className="font-bold text-sm sm:text-base">2.3h</span>
                   </div>
                 </CardContent>
               </Card>

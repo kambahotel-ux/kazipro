@@ -501,10 +501,10 @@ export default function SignerContratPage() {
   if (loading) {
     return (
       <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
-        <div className="flex items-center justify-center h-96">
+        <div className="flex items-center justify-center h-64 md:h-96 px-4">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Génération du contrat...</p>
+            <div className="animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-b-2 border-primary mx-auto mb-3 md:mb-4"></div>
+            <p className="text-sm md:text-base text-muted-foreground">Génération du contrat...</p>
           </div>
         </div>
       </DashboardLayout>
@@ -514,66 +514,70 @@ export default function SignerContratPage() {
   if (!contrat) {
     return (
       <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Le contrat est en cours de génération. Veuillez patienter...
-          </AlertDescription>
-        </Alert>
+        <div className="p-3 md:p-6">
+          <Alert variant="destructive">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <AlertDescription className="text-sm">
+              Le contrat est en cours de génération. Veuillez patienter...
+            </AlertDescription>
+          </Alert>
+        </div>
       </DashboardLayout>
     );
   }
 
   return (
     <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
-      <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-5xl">
-        {/* Header */}
-        <div className="flex items-center gap-4">
+      <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6 max-w-5xl">
+        {/* Header - Mobile Optimized */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => navigate(-1)}
+            className="w-fit"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Retour
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold">Signature du contrat</h1>
-            <p className="text-muted-foreground mt-1">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl md:text-3xl font-bold truncate">Signature du contrat</h1>
+            <p className="text-sm md:text-base text-muted-foreground mt-1 truncate">
               Contrat N° {contrat.numero}
             </p>
           </div>
         </div>
 
-        {/* Alert info */}
+        {/* Alert info - Mobile Optimized */}
         <Alert>
-          <FileSignature className="h-4 w-4" />
-          <AlertDescription>
+          <FileSignature className="w-4 h-4 shrink-0" />
+          <AlertDescription className="text-sm">
             Veuillez lire attentivement le contrat avant de le signer. 
             Votre signature engage votre responsabilité.
           </AlertDescription>
         </Alert>
 
-        {/* Contrat */}
+        {/* Contrat - Mobile Optimized */}
         <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Contrat de prestation</CardTitle>
+          <CardHeader className="pb-3 md:pb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <CardTitle className="text-base md:text-lg">Contrat de prestation</CardTitle>
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={handleDownloadPDF}
                 disabled={downloading}
+                className="w-full sm:w-auto"
               >
                 {downloading ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
-                    Génération...
+                    <div className="animate-spin rounded-full h-3 w-3 md:h-4 md:w-4 border-b-2 border-primary mr-2"></div>
+                    <span className="text-xs md:text-sm">Génération...</span>
                   </>
                 ) : (
                   <>
-                    <Download className="w-4 h-4 mr-2" />
-                    Télécharger PDF
+                    <Download className="w-3 h-3 md:w-4 md:h-4 mr-2" />
+                    <span className="text-xs md:text-sm">Télécharger PDF</span>
                   </>
                 )}
               </Button>
@@ -582,37 +586,39 @@ export default function SignerContratPage() {
           <CardContent>
             <div 
               ref={contratRef}
-              className="prose max-w-none p-6 bg-white border rounded-lg"
+              className="prose prose-sm md:prose max-w-none p-3 md:p-6 bg-white border rounded-lg text-xs md:text-sm"
               dangerouslySetInnerHTML={{ __html: contrat.contenu_html }}
             />
           </CardContent>
         </Card>
 
-        {/* Zone de signature */}
+        {/* Zone de signature - Mobile Optimized */}
         <Card className="border-primary">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Pen className="w-5 h-5" />
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+              <Pen className="w-4 h-4 md:w-5 md:h-5" />
               Votre signature
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-white">
+          <CardContent className="space-y-3 md:space-y-4">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-2 md:p-4 bg-white">
               <SignatureCanvas
                 ref={signatureRef}
                 canvasProps={{
-                  className: 'w-full h-48 cursor-crosshair',
+                  className: 'w-full h-32 md:h-48 cursor-crosshair',
                   style: { touchAction: 'none' }
                 }}
                 onEnd={() => setHasSignature(true)}
               />
             </div>
             
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
               <Button
                 variant="outline"
                 onClick={clearSignature}
                 disabled={!hasSignature}
+                size="sm"
+                className="w-full sm:w-auto"
               >
                 Effacer
               </Button>
@@ -620,24 +626,24 @@ export default function SignerContratPage() {
                 onClick={handleSign}
                 disabled={!hasSignature || signing}
                 className="flex-1"
-                size="lg"
+                size="sm"
               >
                 {signing ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Signature en cours...
+                    <div className="animate-spin rounded-full h-3 w-3 md:h-4 md:w-4 border-b-2 border-white mr-2"></div>
+                    <span className="text-xs md:text-sm truncate">Signature en cours...</span>
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
-                    Signer et continuer vers le paiement
+                    <CheckCircle2 className="w-3 h-3 md:w-4 md:h-4 mr-2 shrink-0" />
+                    <span className="text-xs md:text-sm truncate">Signer et continuer vers le paiement</span>
                   </>
                 )}
               </Button>
             </div>
 
             <Alert className="bg-blue-50 border-blue-200">
-              <AlertDescription className="text-blue-900">
+              <AlertDescription className="text-blue-900 text-xs md:text-sm">
                 <strong>Prochaine étape:</strong> Après la signature, vous serez redirigé 
                 vers la page de paiement de l'acompte ({contrat.conditions_paiement?.acompte || 30}%).
               </AlertDescription>

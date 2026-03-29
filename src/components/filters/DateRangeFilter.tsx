@@ -19,27 +19,31 @@ export function DateRangeFilter({
 }: DateRangeFilterProps) {
   return (
     <div className="space-y-2">
-      <Label className="flex items-center gap-2">
-        <Calendar className="w-4 h-4" />
-        {label}
-      </Label>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
+      {label && (
+        <Label className="flex items-center gap-2 text-sm">
+          <Calendar className="w-4 h-4" />
+          {label}
+        </Label>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground sm:hidden">Date de début</label>
           <Input
             type="date"
             value={startDate}
             onChange={(e) => onStartDateChange(e.target.value)}
             placeholder="Du"
-            className="text-sm"
+            className="text-sm h-10"
           />
         </div>
-        <div>
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground sm:hidden">Date de fin</label>
           <Input
             type="date"
             value={endDate}
             onChange={(e) => onEndDateChange(e.target.value)}
             placeholder="Au"
-            className="text-sm"
+            className="text-sm h-10"
           />
         </div>
       </div>

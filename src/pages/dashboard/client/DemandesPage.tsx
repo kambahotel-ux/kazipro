@@ -243,127 +243,146 @@ export default function DemandesPage() {
 
   return (
     <DashboardLayout role="client" userName={clientName} userRole="Client">
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="space-y-4 md:space-y-6 p-3 md:p-0">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div>
-            <h1 className="text-2xl font-display font-bold text-foreground">Mes Demandes</h1>
-            <p className="text-muted-foreground">Gérez vos demandes de service</p>
+            <h1 className="text-xl md:text-2xl font-display font-bold text-foreground">Mes Demandes</h1>
+            <p className="text-sm md:text-base text-muted-foreground">Gérez vos demandes de service</p>
           </div>
           <Link to="/dashboard/client/demandes/nouvelle">
-            <Button>
+            <Button size="sm" className="w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
-              Nouvelle demande
+              <span className="hidden sm:inline">Nouvelle demande</span>
+              <span className="sm:hidden">Nouvelle</span>
             </Button>
           </Link>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Stats - Mobile Optimized */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           {getStats().map((stat) => (
             <StatsCard key={stat.title} {...stat} />
           ))}
         </div>
 
-        {/* Filters Toggle Button */}
-        <div className="flex items-center justify-between">
+        {/* Filters Toggle Button - Mobile Optimized */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <Button
-            variant="outline"
+            variant={showFilters ? "default" : "outline"}
             onClick={() => setShowFilters(!showFilters)}
-            className="gap-2"
+            className={`gap-2 w-full sm:w-auto ${showFilters ? 'bg-primary text-primary-foreground' : ''}`}
+            size="sm"
           >
             <Search className="w-4 h-4" />
-            {showFilters ? 'Masquer les filtres' : 'Afficher les filtres'}
+            <span className="text-sm">{showFilters ? 'Masquer les filtres' : 'Afficher les filtres'}</span>
           </Button>
           
           {hasActiveFilters && !showFilters && (
-            <Badge variant="secondary">
+            <Badge variant="secondary" className="text-xs bg-primary/10 text-primary border-primary/30">
               Filtres actifs: {filteredDemandes.length} résultat(s)
             </Badge>
           )}
         </div>
 
-        {/* Filters */}
+        {/* Filters - Mobile Optimized with proper spacing */}
         {showFilters && (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                <Input 
-                  placeholder="Rechercher une demande..." 
-                  className="pl-10"
-                  value={filters.search}
-                  onChange={(e) => setFilters({...filters, search: e.target.value})}
-                />
+          <Card className="mt-4 border-2 border-primary/20 bg-primary/5 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2 text-primary">
+                <Search className="w-4 h-4" />
+                Filtres de recherche
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-4">
+              {/* Search - Full width on mobile */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Recherche</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                  <Input 
+                    placeholder="Rechercher une demande..." 
+                    className="pl-10 text-sm h-10"
+                    value={filters.search}
+                    onChange={(e) => setFilters({...filters, search: e.target.value})}
+                  />
+                </div>
               </div>
               
-              {/* Service */}
-              <Select value={filters.service} onValueChange={(v) => setFilters({...filters, service: v})}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Service" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les services</SelectItem>
-                  {services.map(service => (
-                    <SelectItem key={service} value={service}>{service}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              
-              {/* Status */}
-              <Select value={filters.status} onValueChange={(v) => setFilters({...filters, status: v})}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous</SelectItem>
-                  <SelectItem value="active">En attente</SelectItem>
-                  <SelectItem value="in_progress">En cours</SelectItem>
-                  <SelectItem value="completed">Terminée</SelectItem>
-                  <SelectItem value="cancelled">Annulée</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+              {/* Filters grid - Stack on mobile */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Service */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Service</label>
+                  <Select value={filters.service} onValueChange={(v) => setFilters({...filters, service: v})}>
+                    <SelectTrigger className="text-sm h-10">
+                      <SelectValue placeholder="Tous les services" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous les services</SelectItem>
+                      {services.map(service => (
+                        <SelectItem key={service} value={service}>{service}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Status */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Statut</label>
+                  <Select value={filters.status} onValueChange={(v) => setFilters({...filters, status: v})}>
+                    <SelectTrigger className="text-sm h-10">
+                      <SelectValue placeholder="Tous les statuts" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous</SelectItem>
+                      <SelectItem value="active">En attente</SelectItem>
+                      <SelectItem value="in_progress">En cours</SelectItem>
+                      <SelectItem value="completed">Terminée</SelectItem>
+                      <SelectItem value="cancelled">Annulée</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             
-            {/* Date Range */}
-            <div className="mb-4">
-              <DateRangeFilter
-                startDate={filters.startDate}
-                endDate={filters.endDate}
-                onStartDateChange={(d) => setFilters({...filters, startDate: d})}
-                onEndDateChange={(d) => setFilters({...filters, endDate: d})}
-                label="Période de création"
-              />
-            </div>
+              {/* Date Range - Full width */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Période de création</label>
+                <DateRangeFilter
+                  startDate={filters.startDate}
+                  endDate={filters.endDate}
+                  onStartDateChange={(d) => setFilters({...filters, startDate: d})}
+                  onEndDateChange={(d) => setFilters({...filters, endDate: d})}
+                  label=""
+                />
+              </div>
             
-            {/* Results bar */}
-            <div className="flex items-center justify-between">
-              <Badge variant="secondary">
-                {filteredDemandes.length} résultat(s)
-              </Badge>
-              
-              {hasActiveFilters && (
-                <Button variant="ghost" size="sm" onClick={resetFilters}>
-                  <X className="w-4 h-4 mr-2" />
-                  Réinitialiser les filtres
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+              {/* Results bar with proper spacing */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 border-t border-primary/20">
+                <Badge variant="secondary" className="text-xs w-fit bg-primary/10 text-primary border-primary/30">
+                  {filteredDemandes.length} résultat(s)
+                </Badge>
+                
+                {hasActiveFilters && (
+                  <Button variant="ghost" size="sm" onClick={resetFilters} className="w-full sm:w-auto text-primary hover:bg-primary/10">
+                    <X className="w-4 h-4 mr-2" />
+                    <span className="text-sm">Réinitialiser les filtres</span>
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader className="w-6 h-6 animate-spin text-primary" />
+          <div className="flex items-center justify-center py-8 md:py-12">
+            <Loader className="w-5 h-5 md:w-6 md:h-6 animate-spin text-primary" />
           </div>
         ) : demandes.length === 0 ? (
           <Card>
-            <CardContent className="p-12 text-center">
-              <p className="text-muted-foreground mb-4">Aucune demande trouvée</p>
+            <CardContent className="p-6 md:p-12 text-center">
+              <p className="text-sm md:text-base text-muted-foreground mb-4">Aucune demande trouvée</p>
               <Link to="/dashboard/client/demandes/nouvelle">
-                <Button>
+                <Button size="sm">
                   <Plus className="w-4 h-4 mr-2" />
                   Créer une demande
                 </Button>
@@ -371,37 +390,65 @@ export default function DemandesPage() {
             </CardContent>
           </Card>
         ) : (
-          <Tabs defaultValue="active" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="active">En attente ({demandes.filter(d => d.status === "active").length})</TabsTrigger>
-              <TabsTrigger value="in_progress">En cours ({demandes.filter(d => d.status === "in_progress").length})</TabsTrigger>
-              <TabsTrigger value="devis-acceptes">Devis acceptés ({devisAcceptes.length})</TabsTrigger>
-              <TabsTrigger value="completed">Terminées ({demandes.filter(d => d.status === "completed").length})</TabsTrigger>
-              <TabsTrigger value="cancelled">Annulées ({demandes.filter(d => d.status === "cancelled").length})</TabsTrigger>
+          <div className="space-y-4">
+            {/* Separator line between filters and results */}
+            {showFilters && (
+              <div className="border-t border-border/50 pt-2">
+                <p className="text-sm text-muted-foreground text-center">Résultats de la recherche</p>
+              </div>
+            )}
+            
+            <Tabs defaultValue="active" className="space-y-3 md:space-y-4">
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 text-xs md:text-sm h-auto">
+              <TabsTrigger value="active" className="text-xs md:text-sm px-1 py-2 leading-tight">
+                <span className="hidden sm:inline">En attente</span>
+                <span className="sm:hidden">Attente</span>
+                <span className="ml-1">({demandes.filter(d => d.status === "active").length})</span>
+              </TabsTrigger>
+              <TabsTrigger value="in_progress" className="text-xs md:text-sm px-1 py-2 leading-tight">
+                <span className="hidden sm:inline">En cours</span>
+                <span className="sm:hidden">Cours</span>
+                <span className="ml-1">({demandes.filter(d => d.status === "in_progress").length})</span>
+              </TabsTrigger>
+              <TabsTrigger value="devis-acceptes" className="text-xs md:text-sm px-1 py-2 leading-tight">
+                <span className="hidden sm:inline">Devis acceptés</span>
+                <span className="sm:hidden">Acceptés</span>
+                <span className="ml-1">({devisAcceptes.length})</span>
+              </TabsTrigger>
+              <TabsTrigger value="completed" className="text-xs md:text-sm px-1 py-2 leading-tight">
+                <span className="hidden sm:inline">Terminées</span>
+                <span className="sm:hidden">Fini</span>
+                <span className="ml-1">({demandes.filter(d => d.status === "completed").length})</span>
+              </TabsTrigger>
+              <TabsTrigger value="cancelled" className="text-xs md:text-sm px-1 py-2 leading-tight">
+                <span className="hidden sm:inline">Annulées</span>
+                <span className="sm:hidden">Annul</span>
+                <span className="ml-1">({demandes.filter(d => d.status === "cancelled").length})</span>
+              </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="active" className="space-y-4">
+            <TabsContent value="active" className="space-y-3 md:space-y-4">
               {filteredDemandes.filter(d => d.status === "active").map((demande) => (
                 <Card key={demande.id}>
-                  <CardContent className="p-6">
-                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                      <div className="space-y-3 flex-1">
-                        <div className="flex items-start gap-2 flex-wrap">
-                          <h3 className="font-semibold text-lg">{demande.title}</h3>
-                          <Badge variant="secondary">En attente</Badge>
+                  <CardContent className="p-4 md:p-6">
+                    <div className="flex flex-col gap-3 md:gap-4">
+                      <div className="space-y-2 md:space-y-3 flex-1">
+                        <div className="flex flex-col sm:flex-row sm:items-start gap-2 flex-wrap">
+                          <h3 className="font-semibold text-sm md:text-base flex-1 min-w-0 break-words line-clamp-2">{demande.title}</h3>
+                          <Badge variant="secondary" className="text-xs w-fit shrink-0">En attente</Badge>
                         </div>
-                        <p className="text-muted-foreground text-sm">{demande.description}</p>
-                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <MapPin className="w-4 h-4" />
-                            {demande.location}
+                        <p className="text-muted-foreground text-xs md:text-sm line-clamp-2 break-words">{demande.description}</p>
+                        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 md:gap-4 text-xs md:text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1 min-w-0">
+                            <MapPin className="w-3 h-3 md:w-4 md:h-4 shrink-0" />
+                            <span className="truncate">{demande.location}</span>
                           </span>
-                          <span className="flex items-center gap-1">
-                            <DollarSign className="w-4 h-4" />
-                            {demande.budget_min.toLocaleString()} - {demande.budget_max.toLocaleString()} FC
+                          <span className="flex items-center gap-1 min-w-0">
+                            <DollarSign className="w-3 h-3 md:w-4 md:h-4 shrink-0" />
+                            <span className="truncate">{demande.budget_min.toLocaleString()} - {demande.budget_max.toLocaleString()} FC</span>
                           </span>
                         </div>
-                        <div className="flex gap-4 text-sm">
+                        <div className="flex flex-wrap gap-3 md:gap-4 text-xs md:text-sm">
                           <span className="text-muted-foreground">{demande.devis_count || 0} réponses</span>
                           <span className="text-muted-foreground">{new Date(demande.created_at).toLocaleDateString()}</span>
                         </div>
@@ -410,9 +457,11 @@ export default function DemandesPage() {
                         <Button 
                           variant="outline"
                           onClick={() => navigate(`/dashboard/client/demandes/${demande.id}`)}
+                          size="sm"
+                          className="w-full sm:w-auto"
                         >
-                          <Eye className="w-4 h-4 mr-1" />
-                          Voir détails
+                          <Eye className="w-3 h-3 md:w-4 md:h-4 mr-1" />
+                          <span className="text-xs md:text-sm">Voir détails</span>
                         </Button>
                       </div>
                     </div>
@@ -428,10 +477,10 @@ export default function DemandesPage() {
                     <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                       <div className="space-y-3 flex-1">
                         <div className="flex items-start gap-2 flex-wrap">
-                          <h3 className="font-semibold text-lg">{demande.title}</h3>
-                          <Badge variant="default">En cours</Badge>
+                          <h3 className="font-semibold text-sm md:text-base flex-1 min-w-0 break-words line-clamp-2">{demande.title}</h3>
+                          <Badge variant="default" className="shrink-0">En cours</Badge>
                         </div>
-                        <p className="text-muted-foreground text-sm">{demande.description}</p>
+                        <p className="text-muted-foreground text-xs md:text-sm break-words line-clamp-2">{demande.description}</p>
                         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <MapPin className="w-4 h-4" />
@@ -480,8 +529,8 @@ export default function DemandesPage() {
                       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                         <div className="space-y-3 flex-1">
                           <div className="flex items-start gap-2 flex-wrap">
-                            <h3 className="font-semibold text-lg">{devis.titre || 'Sans titre'}</h3>
-                            <Badge className="bg-green-600">
+                            <h3 className="font-semibold text-sm md:text-base flex-1 min-w-0 break-words line-clamp-2">{devis.titre || 'Sans titre'}</h3>
+                            <Badge className="bg-green-600 shrink-0">
                               <CheckCircle className="w-3 h-3 mr-1" />
                               Accepté
                             </Badge>
@@ -547,10 +596,10 @@ export default function DemandesPage() {
                     <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                       <div className="space-y-3 flex-1">
                         <div className="flex items-start gap-2 flex-wrap">
-                          <h3 className="font-semibold text-lg">{demande.title}</h3>
-                          <Badge variant="outline">Terminée</Badge>
+                          <h3 className="font-semibold text-sm md:text-base flex-1 min-w-0 break-words line-clamp-2">{demande.title}</h3>
+                          <Badge variant="outline" className="shrink-0">Terminée</Badge>
                         </div>
-                        <p className="text-muted-foreground text-sm">{demande.description}</p>
+                        <p className="text-muted-foreground text-xs md:text-sm break-words line-clamp-2">{demande.description}</p>
                         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <MapPin className="w-4 h-4" />
@@ -579,10 +628,10 @@ export default function DemandesPage() {
                     <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                       <div className="space-y-3 flex-1">
                         <div className="flex items-start gap-2 flex-wrap">
-                          <h3 className="font-semibold text-lg">{demande.title}</h3>
-                          <Badge variant="default">Annulée</Badge>
+                          <h3 className="font-semibold text-sm md:text-base flex-1 min-w-0 break-words line-clamp-2">{demande.title}</h3>
+                          <Badge variant="default" className="shrink-0">Annulée</Badge>
                         </div>
-                        <p className="text-muted-foreground text-sm">{demande.description}</p>
+                        <p className="text-muted-foreground text-xs md:text-sm break-words line-clamp-2">{demande.description}</p>
                         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <MapPin className="w-4 h-4" />
@@ -604,6 +653,7 @@ export default function DemandesPage() {
               ))}
             </TabsContent>
           </Tabs>
+          </div>
         )}
 
         {/* Details Modal */}

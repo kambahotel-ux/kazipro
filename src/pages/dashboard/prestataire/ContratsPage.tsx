@@ -225,30 +225,51 @@ export default function ContratsPage() {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold">Mes Contrats</h1>
-          <p className="text-muted-foreground">Gérez vos contrats et suivez leur statut</p>
+          <h1 className="text-xl sm:text-2xl font-bold">Mes Contrats</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Gérez vos contrats et suivez leur statut</p>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Stats - Mobile: Single card with horizontal layout, Desktop: Separate cards */}
+        <div className="block sm:hidden">
+          <Card>
+            <CardContent className="p-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center">
+                  <p className="text-lg font-bold">{getStats()[0].value}</p>
+                  <p className="text-xs text-muted-foreground">{getStats()[0].title}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold">{getStats()[1].value}</p>
+                  <p className="text-xs text-muted-foreground">{getStats()[1].title}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold">{getStats()[2].value}</p>
+                  <p className="text-xs text-muted-foreground">{getStats()[2].title}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
+        <div className="hidden sm:grid sm:grid-cols-1 md:grid-cols-3 gap-4">
           {getStats().map((stat) => (
             <StatsCard key={stat.title} {...stat} />
           ))}
         </div>
 
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
             <Input 
               placeholder="Rechercher un contrat..." 
-              className="pl-10"
+              className="pl-10 text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px] text-sm">
               <SelectValue placeholder="Statut" />
             </SelectTrigger>
             <SelectContent>

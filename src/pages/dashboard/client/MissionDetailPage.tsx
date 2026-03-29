@@ -130,7 +130,7 @@ export default function MissionDetailPage() {
   };
 
   const handleValidateMission = async () => {
-    if (!confirm('Êtes-vous sûr de vouloir valider les travaux ? Cela déclenchera le paiement du solde.')) {
+    if (!confirm('Êtes-vous sûr de vouloir valider les travaux ? Cela vous dirigera vers le paiement du solde.')) {
       return;
     }
 
@@ -139,13 +139,13 @@ export default function MissionDetailPage() {
         .from('missions')
         .update({
           status: 'en_validation',
-          validation_requested_at: new Date().toISOString()
+          date_validation_demandee: new Date().toISOString()
         })
         .eq('id', missionId);
 
       if (error) throw error;
 
-      toast.success('Demande de validation envoyée');
+      toast.success('Travaux validés! Redirection vers le paiement du solde...');
       
       // Rediriger vers le paiement du solde
       navigate(`/dashboard/client/paiement/${mission.contrat_id}/solde`);
@@ -280,7 +280,7 @@ export default function MissionDetailPage() {
                   <Alert>
                     <CheckCircle2 className="h-4 w-4" />
                     <AlertDescription>
-                      Le prestataire a terminé les travaux. Vous pouvez maintenant les valider.
+                      Le prestataire a terminé les travaux. Vous pouvez maintenant les valider et payer le solde.
                     </AlertDescription>
                   </Alert>
                 )}

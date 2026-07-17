@@ -4,62 +4,44 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Wrench, Clock, CheckCircle, LogOut, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import {
+  displayNameFromProfil,
+  getProfil,
+  isPrestataireValidated,
+  professionLabelFromProfil,
+} from "@/lib/kazipro-profile";
+import type { ProfilRecord } from "@/lib/kazipro-profile";
 
 export default function ProviderPending() {
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
-  const [providerData, setProviderData] = useState<any>(null);
+  const { user, signOut, refreshUser } = useAuth();
+  const [providerData, setProviderData] = useState<ProfilRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkingStatus, setCheckingStatus] = useState(false);
 
   useEffect(() => {
     if (user) {
-      fetchProviderInfo();
-    }
-  }, [user]);
-
-  const fetchProviderInfo = async () => {
-    if (!user) return;
-    
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("prestataires")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle(); // Utilise maybeSingle() au lieu de single()
-
-      if (error) throw error;
-
-      if (!data) {
-        // Pas de profil prestataire trouvé
-        toast.error("Profil prestataire introuvable. Veuillez vous réinscrire.");
-        navigate("/inscription/prestataire");
-        return;
-      }
-
-      setProviderData(data);
-      // Si le prestataire est vérifié, rediriger vers le dashboard
-      if (data.verified) {
+      const profil = getProfil(user);
+      setProviderData(profil);
+      if (isPrestataireValidated(profil)) {
         toast.success("Votre compte a été approuvé!");
         navigate("/dashboard/prestataire");
       }
-    } catch (error: any) {
-      console.error("Erreur:", error);
-      toast.error("Erreur lors de la récupération des informations");
-    } finally {
       setLoading(false);
     }
-  };
+  }, [user, navigate]);
 
   const handleCheckStatus = async () => {
     try {
       setCheckingStatus(true);
-      await fetchProviderInfo();
-      
-      if (providerData && !providerData.verified) {
+      const refreshed = await refreshUser();
+      const profil = getProfil(refreshed);
+      setProviderData(profil);
+      if (isPrestataireValidated(profil)) {
+        toast.success("Votre compte a été approuvé!");
+        navigate("/dashboard/prestataire");
+      } else {
         toast.info("Votre compte est toujours en attente d'approbation");
       }
     } finally {
@@ -71,7 +53,7 @@ export default function ProviderPending() {
     try {
       await signOut();
       navigate("/connexion");
-    } catch (error) {
+    } catch {
       toast.error("Erreur lors de la déconnexion");
     }
   };
@@ -104,9 +86,11 @@ export default function ProviderPending() {
           {providerData && (
             <div className="bg-muted/50 p-4 rounded-lg space-y-2">
               <p className="text-sm text-muted-foreground">Nom du prestataire</p>
-              <p className="font-semibold text-lg">{providerData.full_name}</p>
+              <p className="font-semibold text-lg">{displayNameFromProfil(providerData)}</p>
               <p className="text-sm text-muted-foreground">{user?.email}</p>
-              <p className="text-sm text-muted-foreground">Profession: {providerData.profession}</p>
+              <p className="text-sm text-muted-foreground">
+                Profession: {professionLabelFromProfil(providerData) || "—"}
+              </p>
             </div>
           )}
 
@@ -132,11 +116,7 @@ export default function ProviderPending() {
           </div>
 
           <div className="space-y-3">
-            <Button
-              onClick={handleCheckStatus}
-              disabled={checkingStatus}
-              className="w-full"
-            >
+            <Button onClick={handleCheckStatus} disabled={checkingStatus} className="w-full">
               {checkingStatus ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -146,11 +126,7 @@ export default function ProviderPending() {
                 "Vérifier le statut"
               )}
             </Button>
-            <Button
-              onClick={handleLogout}
-              variant="outline"
-              className="w-full"
-            >
+            <Button onClick={handleLogout} variant="outline" className="w-full">
               <LogOut className="w-4 h-4 mr-2" />
               Se déconnecter
             </Button>

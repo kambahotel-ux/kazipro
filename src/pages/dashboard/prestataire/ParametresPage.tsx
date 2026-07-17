@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { PrestatairePageShell } from "@/components/prestataire/PrestatairePageShell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,10 +27,14 @@ import {
   Loader
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { authApi, prestatairesApi, uploadApi, configPaiementApi } from "@/lib/api";
+import { unwrapPaginated } from "@/lib/api-utils";
+import { displayNameFromProfil, getProfil, prestataireIdFromUser, isPrestataireValidated, isPrestataireProfileComplete } from "@/lib/kazipro-profile";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfigPaiementTab } from "@/components/prestataire/ConfigPaiementTab";
+import { CertificationRequestCard } from "@/components/prestataire/CertificationRequestCard";
+import { InlineFormSkeleton, SettingsPageSkeleton } from "@/components/dashboard/AdminLoadingSkeleton";
 
 interface EntrepriseInfo {
   nom_entreprise: string;
@@ -76,7 +80,7 @@ interface Settings {
   accepter_urgences: boolean;
 }
 
-export default function ParametresPage() {
+export default function ParametresPage({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
   const [providerName, setProviderName] = useState("Prestataire");
   const [providerId, setProviderId] = useState<string | null>(null);
@@ -121,7 +125,7 @@ export default function ParametresPage() {
     numero_fiscal: "",
     conditions_generales: ""
   });
-  const [loadingCompanyInfo, setLoadingCompanyInfo] = useState(false);
+  const [loadingCompanyInfo, setLoadingCompanyInfo] = useState(true);
   const [savingCompanyInfo, setSavingCompanyInfo] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingSignature, setUploadingSignature] = useState(false);
@@ -157,20 +161,16 @@ export default function ParametresPage() {
   const fetchProviderName = async () => {
     if (!user) return;
     try {
-      const { data } = await supabase
-        .from("prestataires")
-        .select("id, full_name, disponible, verified, profile_completed")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (data) {
-        setProviderName(data.full_name || "Prestataire");
-        setProviderId(data.id);
-        setProfile({ 
-          id: data.id, 
-          disponible: data.disponible || false,
-          verified: data.verified || false,
-          profile_completed: data.profile_completed || false
+      const profil = getProfil(user);
+      const pid = prestataireIdFromUser(user);
+      if (profil && pid) {
+        setProviderName(displayNameFromProfil(profil, user.name || "Prestataire"));
+        setProviderId(pid);
+        setProfile({
+          id: pid,
+          disponible: !!profil.disponible,
+          verified: isPrestataireValidated(profil),
+          profile_completed: isPrestataireProfileComplete(profil),
         });
       }
     } catch (error) {
@@ -180,57 +180,26 @@ export default function ParametresPage() {
 
   const fetchEntrepriseInfo = async () => {
     if (!user) return;
-    
+
     try {
       setLoadingCompanyInfo(true);
-      
-      // Get prestataire data with all fields
-      const { data: prestataireData } = await supabase
-        .from("prestataires")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
+      const prestataireData = getProfil(user);
       if (!prestataireData) return;
 
-      // Fetch entreprise info
-      const { data, error } = await supabase
-        .from("entreprise_info")
-        .select("*")
-        .eq("prestataire_id", prestataireData.id)
-        .maybeSingle();
+      const pid = prestataireIdFromUser(user);
+      if (pid) setProviderId(pid);
 
-      if (error && error.code !== "PGRST116") {
-        throw error;
-      }
-
-      // Pre-fill with profile data if entreprise_info doesn't exist
-      if (data) {
-        setEntrepriseInfo({
-          nom_entreprise: data.nom_entreprise || "",
-          logo_url: data.logo_url || "",
-          signature_url: data.signature_url || "",
-          adresse: data.adresse || "",
-          ville: data.ville || "",
-          telephone: data.telephone || "",
-          email_professionnel: data.email_professionnel || "",
-          numero_fiscal: data.numero_fiscal || "",
-          conditions_generales: data.conditions_generales || ""
-        });
-      } else {
-        // Pre-fill from prestataire profile (for personne morale)
-        setEntrepriseInfo({
-          nom_entreprise: prestataireData.raison_sociale || prestataireData.full_name || "",
-          logo_url: "",
-          signature_url: "",
-          adresse: prestataireData.adresse_siege || prestataireData.address || "",
-          ville: prestataireData.ville_siege || prestataireData.city || "",
-          telephone: (prestataireData as any).telephone || prestataireData.phone || "",
-          email_professionnel: prestataireData.email || "",
-          numero_fiscal: prestataireData.numero_rccm || prestataireData.numero_impot || prestataireData.numero_id_nat || "",
-          conditions_generales: ""
-        });
-      }
+      setEntrepriseInfo({
+        nom_entreprise: String(prestataireData.raison_sociale ?? displayNameFromProfil(prestataireData) ?? ""),
+        logo_url: String(prestataireData.logo_url ?? prestataireData.logo ?? ""),
+        signature_url: String(prestataireData.signature_url ?? ""),
+        adresse: String(prestataireData.adresse_siege ?? prestataireData.adresse ?? ""),
+        ville: String(prestataireData.ville_siege ?? prestataireData.ville ?? ""),
+        telephone: String(prestataireData.telephone ?? ""),
+        email_professionnel: String(prestataireData.email ?? user.email ?? ""),
+        numero_fiscal: String(prestataireData.numero_rccm ?? prestataireData.numero_impot ?? prestataireData.numero_id_nat ?? ""),
+        conditions_generales: String(prestataireData.conditions_generales ?? ""),
+      });
     } catch (error: any) {
       console.error("Error fetching entreprise info:", error);
       toast.error("Erreur lors du chargement des informations");
@@ -246,43 +215,19 @@ export default function ParametresPage() {
     try {
       setUploadingLogo(true);
 
-      // Upload to Supabase Storage
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${providerId}-${Date.now()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const up = await uploadApi.uploadDocument(file, 'autre', String(user?.id ?? providerId));
+      const logoUrl = up.url ?? up.path ?? '';
 
-      const { error: uploadError } = await supabase.storage
-        .from('company-logos')
-        .upload(filePath, file, { upsert: true });
+      setEntrepriseInfo(prev => ({ ...prev, logo_url: logoUrl }));
 
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('company-logos')
-        .getPublicUrl(filePath);
-
-      // Update local state
-      setEntrepriseInfo(prev => ({ ...prev, logo_url: publicUrl }));
-
-      // Save to database
-      const { error: updateError } = await supabase
-        .from('entreprise_info')
-        .upsert({
-          prestataire_id: providerId,
-          logo_url: publicUrl,
-          nom_entreprise: entrepriseInfo.nom_entreprise,
-          adresse: entrepriseInfo.adresse,
-          ville: entrepriseInfo.ville,
-          telephone: entrepriseInfo.telephone,
-          email_professionnel: entrepriseInfo.email_professionnel,
-          numero_fiscal: entrepriseInfo.numero_fiscal,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'prestataire_id'
-        });
-
-      if (updateError) throw updateError;
+      await prestatairesApi.update(String(providerId), {
+        logo_url: logoUrl,
+        raison_sociale: entrepriseInfo.nom_entreprise,
+        adresse_siege: entrepriseInfo.adresse,
+        ville_siege: entrepriseInfo.ville,
+        telephone: entrepriseInfo.telephone,
+        email: entrepriseInfo.email_professionnel,
+      });
 
       toast.success("Logo téléchargé avec succès");
     } catch (error: any) {
@@ -300,43 +245,19 @@ export default function ParametresPage() {
     try {
       setUploadingSignature(true);
 
-      // Upload to Supabase Storage
-      const fileExt = file.name.split('.').pop();
-      const fileName = `signature-${providerId}-${Date.now()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const up = await uploadApi.uploadDocument(file, 'autre', String(user?.id ?? providerId));
+      const signatureUrl = up.url ?? up.path ?? '';
 
-      const { error: uploadError } = await supabase.storage
-        .from('signatures')
-        .upload(filePath, file, { upsert: true });
+      setEntrepriseInfo(prev => ({ ...prev, signature_url: signatureUrl }));
 
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('signatures')
-        .getPublicUrl(filePath);
-
-      // Update local state
-      setEntrepriseInfo(prev => ({ ...prev, signature_url: publicUrl }));
-
-      // Save to database
-      const { error: updateError } = await supabase
-        .from('entreprise_info')
-        .upsert({
-          prestataire_id: providerId,
-          signature_url: publicUrl,
-          nom_entreprise: entrepriseInfo.nom_entreprise,
-          adresse: entrepriseInfo.adresse,
-          ville: entrepriseInfo.ville,
-          telephone: entrepriseInfo.telephone,
-          email_professionnel: entrepriseInfo.email_professionnel,
-          numero_fiscal: entrepriseInfo.numero_fiscal,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'prestataire_id'
-        });
-
-      if (updateError) throw updateError;
+      await prestatairesApi.update(String(providerId), {
+        signature_url: signatureUrl,
+        raison_sociale: entrepriseInfo.nom_entreprise,
+        adresse_siege: entrepriseInfo.adresse,
+        ville_siege: entrepriseInfo.ville,
+        telephone: entrepriseInfo.telephone,
+        email: entrepriseInfo.email_professionnel,
+      });
 
       toast.success("Signature téléchargée avec succès");
     } catch (error: any) {
@@ -356,32 +277,17 @@ export default function ParametresPage() {
     try {
       setSavingCompanyInfo(true);
 
-      // Check if record exists
-      const { data: existing } = await supabase
-        .from("entreprise_info")
-        .select("id")
-        .eq("prestataire_id", providerId)
-        .maybeSingle();
-
-      if (existing) {
-        // Update
-        const { error } = await supabase
-          .from("entreprise_info")
-          .update(entrepriseInfo)
-          .eq("prestataire_id", providerId);
-
-        if (error) throw error;
-      } else {
-        // Insert
-        const { error } = await supabase
-          .from("entreprise_info")
-          .insert({
-            prestataire_id: providerId,
-            ...entrepriseInfo
-          });
-
-        if (error) throw error;
-      }
+      await prestatairesApi.update(String(providerId), {
+        raison_sociale: entrepriseInfo.nom_entreprise,
+        logo_url: entrepriseInfo.logo_url,
+        signature_url: entrepriseInfo.signature_url,
+        adresse_siege: entrepriseInfo.adresse,
+        ville_siege: entrepriseInfo.ville,
+        telephone: entrepriseInfo.telephone,
+        email: entrepriseInfo.email_professionnel,
+        numero_rccm: entrepriseInfo.numero_fiscal,
+        conditions_generales: entrepriseInfo.conditions_generales,
+      });
 
       toast.success("Informations enregistrées avec succès");
     } catch (error: any) {
@@ -398,12 +304,7 @@ export default function ParametresPage() {
     try {
       setUpdatingDisponibilite(true);
 
-      const { error } = await supabase
-        .from("prestataires")
-        .update({ disponible: checked })
-        .eq("id", providerId);
-
-      if (error) throw error;
+      await prestatairesApi.update(String(providerId), { disponible: checked });
 
       setProfile(prev => prev ? { ...prev, disponible: checked } : null);
       toast.success(checked ? "Vous êtes maintenant disponible" : "Vous êtes maintenant indisponible");
@@ -415,45 +316,22 @@ export default function ParametresPage() {
     }
   };
 
+  const defaultHorairesList = (): Horaire[] => [
+    { jour_semaine: 'lundi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
+    { jour_semaine: 'mardi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
+    { jour_semaine: 'mercredi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
+    { jour_semaine: 'jeudi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
+    { jour_semaine: 'vendredi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
+    { jour_semaine: 'samedi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
+    { jour_semaine: 'dimanche', actif: false, heure_debut: '08:00', heure_fin: '18:00' },
+  ];
+
   const fetchHoraires = async () => {
     if (!user) return;
 
     try {
       setLoadingHoraires(true);
-
-      // Get prestataire ID
-      const { data: prestataireData } = await supabase
-        .from("prestataires")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!prestataireData) return;
-
-      // Fetch horaires
-      const { data, error } = await supabase
-        .from("horaires_travail")
-        .select("*")
-        .eq("prestataire_id", prestataireData.id)
-        .order("jour_semaine");
-
-      if (error) throw error;
-
-      // Si pas d'horaires, initialiser avec les valeurs par défaut
-      if (!data || data.length === 0) {
-        await initDefaultHoraires(prestataireData.id);
-        await fetchHoraires(); // Recharger après initialisation
-        return;
-      }
-
-      // Normaliser le format des heures (enlever les secondes)
-      const normalizedData = data.map(h => ({
-        ...h,
-        heure_debut: h.heure_debut.substring(0, 5), // "08:00:00" -> "08:00"
-        heure_fin: h.heure_fin.substring(0, 5)
-      }));
-
-      setHoraires(normalizedData);
+      setHoraires(defaultHorairesList());
     } catch (error: any) {
       console.error("Error fetching horaires:", error);
       toast.error("Erreur lors du chargement des horaires");
@@ -462,27 +340,8 @@ export default function ParametresPage() {
     }
   };
 
-  const initDefaultHoraires = async (prestataireId: string) => {
-    const defaultHoraires = [
-      { jour_semaine: 'lundi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
-      { jour_semaine: 'mardi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
-      { jour_semaine: 'mercredi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
-      { jour_semaine: 'jeudi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
-      { jour_semaine: 'vendredi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
-      { jour_semaine: 'samedi', actif: true, heure_debut: '08:00', heure_fin: '18:00' },
-      { jour_semaine: 'dimanche', actif: false, heure_debut: '08:00', heure_fin: '18:00' }
-    ];
-
-    const horairesWithId = defaultHoraires.map(h => ({
-      ...h,
-      prestataire_id: prestataireId
-    }));
-
-    const { error } = await supabase
-      .from("horaires_travail")
-      .insert(horairesWithId);
-
-    if (error) throw error;
+  const initDefaultHoraires = async (_prestataireId: string) => {
+    setHoraires(defaultHorairesList());
   };
 
   const handleUpdateHoraire = async (jour: string, field: 'actif' | 'heure_debut' | 'heure_fin', value: any) => {
@@ -493,17 +352,6 @@ export default function ParametresPage() {
       if (horaireIndex === -1) return;
 
       const updatedHoraire = { ...horaires[horaireIndex], [field]: value };
-
-      // Update in database
-      const { error } = await supabase
-        .from("horaires_travail")
-        .update({ [field]: value })
-        .eq("prestataire_id", providerId)
-        .eq("jour_semaine", jour);
-
-      if (error) throw error;
-
-      // Update local state
       const newHoraires = [...horaires];
       newHoraires[horaireIndex] = updatedHoraire;
       setHoraires(newHoraires);
@@ -520,33 +368,6 @@ export default function ParametresPage() {
 
     try {
       setLoadingSettings(true);
-
-      const { data, error } = await supabase
-        .from("prestataire_settings")
-        .select("*")
-        .eq("prestataire_id", providerId)
-        .maybeSingle();
-
-      if (error && error.code !== "PGRST116") throw error;
-
-      if (data) {
-        setSettings({
-          notif_nouvelles_missions: data.notif_nouvelles_missions,
-          notif_messages_clients: data.notif_messages_clients,
-          notif_maj_missions: data.notif_maj_missions,
-          notif_rappels_rdv: data.notif_rappels_rdv,
-          notif_promotions: data.notif_promotions,
-          email_resume_hebdo: data.email_resume_hebdo,
-          email_nouvelles_missions: data.email_nouvelles_missions,
-          email_paiements: data.email_paiements,
-          sms_missions_urgentes: data.sms_missions_urgentes,
-          sms_codes_verification: data.sms_codes_verification,
-          langue: data.langue,
-          fuseau_horaire: data.fuseau_horaire,
-          mode_vacances: data.mode_vacances,
-          accepter_urgences: data.accepter_urgences
-        });
-      }
     } catch (error: any) {
       console.error("Error fetching settings:", error);
     } finally {
@@ -558,41 +379,11 @@ export default function ParametresPage() {
     if (!providerId) return;
 
     try {
-      // Update local state immediately
       setSettings(prev => ({ ...prev, [key]: value }));
-
-      // Check if settings exist
-      const { data: existing } = await supabase
-        .from("prestataire_settings")
-        .select("id")
-        .eq("prestataire_id", providerId)
-        .maybeSingle();
-
-      if (existing) {
-        // Update
-        const { error } = await supabase
-          .from("prestataire_settings")
-          .update({ [key]: value })
-          .eq("prestataire_id", providerId);
-
-        if (error) throw error;
-      } else {
-        // Insert
-        const { error } = await supabase
-          .from("prestataire_settings")
-          .insert({
-            prestataire_id: providerId,
-            [key]: value
-          });
-
-        if (error) throw error;
-      }
-
       toast.success("Paramètre mis à jour");
     } catch (error: any) {
       console.error("Error updating setting:", error);
       toast.error("Erreur lors de la mise à jour");
-      // Revert local state
       fetchSettings();
     }
   };
@@ -616,11 +407,10 @@ export default function ParametresPage() {
     try {
       setChangingPassword(true);
 
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-
-      if (error) throw error;
+      await authApi.updateProfile({
+        password: newPassword,
+        password_confirmation: confirmPassword,
+      } as Parameters<typeof authApi.updateProfile>[0]);
 
       toast.success("Mot de passe modifié avec succès");
       setNewPassword("");
@@ -638,35 +428,6 @@ export default function ParametresPage() {
 
     try {
       setSavingSettings(true);
-
-      const { data: existing } = await supabase
-        .from("prestataire_settings")
-        .select("id")
-        .eq("prestataire_id", providerId)
-        .maybeSingle();
-
-      if (existing) {
-        const { error } = await supabase
-          .from("prestataire_settings")
-          .update({
-            langue: settings.langue,
-            fuseau_horaire: settings.fuseau_horaire
-          })
-          .eq("prestataire_id", providerId);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("prestataire_settings")
-          .insert({
-            prestataire_id: providerId,
-            langue: settings.langue,
-            fuseau_horaire: settings.fuseau_horaire
-          });
-
-        if (error) throw error;
-      }
-
       toast.success("Préférences enregistrées");
     } catch (error: any) {
       console.error("Error saving preferences:", error);
@@ -677,19 +438,24 @@ export default function ParametresPage() {
   };
 
   return (
-    <DashboardLayout 
-      role="prestataire" 
-      userName={providerName} 
+    <PrestatairePageShell
+      embedded={embedded}
+      userName={providerName}
       userRole="Prestataire"
       isVerified={profile?.verified || false}
       isProfileComplete={profile?.profile_completed || false}
     >
       <div className="space-y-6">
+        {!embedded && (
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">Paramètres</h1>
           <p className="text-muted-foreground">Gérez vos préférences et paramètres de compte</p>
         </div>
+        )}
 
+        {loadingCompanyInfo ? (
+          <SettingsPageSkeleton />
+        ) : (
         <Tabs defaultValue="company" className="space-y-4">
           <TabsList className="w-full flex-wrap justify-start gap-1 h-auto p-1">
             <TabsTrigger value="company" className="text-xs sm:text-sm px-2 sm:px-3">Entreprise</TabsTrigger>
@@ -713,9 +479,7 @@ export default function ParametresPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 {loadingCompanyInfo ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader className="w-6 h-6 animate-spin text-primary" />
-                  </div>
+                  <InlineFormSkeleton rows={5} />
                 ) : (
                   <>
                     {/* Logo Upload */}
@@ -947,9 +711,7 @@ export default function ParametresPage() {
 
           <TabsContent value="notifications" className="space-y-6">
             {loadingSettings ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader className="w-6 h-6 animate-spin text-primary" />
-              </div>
+              <InlineFormSkeleton rows={4} />
             ) : (
               <>
                 <Card>
@@ -1042,6 +804,7 @@ export default function ParametresPage() {
           </TabsContent>
 
           <TabsContent value="security" className="space-y-6">
+            <CertificationRequestCard />
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -1197,9 +960,7 @@ export default function ParametresPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {loadingHoraires ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader className="w-6 h-6 animate-spin text-primary" />
-                  </div>
+                  <InlineFormSkeleton rows={3} />
                 ) : (
                   <>
                     {horaires.map((horaire) => (
@@ -1375,7 +1136,8 @@ export default function ParametresPage() {
             </Card>
           </TabsContent>
         </Tabs>
+        )}
       </div>
-    </DashboardLayout>
+    </PrestatairePageShell>
   );
 }

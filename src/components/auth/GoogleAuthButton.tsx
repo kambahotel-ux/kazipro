@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
 interface GoogleAuthButtonProps {
@@ -11,32 +10,29 @@ interface GoogleAuthButtonProps {
 const GoogleAuthButton = ({ mode, className = "" }: GoogleAuthButtonProps) => {
   const [loading, setLoading] = useState(false);
 
-  const getRedirectUrl = () => {
-    const baseUrl = window.location.origin;
-    return `${baseUrl}/auth/callback?mode=${mode}`;
+  const getGoogleRedirectUrl = () => {
+    const apiBase = import.meta.env.VITE_API_URL || "/api";
+    const params = new URLSearchParams();
+
+    if (mode === "signup-client") {
+      params.set("role", "client");
+    } else if (mode === "signup-provider") {
+      params.set("role", "prestataire");
+    }
+
+    const query = params.toString();
+    return `${apiBase}/auth/google/redirect${query ? `?${query}` : ""}`;
   };
 
-  const handleGoogleAuth = async () => {
+  const handleGoogleAuth = () => {
     try {
       setLoading(true);
-      
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: getRedirectUrl(),
-          queryParams: {
-            access_type: "offline",
-            prompt: "consent",
-          },
-        },
-      });
-
-      if (error) throw error;
-      
-      // La redirection vers Google se fait automatiquement
-    } catch (error: any) {
+      window.location.href = getGoogleRedirectUrl();
+    } catch (error: unknown) {
       console.error("Erreur d'authentification Google:", error);
-      toast.error(error.message || "Erreur lors de la connexion avec Google");
+      const message =
+        error instanceof Error ? error.message : "Erreur lors de la connexion avec Google";
+      toast.error(message);
       setLoading(false);
     }
   };

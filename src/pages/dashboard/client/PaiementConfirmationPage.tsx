@@ -5,8 +5,22 @@ import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { supabase } from '@/lib/supabase';
+import { paiementsApi, contratsApi } from '@/lib/api';
+import {
+  getClientDisplayName,
+  mapMissionToUi,
+  mapPaiementToUi,
+} from '@/lib/client-helpers';
+import {
+  PAYMENTS_SIMULATION_ENABLED,
+  finalizePaiementSimulation,
+  formatPaiementStatut,
+  validerPaiementAdmin,
+} from '@/lib/payments';
+import { generateReceiptPDF } from '@/lib/pdf-generator';
 import { toast } from 'sonner';
+import { DetailPageSkeleton } from '@/components/dashboard/AdminLoadingSkeleton';
+import { SlideToConfirm } from '@/components/ui/SlideToConfirm';
 import { 
   CheckCircle2, 
   Download,
@@ -20,11 +34,14 @@ export default function PaiementConfirmationPage() {
   const { paiementId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const clientName = getClientDisplayName(user);
+  const isAdmin = user?.role === 'admin';
   
   const [loading, setLoading] = useState(true);
-  const [paiement, setPaiement] = useState<any>(null);
-  const [contrat, setContrat] = useState<any>(null);
-  const [mission, setMission] = useState<any>(null);
+  const [finalizing, setFinalizing] = useState(false);
+  const [paiement, setPaiement] = useState<Record<string, unknown> | null>(null);
+  const [contrat, setContrat] = useState<Record<string, unknown> | null>(null);
+  const [mission, setMission] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     fetchPaiement();
@@ -34,208 +51,93 @@ export default function PaiementConfirmationPage() {
     try {
       setLoading(true);
       
-      // Récupérer le paiement
-      const { data: paiementData, error: paiementError } = await supabase
-        .from('paiements')
-        .select(`
-          *,
-          prestataires (
-            full_name,
-            profession
-          )
-        `)
-        .eq('id', paiementId)
-        .single();
+      const rawPaiement = await paiementsApi.getById(String(paiementId));
+      let paiementCourant = mapPaiementToUi(rawPaiement as Record<string, unknown>);
 
-      if (paiementError) throw paiementError;
-      setPaiement(paiementData);
-
-      // Récupérer le contrat
-      const { data: contratData, error: contratError } = await supabase
-        .from('contrats')
-        .select('*')
-        .eq('id', paiementData.contrat_id)
-        .single();
-
-      if (contratError) throw contratError;
-      setContrat(contratData);
-
-      // Récupérer la mission
-      const { data: missionData, error: missionError } = await supabase
-        .from('missions')
-        .select('*')
-        .eq('contrat_id', paiementData.contrat_id)
-        .single();
-
-      if (missionError) {
-        console.log('Mission pas encore créée:', missionError);
-      } else {
-        setMission(missionData);
+      const st = String(paiementCourant.statut ?? '');
+      if (
+        PAYMENTS_SIMULATION_ENABLED &&
+        ['en_cours', 'en_attente', 'echoue'].includes(st)
+      ) {
+        try {
+          await finalizePaiementSimulation(String(paiementId));
+          const refreshed = await paiementsApi.getById(String(paiementId));
+          paiementCourant = mapPaiementToUi(refreshed as Record<string, unknown>);
+        } catch (recoveryErr) {
+          console.warn('Recovery simulation:', recoveryErr);
+        }
       }
 
-    } catch (error: any) {
+      setPaiement(paiementCourant as Record<string, unknown>);
+
+      if (paiementCourant.contrat_id) {
+        const contratData = await contratsApi.getById(String(paiementCourant.contrat_id));
+        setContrat(contratData as Record<string, unknown>);
+
+        const missionRaw = (contratData as { mission?: Record<string, unknown> }).mission;
+        if (missionRaw) {
+          setMission(mapMissionToUi(missionRaw) as Record<string, unknown>);
+        }
+      }
+
+    } catch (error: unknown) {
       console.error('Erreur:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDownloadReceipt = async () => {
+  const handleFinalizeSimulation = async () => {
+    if (!paiementId) return;
     try {
-      const html2canvas = (await import('html2canvas')).default;
-      const jsPDF = (await import('jspdf')).default;
-
-      // Créer un élément temporaire pour le reçu
-      const receiptElement = document.createElement('div');
-      receiptElement.style.position = 'absolute';
-      receiptElement.style.left = '-9999px';
-      receiptElement.style.width = '210mm';
-      receiptElement.style.padding = '20mm';
-      receiptElement.style.backgroundColor = 'white';
-      receiptElement.style.fontFamily = 'Arial, sans-serif';
-
-      // Contenu du reçu
-      receiptElement.innerHTML = `
-        <div style="max-width: 170mm; margin: 0 auto;">
-          <!-- En-tête -->
-          <div style="text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #2563eb;">
-            <h1 style="color: #2563eb; font-size: 32px; margin: 0 0 10px 0;">REÇU DE PAIEMENT</h1>
-            <p style="color: #64748b; font-size: 14px; margin: 0;">KaziPro - Plateforme de services professionnels</p>
-          </div>
-
-          <!-- Informations du reçu -->
-          <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-              <div>
-                <p style="color: #64748b; font-size: 12px; margin: 0 0 5px 0;">Numéro de reçu</p>
-                <p style="color: #0f172a; font-size: 16px; font-weight: bold; margin: 0;">${paiement.numero}</p>
-              </div>
-              <div>
-                <p style="color: #64748b; font-size: 12px; margin: 0 0 5px 0;">Date de paiement</p>
-                <p style="color: #0f172a; font-size: 16px; font-weight: bold; margin: 0;">
-                  ${new Date(paiement.date_paiement || paiement.created_at).toLocaleDateString('fr-FR', {
-                    day: '2-digit',
-                    month: 'long',
-                    year: 'numeric'
-                  })}
-                </p>
-              </div>
-              <div>
-                <p style="color: #64748b; font-size: 12px; margin: 0 0 5px 0;">Statut</p>
-                <p style="color: #16a34a; font-size: 16px; font-weight: bold; margin: 0; text-transform: uppercase;">
-                  ${paiement.statut}
-                </p>
-              </div>
-              <div>
-                <p style="color: #64748b; font-size: 12px; margin: 0 0 5px 0;">Méthode de paiement</p>
-                <p style="color: #0f172a; font-size: 16px; font-weight: bold; margin: 0; text-transform: capitalize;">
-                  ${paiement.methode_paiement.replace('_', ' ')}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Montant -->
-          <div style="background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); padding: 30px; border-radius: 8px; margin-bottom: 30px; text-align: center;">
-            <p style="color: rgba(255,255,255,0.9); font-size: 14px; margin: 0 0 10px 0;">MONTANT PAYÉ</p>
-            <p style="color: white; font-size: 42px; font-weight: bold; margin: 0;">
-              ${paiement.montant_total.toLocaleString()} FC
-            </p>
-            <p style="color: rgba(255,255,255,0.8); font-size: 14px; margin: 10px 0 0 0;">
-              Type: ${paiement.type_paiement === 'acompte' ? 'Acompte (30%)' : paiement.type_paiement}
-            </p>
-          </div>
-
-          <!-- Détails du prestataire -->
-          <div style="margin-bottom: 30px;">
-            <h3 style="color: #0f172a; font-size: 16px; margin: 0 0 15px 0; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0;">
-              Prestataire
-            </h3>
-            <div style="padding-left: 15px;">
-              <p style="color: #0f172a; font-size: 16px; font-weight: bold; margin: 0 0 5px 0;">
-                ${paiement.prestataires?.full_name || 'N/A'}
-              </p>
-              <p style="color: #64748b; font-size: 14px; margin: 0;">
-                ${paiement.prestataires?.profession || 'N/A'}
-              </p>
-            </div>
-          </div>
-
-          ${paiement.transaction_id || paiement.reference_paiement ? `
-          <!-- Référence de transaction -->
-          <div style="margin-bottom: 30px;">
-            <h3 style="color: #0f172a; font-size: 16px; margin: 0 0 15px 0; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0;">
-              Référence de transaction
-            </h3>
-            <p style="color: #64748b; font-family: monospace; font-size: 12px; margin: 0; padding: 10px; background: #f8fafc; border-radius: 4px;">
-              ${paiement.transaction_id || paiement.reference_paiement}
-            </p>
-          </div>
-          ` : ''}
-
-          <!-- Informations importantes -->
-          <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin-bottom: 30px;">
-            <p style="color: #92400e; font-size: 13px; margin: 0; line-height: 1.6;">
-              <strong>Note importante:</strong> Ce reçu confirme que votre paiement a été reçu et sécurisé. 
-              Les fonds seront libérés au prestataire selon les termes du contrat.
-            </p>
-          </div>
-
-          <!-- Pied de page -->
-          <div style="text-align: center; padding-top: 20px; border-top: 2px solid #e2e8f0;">
-            <p style="color: #64748b; font-size: 11px; margin: 0 0 5px 0;">
-              Document généré automatiquement le ${new Date().toLocaleDateString('fr-FR', {
-                day: '2-digit',
-                month: 'long',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
-            </p>
-            <p style="color: #64748b; font-size: 11px; margin: 0;">
-              KaziPro - Tous droits réservés
-            </p>
-          </div>
-        </div>
-      `;
-
-      document.body.appendChild(receiptElement);
-
-      // Générer le PDF
-      const canvas = await html2canvas(receiptElement, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff'
-      });
-
-      document.body.removeChild(receiptElement);
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const imgWidth = 210;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= 297;
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= 297;
+      setFinalizing(true);
+      if (isAdmin) {
+        await validerPaiementAdmin(paiementId);
+        toast.success('Paiement validé par l\'administrateur');
+      } else {
+        const result = await finalizePaiementSimulation(paiementId);
+        if (result.ok) {
+          toast.success('Paiement validé avec succès');
+        } else {
+          toast.info(
+            'En attente de validation admin. Connectez-vous en admin ou demandez la validation depuis Transactions.',
+          );
+        }
       }
+      await fetchPaiement();
+    } catch (error: unknown) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : 'Finalisation impossible';
+      toast.error(message);
+      throw error;
+    } finally {
+      setFinalizing(false);
+    }
+  };
 
-      const fileName = `Recu_${paiement.numero}_${new Date().toISOString().split('T')[0]}.pdf`;
-      pdf.save(fileName);
+  const handleDownloadReceipt = async () => {
+    if (!paiement) return;
+    try {
+      const prest = paiement.prestataires as { full_name?: string; profession?: string } | undefined;
+      generateReceiptPDF({
+        numero: String(paiement.numero ?? ''),
+        date: new Date(String(paiement.date_paiement ?? paiement.created_at)).toLocaleDateString('fr-FR', {
+          day: '2-digit',
+          month: 'long',
+          year: 'numeric'
+        }),
+        statut: String(paiement.statut ?? ''),
+        methode_paiement: String(paiement.methode_paiement ?? ''),
+        type_paiement: String(paiement.type_paiement ?? ''),
+        montant_total: Number(paiement.montant_total ?? 0),
+        devise: String(paiement.devise ?? 'FC'),
+        prestataire: {
+          nom: prest?.full_name,
+          profession: prest?.profession,
+        },
+        transaction_id: paiement.transaction_id as string | undefined,
+        reference_paiement: paiement.reference_paiement as string | undefined,
+      });
 
       toast.success('Reçu téléchargé avec succès!');
     } catch (error) {
@@ -246,20 +148,15 @@ export default function PaiementConfirmationPage() {
 
   if (loading) {
     return (
-      <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Chargement...</p>
-          </div>
-        </div>
+      <DashboardLayout role="client" userName={clientName} userRole="Client">
+        <DetailPageSkeleton />
       </DashboardLayout>
     );
   }
 
   if (!paiement) {
     return (
-      <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
+      <DashboardLayout role="client" userName={clientName} userRole="Client">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>Paiement introuvable</AlertDescription>
@@ -268,12 +165,17 @@ export default function PaiementConfirmationPage() {
     );
   }
 
-  const isSuccess = paiement.statut === 'valide';
+  const isSuccess =
+    paiement.statut === 'valide' || paiement.statut === 'complete';
+  const estSolde = paiement.type_paiement === 'solde';
+  const needsSimulationFinalize =
+    PAYMENTS_SIMULATION_ENABLED &&
+    !isSuccess &&
+    ['en_cours', 'en_attente', 'echoue'].includes(String(paiement.statut ?? ''));
 
   return (
-    <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
+    <DashboardLayout role="client" userName={clientName} userRole="Client">
       <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-3xl">
-        {/* Success Header */}
         <div className="text-center space-y-4">
           <div className={`w-20 h-20 rounded-full mx-auto flex items-center justify-center ${
             isSuccess ? 'bg-green-100' : 'bg-yellow-100'
@@ -289,15 +191,15 @@ export default function PaiementConfirmationPage() {
               {isSuccess ? 'Paiement réussi!' : 'Paiement en cours'}
             </h1>
             <p className="text-muted-foreground mt-2">
-              {isSuccess 
-                ? 'Votre acompte a été payé avec succès'
-                : 'Votre paiement est en cours de traitement'
-              }
+              {isSuccess
+                ? estSolde
+                  ? 'Le solde a été réglé avec succès.'
+                  : "Votre acompte a été payé avec succès."
+                : 'Votre paiement est en cours de traitement.'}
             </p>
           </div>
         </div>
 
-        {/* Détails du paiement */}
         <Card>
           <CardHeader>
             <CardTitle>Détails du paiement</CardTitle>
@@ -306,36 +208,36 @@ export default function PaiementConfirmationPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Numéro de paiement</p>
-                <p className="font-semibold">{paiement.numero}</p>
+                <p className="font-semibold">{String(paiement.numero ?? '')}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Date</p>
                 <p className="font-semibold">
-                  {new Date(paiement.date_paiement || paiement.created_at).toLocaleDateString('fr-FR')}
+                  {new Date(String(paiement.date_paiement ?? paiement.created_at)).toLocaleDateString('fr-FR')}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Montant</p>
                 <p className="font-semibold text-lg text-primary">
-                  {paiement.montant_total.toLocaleString()} FC
+                  {Number(paiement.montant_total ?? 0).toLocaleString()} FC
                 </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Méthode</p>
                 <p className="font-semibold capitalize">
-                  {paiement.methode_paiement.replace('_', ' ')}
+                  {String(paiement.methode_paiement ?? '').replace('_', ' ')}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Type</p>
-                <p className="font-semibold capitalize">{paiement.type_paiement}</p>
+                <p className="font-semibold capitalize">{String(paiement.type_paiement ?? '')}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Statut</p>
-                <p className={`font-semibold capitalize ${
+                <p className={`font-semibold ${
                   isSuccess ? 'text-green-600' : 'text-yellow-600'
                 }`}>
-                  {paiement.statut}
+                  {formatPaiementStatut(String(paiement.statut ?? ''))}
                 </p>
               </div>
             </div>
@@ -344,14 +246,13 @@ export default function PaiementConfirmationPage() {
               <div className="pt-4 border-t">
                 <p className="text-sm text-muted-foreground">Référence de transaction</p>
                 <p className="font-mono text-sm">
-                  {paiement.transaction_id || paiement.reference_paiement}
+                  {String(paiement.transaction_id ?? paiement.reference_paiement ?? '')}
                 </p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Prestataire */}
         <Card>
           <CardHeader>
             <CardTitle>Prestataire</CardTitle>
@@ -360,18 +261,21 @@ export default function PaiementConfirmationPage() {
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
                 <span className="text-xl font-bold text-primary">
-                  {paiement.prestataires?.full_name?.charAt(0) || 'P'}
+                  {(paiement.prestataires as { full_name?: string } | undefined)?.full_name?.charAt(0) || 'P'}
                 </span>
               </div>
               <div>
-                <p className="font-semibold">{paiement.prestataires?.full_name}</p>
-                <p className="text-sm text-muted-foreground">{paiement.prestataires?.profession}</p>
+                <p className="font-semibold">
+                  {(paiement.prestataires as { full_name?: string } | undefined)?.full_name}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {(paiement.prestataires as { profession?: string } | undefined)?.profession}
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Prochaines étapes */}
         {isSuccess && (
           <Card>
             <CardHeader>
@@ -383,13 +287,18 @@ export default function PaiementConfirmationPage() {
                   <CheckCircle2 className="w-4 h-4 text-green-600" />
                 </div>
                 <div>
-                  <p className="font-medium">Acompte payé</p>
+                  <p className="font-medium">
+                    {estSolde ? 'Solde réglé' : 'Acompte payé'}
+                  </p>
                   <p className="text-sm text-muted-foreground">
-                    Votre acompte est sécurisé et sera libéré au prestataire au début des travaux
+                    {estSolde
+                      ? 'Les fonds suivent les règles de versement prévues au contrat.'
+                      : 'Votre acompte est sécurisé et sera libéré au prestataire au début des travaux'}
                   </p>
                 </div>
               </div>
               
+              {!estSolde && mission && (
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
                   <Calendar className="w-4 h-4 text-blue-600" />
@@ -401,6 +310,7 @@ export default function PaiementConfirmationPage() {
                   </p>
                 </div>
               </div>
+              )}
 
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
@@ -409,7 +319,9 @@ export default function PaiementConfirmationPage() {
                 <div>
                   <p className="font-medium">Suivi des travaux</p>
                   <p className="text-sm text-muted-foreground">
-                    Vous pourrez suivre l'avancement et communiquer avec le prestataire
+                    {!estSolde
+                      ? "Après réception des travaux, vous paierez le solde depuis le tableau de bord (action « Payer le solde ») ou depuis Paiements."
+                      : 'Le contrat peut être clôturé selon vos échanges avec le prestataire et les règles KaziPro.'}
                   </p>
                 </div>
               </div>
@@ -417,12 +329,35 @@ export default function PaiementConfirmationPage() {
           </Card>
         )}
 
-        {/* Actions */}
+        {needsSimulationFinalize && (
+          <Alert className="border-amber-200 bg-amber-50">
+            <AlertCircle className="h-4 w-4 text-amber-700" />
+            <AlertDescription className="text-sm text-amber-950">
+              {isAdmin
+                ? 'Paiement en attente. Cliquez pour valider via l\'API admin (simulation, aucun débit réel).'
+                : 'Paiement enregistré en attente. Un administrateur doit valider via le dashboard admin → Transactions.'}
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="flex flex-col sm:flex-row gap-3">
+          {needsSimulationFinalize && (
+            <div className="flex-1">
+              <SlideToConfirm
+                label={isAdmin ? 'Valider ce paiement en attente (simulation admin)' : 'Vérifier le statut du paiement'}
+                hint="Glisser pour valider"
+                variant="success"
+                loading={finalizing}
+                successMessage="Paiement validé"
+                onConfirm={handleFinalizeSimulation}
+              />
+            </div>
+          )}
           <Button
             onClick={handleDownloadReceipt}
             variant="outline"
             className="flex-1"
+            disabled={!isSuccess}
           >
             <Download className="w-4 h-4 mr-2" />
             Télécharger le reçu
@@ -430,13 +365,13 @@ export default function PaiementConfirmationPage() {
           <Button
             onClick={() => navigate('/dashboard/client')}
             className="flex-1"
+            variant={needsSimulationFinalize ? 'outline' : 'default'}
           >
             <Home className="w-4 h-4 mr-2" />
             Retour au tableau de bord
           </Button>
         </div>
 
-        {/* Info */}
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>

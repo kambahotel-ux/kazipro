@@ -8,7 +8,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowRight, User, Briefcase, MapPin, Building2, FileText, Phone } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { prestatairesApi } from "@/lib/api";
+import { getProfil, prestataireIdFromUser, displayNameFromProfil } from "@/lib/kazipro-profile";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
@@ -54,16 +55,10 @@ const CompleterProfil = () => {
       if (!user) return;
 
       try {
-        const { data, error } = await supabase
-          .from("prestataires")
-          .select("*")
-          .eq("user_id", user.id)
-          .single();
-
-        if (error) throw error;
-
-        if (data) {
-          setProviderName(data.full_name || "Prestataire");
+        const profil = getProfil(user);
+        if (profil) {
+          setProviderName(displayNameFromProfil(profil, user.name || "Prestataire"));
+          const data = profil;
           setFormData({
             profession: data.profession || "",
             city: data.city || "",
@@ -176,12 +171,14 @@ const CompleterProfil = () => {
         updateData.ville_siege = formData.villeSiege || null;
       }
 
-      const { error } = await supabase
-        .from("prestataires")
-        .update(updateData)
-        .eq("user_id", user.id);
-
-      if (error) throw error;
+      const pid = prestataireIdFromUser(user);
+      if (!pid) throw new Error("Profil prestataire introuvable");
+      await prestatairesApi.update(pid, {
+        ...updateData,
+        ville: formData.city,
+        bio: formData.bio || undefined,
+        telephone: formData.phone,
+      });
 
       toast.success("Profil complété avec succès !");
       navigate("/dashboard/prestataire");

@@ -1,26 +1,56 @@
 import { useState, useEffect, useMemo } from 'react';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
+import { AdminListSkeleton } from '@/components/dashboard/AdminLoadingSkeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
-  Search, Eye, FileText, DollarSign, CheckCircle, Clock, 
-  XCircle, Loader, Download, X
+  Search, Eye, FileText,
+  X, Phone, User, Hash, MapPin, Star, ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { StatsCard } from '@/components/dashboard/StatsCard';
-import { supabase } from '@/lib/supabase';
+import { devisApi } from '@/lib/api';
+import { parsePaginatedMeta, unwrapPaginated } from '@/lib/api-utils';
+import { mapDevisToUi } from '@/lib/client-helpers';
+import { displayNameFromProfil, professionLabelFromProfil } from '@/lib/kazipro-profile';
 import { toast } from 'sonner';
 import { DateRangeFilter } from '@/components/filters/DateRangeFilter';
+import { FormDrawer } from '@/components/ui/FormDrawer';
+
+const PAGE_SIZE = 10;
 
 interface DevisItem {
-  id: string;
+  id?: string;
   designation: string;
+  type_ligne?: string;
   quantite: number;
   unite: string;
   prix_unitaire: number;
   montant: number;
+}
+
+interface PersonInfo {
+  full_name: string;
+  telephone?: string;
+  ville?: string;
+}
+
+interface DemandeInfo {
+  numero: string;
+  titre: string;
+  statut?: string;
+  type?: string;
+  ville?: string;
+  urgence?: string;
+  budget_max?: number;
+}
+
+interface PrestataireInfo extends PersonInfo {
+  profession?: string;
+  note_moyenne?: number;
+  nb_avis?: number;
+  certifie?: boolean;
 }
 
 interface Devis {
@@ -34,31 +64,130 @@ interface Devis {
   montant_ht: number;
   tva: number;
   montant_ttc: number;
+  acompte_pourcentage?: number;
+  acompte_montant?: number;
   devise?: string;
-  frais_deplacement?: number;
   statut: string;
-  date_creation: string;
-  date_envoi?: string;
+  motif_refus?: string;
+  date_debut?: string;
+  duree_jours?: number;
   date_expiration?: string;
   created_at: string;
+  updated_at?: string;
   items?: DevisItem[];
-  prestataire?: {
-    full_name: string;
-    profession: string;
-  };
-  demande?: {
-    title: string;
-    titre: string;
+  prestataire?: PrestataireInfo;
+  client?: PersonInfo;
+  demande?: DemandeInfo;
+}
+
+function strOrUndef(value: unknown): string | undefined {
+  if (value == null || value === '') return undefined;
+  const s = String(value).trim();
+  return s || undefined;
+}
+
+function personName(raw?: Record<string, unknown> | null): string {
+  if (!raw) return '';
+  return [raw.prenom, raw.nom].filter(Boolean).join(' ').trim();
+}
+
+function formatMoney(value: unknown, devise = 'FC'): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return `— ${devise}`;
+  return `${n.toLocaleString('fr-FR')} ${devise}`;
+}
+
+function mapAdminDevis(raw: Record<string, unknown>): Devis {
+  const mapped = mapDevisToUi(raw);
+  const prestRaw = raw.prestataire as Record<string, unknown> | undefined;
+  const clientRaw = raw.client as Record<string, unknown> | undefined;
+  const demandeRaw = raw.demande as Record<string, unknown> | undefined;
+  const montantHt = Number(mapped.montant_ht ?? 0);
+  const montantTtc = Number(mapped.montant_ttc ?? 0);
+  const tva = Number(mapped.taux_tva ?? raw.tva ?? 0);
+  const acomptePct = raw.acompte_pourcentage != null ? Number(raw.acompte_pourcentage) : undefined;
+  const demandeTitre = strOrUndef(demandeRaw?.titre ?? demandeRaw?.title);
+
+  return {
+    id: String(raw.id),
+    numero: String(raw.numero ?? ''),
+    titre: String(mapped.titre ?? raw.description ?? demandeTitre ?? 'Devis'),
+    prestataire_id: String(raw.prestataire_id ?? ''),
+    client_id: raw.client_id != null ? String(raw.client_id) : undefined,
+    demande_id: raw.demande_id != null ? String(raw.demande_id) : undefined,
+    description: strOrUndef(raw.description),
+    montant_ht: montantHt,
+    tva,
+    montant_ttc: montantTtc,
+    acompte_pourcentage: acomptePct,
+    acompte_montant: acomptePct != null ? Math.round(montantTtc * acomptePct) / 100 : undefined,
+    devise: 'FC',
+    statut: String(mapped.statut ?? raw.statut ?? 'envoye'),
+    motif_refus: strOrUndef(raw.motif_refus),
+    date_debut: strOrUndef(raw.date_debut),
+    duree_jours: raw.duree_jours != null ? Number(raw.duree_jours) : undefined,
+    date_expiration: strOrUndef(raw.validite),
+    created_at: String(raw.created_at ?? new Date().toISOString()),
+    updated_at: strOrUndef(raw.updated_at),
+    items: (mapped.items ?? []).map((item, i) => {
+      const itemRaw = Array.isArray(raw.items) ? (raw.items[i] as Record<string, unknown>) : undefined;
+      return {
+        id: itemRaw?.id != null ? String(itemRaw.id) : undefined,
+        designation: String(item.designation ?? '—'),
+        type_ligne: strOrUndef(itemRaw?.type_ligne),
+        quantite: Number(item.quantite ?? 1),
+        unite: String(item.unite ?? 'unité'),
+        prix_unitaire: Number(item.prix_unitaire ?? 0),
+        montant: Number(item.montant ?? 0),
+      };
+    }),
+    prestataire: prestRaw
+      ? {
+          full_name: displayNameFromProfil(prestRaw),
+          profession: professionLabelFromProfil(prestRaw),
+          telephone: strOrUndef(prestRaw.telephone),
+          ville: strOrUndef(prestRaw.ville),
+          note_moyenne: prestRaw.note_moyenne != null ? Number(prestRaw.note_moyenne) : undefined,
+          nb_avis: prestRaw.nb_avis != null ? Number(prestRaw.nb_avis) : undefined,
+          certifie: prestRaw.certifie === true,
+        }
+      : undefined,
+    client: clientRaw
+      ? {
+          full_name: personName(clientRaw) || 'Client',
+          telephone: strOrUndef(clientRaw.telephone),
+          ville: strOrUndef(clientRaw.ville),
+        }
+      : undefined,
+    demande: demandeRaw
+      ? {
+          numero: String(demandeRaw.numero ?? ''),
+          titre: demandeTitre ?? '—',
+          statut: strOrUndef(demandeRaw.statut),
+          type: strOrUndef(demandeRaw.type),
+          ville: strOrUndef(demandeRaw.ville),
+          urgence: strOrUndef(demandeRaw.urgence),
+          budget_max: demandeRaw.budget_max != null ? Number(demandeRaw.budget_max) : undefined,
+        }
+      : undefined,
   };
 }
+
+const typeLigneLabel: Record<string, string> = {
+  main_oeuvre: 'Main d\'œuvre',
+  transport: 'Transport',
+  fourniture: 'Fourniture',
+  forfait: 'Forfait',
+  autre: 'Autre',
+};
 
 export default function AdminDevisPage() {
   const [devisList, setDevisList] = useState<Devis[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [totalFromApi, setTotalFromApi] = useState(0);
+  const [listPage, setListPage] = useState(1);
   const [selectedDevis, setSelectedDevis] = useState<Devis | null>(null);
-  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [showDetailsDrawer, setShowDetailsDrawer] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   
   // Additional filters
@@ -76,43 +205,30 @@ export default function AdminDevisPage() {
     fetchDevis();
   }, []);
 
+  useEffect(() => {
+    setListPage(1);
+  }, [filters]);
+
   const fetchDevis = async () => {
     try {
       setLoading(true);
-      
-      // Charger tous les devis avec les infos prestataire et demande
-      // Using explicit relationship name to avoid ambiguity
-      const { data, error } = await supabase
-        .from('devis')
-        .select(`
-          *,
-          prestataire:prestataires(full_name, profession),
-          demande:demandes!devis_demande_id_fkey(title, titre)
-        `)
-        .order('created_at', { ascending: false });
+      const allRows: Record<string, unknown>[] = [];
+      let page = 1;
+      let lastPage = 1;
+      let total = 0;
 
-      if (error) throw error;
+      do {
+        const res = await devisApi.getAll({ page, per_page: 50 });
+        const meta = parsePaginatedMeta(res);
+        lastPage = meta.last_page;
+        total = meta.total;
+        allRows.push(...unwrapPaginated<Record<string, unknown>>(res));
+        page++;
+      } while (page <= lastPage);
 
-      // Charger les items pour chaque devis
-      const devisWithItems = await Promise.all(
-        (data || []).map(async (devis) => {
-          const { data: itemsData } = await supabase
-            .from('devis_pro_items')
-            .select('*')
-            .eq('devis_id', devis.id)
-            .order('created_at', { ascending: true });
-          
-          return { 
-            ...devis, 
-            items: itemsData || [],
-            prestataire: Array.isArray(devis.prestataire) ? devis.prestataire[0] : devis.prestataire,
-            demande: Array.isArray(devis.demande) ? devis.demande[0] : devis.demande
-          };
-        })
-      );
-
-      setDevisList(devisWithItems);
-    } catch (error: any) {
+      setTotalFromApi(total);
+      setDevisList(allRows.map(mapAdminDevis));
+    } catch (error: unknown) {
       toast.error('Erreur lors du chargement des devis');
       console.error(error);
     } finally {
@@ -120,32 +236,23 @@ export default function AdminDevisPage() {
     }
   };
 
-  const getStats = () => {
-    const total = filteredDevis.length;
-    const enAttente = filteredDevis.filter(d => d.statut === 'en_attente' || d.statut === 'envoye').length;
-    const acceptes = filteredDevis.filter(d => d.statut === 'accepte').length;
-    const totalMontant = filteredDevis
-      .filter(d => d.statut === 'accepte')
-      .reduce((sum, d) => sum + d.montant_ttc, 0);
-
-    return [
-      { title: 'Total Devis', value: total.toString(), subtitle: hasActiveFilters ? 'Filtrés' : 'Tous statuts', icon: <FileText className="w-5 h-5" /> },
-      { title: 'En attente', value: enAttente.toString(), subtitle: 'À traiter', icon: <Clock className="w-5 h-5" /> },
-      { title: 'Acceptés', value: acceptes.toString(), subtitle: 'Validés', icon: <CheckCircle className="w-5 h-5" /> },
-      { title: 'Montant total', value: `${totalMontant.toLocaleString()} FC`, subtitle: 'Devis acceptés', icon: <DollarSign className="w-5 h-5" /> },
-    ];
-  };
-
   const filteredDevis = useMemo(() => {
     return devisList.filter(d => {
       // Search filter
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
-        if (!(d.titre || '').toLowerCase().includes(searchLower) &&
-            !(d.numero || '').toLowerCase().includes(searchLower) &&
-            !(d.prestataire?.full_name || '').toLowerCase().includes(searchLower)) {
-          return false;
-        }
+        const haystack = [
+          d.titre,
+          d.numero,
+          d.prestataire?.full_name,
+          d.client?.full_name,
+          d.demande?.titre,
+          d.demande?.numero,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(searchLower)) return false;
       }
       
       // Status filter
@@ -185,6 +292,11 @@ export default function AdminDevisPage() {
       return true;
     });
   }, [devisList, filters]);
+
+  const totalListPages = Math.max(1, Math.ceil(filteredDevis.length / PAGE_SIZE));
+  const paginatedDevis = filteredDevis.slice((listPage - 1) * PAGE_SIZE, listPage * PAGE_SIZE);
+  const listFrom = filteredDevis.length === 0 ? 0 : (listPage - 1) * PAGE_SIZE + 1;
+  const listTo = Math.min(listPage * PAGE_SIZE, filteredDevis.length);
 
   // Get unique devises for filter dropdown
   const devises = useMemo(() => {
@@ -230,36 +342,14 @@ export default function AdminDevisPage() {
           <p className="text-sm sm:text-base text-muted-foreground">Visualisez et gérez tous les devis de la plateforme</p>
         </div>
 
-        {/* Stats - Mobile: Single card with 2x2 grid, Desktop: Separate cards */}
-        <div className="block sm:hidden">
-          <Card>
-            <CardContent className="p-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center">
-                  <p className="text-xl font-bold">{getStats()[0].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[0].title}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xl font-bold">{getStats()[1].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[1].title}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xl font-bold">{getStats()[2].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[2].title}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold">{getStats()[3].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[3].title}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-        
-        <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {getStats().map((stat) => (
-            <StatsCard key={stat.title} {...stat} />
-          ))}
+        <div className="relative max-w-xl">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+          <Input
+            placeholder="Rechercher..."
+            className="pl-10 text-sm"
+            value={filters.search}
+            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+          />
         </div>
 
         {/* Filters Toggle Button */}
@@ -285,19 +375,11 @@ export default function AdminDevisPage() {
         {/* Filters */}
         {showFilters && (
           <Card>
-            <CardContent className="p-4 sm:pt-6">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Filtres</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-2 sm:pt-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                <Input 
-                  placeholder="Rechercher..." 
-                  className="pl-10 text-sm"
-                  value={filters.search}
-                  onChange={(e) => setFilters({...filters, search: e.target.value})}
-                />
-              </div>
-              
               {/* Status */}
               <Select value={filters.status} onValueChange={(v) => setFilters({...filters, status: v})}>
                 <SelectTrigger className="text-sm">
@@ -379,31 +461,30 @@ export default function AdminDevisPage() {
 
         {/* Devis List */}
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader className="w-6 h-6 animate-spin" />
-          </div>
+          <AdminListSkeleton items={4} />
         ) : filteredDevis.length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center">
               <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
               <p className="text-muted-foreground">
-                {searchTerm || filterStatus !== 'all' 
-                  ? 'Aucun devis trouvé' 
-                  : 'Aucun devis dans le système'}
+                {hasActiveFilters ? 'Aucun devis trouvé' : 'Aucun devis dans le système'}
               </p>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-4">
-            {filteredDevis.map((devis) => (
-              <Card key={devis.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-4 sm:p-6">
-                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                    <div className="space-y-3 flex-1 min-w-0">
-                      <div className="flex items-start gap-3 flex-wrap">
+            {paginatedDevis.map((devis) => (
+              <Card key={devis.id} className="transition-shadow hover:shadow-card">
+                <CardContent className="px-4 pt-5 pb-3 sm:px-5 sm:pt-5 sm:pb-4">
+                  <div className="flex flex-col gap-4 lg:min-h-[112px] lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex flex-1 min-w-0 flex-col justify-center space-y-3">
+                      <div className="flex items-center gap-3 flex-wrap">
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-base sm:text-lg truncate">{devis.titre || 'Sans titre'}</h3>
-                          <p className="text-xs sm:text-sm text-muted-foreground">{devis.numero || 'N/A'}</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1">
+                            <Hash className="h-3 w-3" />
+                            {devis.numero || 'N/A'}
+                          </p>
                         </div>
                         <div className="flex-shrink-0">
                           {getStatusBadge(devis.statut)}
@@ -418,10 +499,19 @@ export default function AdminDevisPage() {
                             <span className="text-muted-foreground"> ({devis.prestataire.profession})</span>
                           )}
                         </p>
+                        {devis.client && (
+                          <p className="text-xs sm:text-sm">
+                            <span className="text-muted-foreground">Client: </span>
+                            <span className="font-medium">{devis.client.full_name}</span>
+                          </p>
+                        )}
                         {devis.demande && (
                           <p className="text-xs sm:text-sm">
                             <span className="text-muted-foreground">Demande: </span>
-                            <span className="truncate">{devis.demande.title || devis.demande.titre}</span>
+                            <span className="truncate">{devis.demande.titre}</span>
+                            {devis.demande.numero && (
+                              <span className="text-muted-foreground"> ({devis.demande.numero})</span>
+                            )}
                           </p>
                         )}
                       </div>
@@ -429,22 +519,28 @@ export default function AdminDevisPage() {
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs sm:text-sm">
                         <div>
                           <span className="text-muted-foreground">Montant HT: </span>
-                          <span className="font-medium">{devis.montant_ht.toLocaleString()} {devis.devise || 'FC'}</span>
+                          <span className="font-medium">{formatMoney(devis.montant_ht, devis.devise || 'FC')}</span>
                         </div>
                         <div>
                           <span className="text-muted-foreground">TVA ({devis.tva}%): </span>
-                          <span className="font-medium">{(devis.montant_ttc - devis.montant_ht).toLocaleString()} {devis.devise || 'FC'}</span>
+                          <span className="font-medium">{formatMoney(devis.montant_ttc - devis.montant_ht, devis.devise || 'FC')}</span>
                         </div>
+                        {devis.acompte_pourcentage != null && (
+                          <div>
+                            <span className="text-muted-foreground">Acompte ({devis.acompte_pourcentage}%): </span>
+                            <span className="font-medium">{formatMoney(devis.acompte_montant, devis.devise || 'FC')}</span>
+                          </div>
+                        )}
                       </div>
                       
                       <div className="text-base sm:text-lg font-bold text-primary">
-                        Total TTC: {devis.montant_ttc.toLocaleString()} {devis.devise || 'FC'}
+                        Total TTC: {formatMoney(devis.montant_ttc, devis.devise || 'FC')}
                       </div>
                       
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap gap-2 sm:gap-4 text-xs text-muted-foreground">
                         <span>Créé le {new Date(devis.created_at).toLocaleDateString('fr-FR')}</span>
-                        {devis.date_envoi && (
-                          <span>• Envoyé le {new Date(devis.date_envoi).toLocaleDateString('fr-FR')}</span>
+                        {devis.duree_jours != null && (
+                          <span>• Durée: {devis.duree_jours} jour(s)</span>
                         )}
                         {devis.items && devis.items.length > 0 && (
                           <span>• {devis.items.length} article(s)</span>
@@ -452,13 +548,13 @@ export default function AdminDevisPage() {
                       </div>
                     </div>
                     
-                    <div className="flex flex-wrap gap-2 flex-shrink-0">
+                    <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
                       <Button 
                         variant="outline"
                         size="sm"
                         onClick={() => {
                           setSelectedDevis(devis);
-                          setShowPreviewModal(true);
+                          setShowDetailsDrawer(true);
                         }}
                         className="text-sm"
                       >
@@ -471,178 +567,225 @@ export default function AdminDevisPage() {
                 </CardContent>
               </Card>
             ))}
+
+            {filteredDevis.length > 0 && (
+              <div className="flex flex-col items-center justify-between gap-3 border-t pt-4 sm:flex-row">
+                <p className="text-xs text-muted-foreground sm:text-sm">
+                  {listFrom}–{listTo} sur {filteredDevis.length} devis
+                  {!hasActiveFilters && totalFromApi > 0 ? ` · ${totalFromApi} en base` : ''}
+                </p>
+                {filteredDevis.length > PAGE_SIZE && (
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" disabled={listPage <= 1} onClick={() => setListPage((p) => Math.max(1, p - 1))}>
+                      <ChevronLeft className="h-4 w-4" />
+                      Précédent
+                    </Button>
+                    <span className="text-xs text-muted-foreground sm:text-sm">
+                      Page {listPage} / {totalListPages}
+                    </span>
+                    <Button variant="outline" size="sm" disabled={listPage >= totalListPages} onClick={() => setListPage((p) => Math.min(totalListPages, p + 1))}>
+                      Suivant
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Preview Modal */}
-        {showPreviewModal && selectedDevis && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
-            <Card className="w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
-              <CardHeader className="flex flex-row items-center justify-between p-4 sm:p-6">
-                <CardTitle className="text-lg sm:text-xl">Détails du Devis</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => { setShowPreviewModal(false); setSelectedDevis(null); }}>
-                  <XCircle className="w-4 h-4" />
-                </Button>
-              </CardHeader>
-              <CardContent className="p-4 sm:p-6 pt-0">
-                <div className="bg-white border rounded-lg p-4 sm:p-8 space-y-4 sm:space-y-6">
-                  {/* Header */}
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start border-b pb-4 gap-4">
-                    <div>
-                      <h2 className="text-xl sm:text-2xl font-bold text-primary">KAZIPRO</h2>
-                      <p className="text-xs sm:text-sm text-muted-foreground">Plateforme de services professionnels</p>
-                    </div>
-                    <div className="text-left sm:text-right">
-                      <div className="text-xl sm:text-2xl font-bold">DEVIS</div>
-                      <div className="text-xs sm:text-sm text-muted-foreground">{selectedDevis.numero || 'N/A'}</div>
-                      {getStatusBadge(selectedDevis.statut)}
-                    </div>
-                  </div>
+        <FormDrawer
+          open={showDetailsDrawer && !!selectedDevis}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowDetailsDrawer(false);
+              setSelectedDevis(null);
+            }
+          }}
+          title={selectedDevis?.titre ?? 'Devis'}
+          description={selectedDevis?.numero}
+        >
+          {selectedDevis && (
+            <div className="space-y-4 sm:space-y-6">
+              <div className="flex flex-wrap items-center gap-2">
+                {getStatusBadge(selectedDevis.statut)}
+                {selectedDevis.statut === 'refuse' && selectedDevis.motif_refus && (
+                  <Badge variant="destructive" className="text-xs">Motif: {selectedDevis.motif_refus}</Badge>
+                )}
+              </div>
 
-                  {/* Info */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                    <div>
-                      <h3 className="font-semibold mb-2 text-sm sm:text-base">Prestataire</h3>
-                      <p className="text-xs sm:text-sm">{selectedDevis.prestataire?.full_name || 'N/A'}</p>
-                      {selectedDevis.prestataire?.profession && (
-                        <p className="text-xs sm:text-sm text-muted-foreground">{selectedDevis.prestataire.profession}</p>
-                      )}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold mb-2 text-sm sm:text-base">Dates</h3>
-                      <p className="text-xs sm:text-sm">
-                        <span className="text-muted-foreground">Créé le: </span>
-                        {new Date(selectedDevis.date_creation).toLocaleDateString('fr-FR')}
-                      </p>
-                      {selectedDevis.date_envoi && (
-                        <p className="text-xs sm:text-sm">
-                          <span className="text-muted-foreground">Envoyé le: </span>
-                          {new Date(selectedDevis.date_envoi).toLocaleDateString('fr-FR')}
-                        </p>
-                      )}
-                      {selectedDevis.date_expiration && (
-                        <p className="text-xs sm:text-sm">
-                          <span className="text-muted-foreground">Valable jusqu'au: </span>
-                          {new Date(selectedDevis.date_expiration).toLocaleDateString('fr-FR')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Demande */}
-                  {selectedDevis.demande && (
-                    <div>
-                      <h3 className="font-semibold mb-2 text-sm sm:text-base">Demande associée</h3>
-                      <p className="text-xs sm:text-sm">{selectedDevis.demande.title || selectedDevis.demande.titre}</p>
-                    </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Prestataire</p>
+                  <p className="font-medium text-sm">{selectedDevis.prestataire?.full_name || 'N/A'}</p>
+                  {selectedDevis.prestataire?.profession && (
+                    <p className="text-xs text-muted-foreground">{selectedDevis.prestataire.profession}</p>
                   )}
-
-                  {/* Titre et description */}
-                  <div>
-                    <h3 className="text-lg sm:text-xl font-bold mb-2">{selectedDevis.titre || 'Sans titre'}</h3>
-                    {selectedDevis.description && (
-                      <p className="text-xs sm:text-sm text-muted-foreground whitespace-pre-line">{selectedDevis.description}</p>
-                    )}
-                  </div>
-
-                  {/* Items - Mobile: Cards, Desktop: Table */}
-                  <div className="block sm:hidden space-y-3">
-                    <h4 className="font-semibold text-sm">Articles</h4>
-                    {selectedDevis.items && selectedDevis.items.length > 0 ? (
-                      selectedDevis.items.map((item, index) => (
-                        <Card key={index} className="p-3">
-                          <div className="space-y-2">
-                            <p className="font-medium text-sm">{item.designation}</p>
-                            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                              <span>Qté: {item.quantite} {item.unite || 'unité'}</span>
-                              <span>P.U.: {item.prix_unitaire.toLocaleString()} {selectedDevis.devise || 'FC'}</span>
-                            </div>
-                            <div className="text-sm font-medium text-right">
-                              {item.montant.toLocaleString()} {selectedDevis.devise || 'FC'}
-                            </div>
-                          </div>
-                        </Card>
-                      ))
-                    ) : (
-                      <p className="text-center text-xs text-muted-foreground py-4">
-                        Aucun article détaillé pour ce devis
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="hidden sm:block border rounded-lg overflow-hidden">
-                    <table className="w-full">
-                      <thead className="bg-muted">
-                        <tr>
-                          <th className="text-left p-3 text-sm font-medium">Désignation</th>
-                          <th className="text-center p-3 text-sm font-medium w-20">Qté</th>
-                          <th className="text-center p-3 text-sm font-medium w-24">Unité</th>
-                          <th className="text-right p-3 text-sm font-medium w-28">P.U.</th>
-                          <th className="text-right p-3 text-sm font-medium w-32">Montant</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedDevis.items && selectedDevis.items.length > 0 ? (
-                          selectedDevis.items.map((item, index) => (
-                            <tr key={index} className="border-t">
-                              <td className="p-3 text-sm">{item.designation}</td>
-                              <td className="p-3 text-sm text-center">{item.quantite}</td>
-                              <td className="p-3 text-sm text-center">{item.unite || 'unité'}</td>
-                              <td className="p-3 text-sm text-right">{item.prix_unitaire.toLocaleString()} {selectedDevis.devise || 'FC'}</td>
-                              <td className="p-3 text-sm text-right font-medium">{item.montant.toLocaleString()} {selectedDevis.devise || 'FC'}</td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr className="border-t">
-                            <td colSpan={5} className="p-6 text-center text-sm text-muted-foreground">
-                              Aucun article détaillé pour ce devis
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Totaux */}
-                  <div className="flex justify-end">
-                    <div className="w-full sm:w-80 space-y-2">
-                      <div className="flex justify-between text-xs sm:text-sm">
-                        <span>Montant HT:</span>
-                        <span className="font-medium">{selectedDevis.montant_ht.toLocaleString()} {selectedDevis.devise || 'FC'}</span>
-                      </div>
-                      {selectedDevis.frais_deplacement && selectedDevis.frais_deplacement > 0 && (
-                        <div className="flex justify-between text-xs sm:text-sm">
-                          <span>Frais de déplacement:</span>
-                          <span className="font-medium">{selectedDevis.frais_deplacement.toLocaleString()} {selectedDevis.devise || 'FC'}</span>
-                        </div>
+                  {selectedDevis.prestataire?.telephone && (
+                    <p className="flex items-center gap-1 text-xs mt-1">
+                      <Phone className="h-3 w-3" />
+                      {selectedDevis.prestataire.telephone}
+                    </p>
+                  )}
+                  {selectedDevis.prestataire?.note_moyenne != null && (
+                    <p className="flex items-center gap-1 text-xs mt-1">
+                      <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                      {selectedDevis.prestataire.note_moyenne.toFixed(2)}
+                      {selectedDevis.prestataire.nb_avis != null && (
+                        <span className="text-muted-foreground">({selectedDevis.prestataire.nb_avis} avis)</span>
                       )}
-                      <div className="flex justify-between text-xs sm:text-sm">
-                        <span>TVA ({selectedDevis.tva}%):</span>
-                        <span className="font-medium">{(selectedDevis.montant_ttc - selectedDevis.montant_ht).toLocaleString()} {selectedDevis.devise || 'FC'}</span>
-                      </div>
-                      <div className="flex justify-between text-base sm:text-lg font-bold border-t pt-2">
-                        <span>Total TTC:</span>
-                        <span className="text-primary">{selectedDevis.montant_ttc.toLocaleString()} {selectedDevis.devise || 'FC'}</span>
-                      </div>
-                    </div>
-                  </div>
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Client</p>
+                  <p className="font-medium text-sm flex items-center gap-1">
+                    <User className="h-3 w-3" />
+                    {selectedDevis.client?.full_name || 'N/A'}
+                  </p>
+                  {selectedDevis.client?.telephone && (
+                    <p className="flex items-center gap-1 text-xs mt-1">
+                      <Phone className="h-3 w-3" />
+                      {selectedDevis.client.telephone}
+                    </p>
+                  )}
+                  {selectedDevis.client?.ville && (
+                    <p className="flex items-center gap-1 text-xs mt-1 text-muted-foreground">
+                      <MapPin className="h-3 w-3" />
+                      {selectedDevis.client.ville}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Créé le</p>
+                  <p className="font-medium text-sm">
+                    {new Date(selectedDevis.created_at).toLocaleString('fr-FR')}
+                  </p>
+                  {selectedDevis.updated_at && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Modifié le {new Date(selectedDevis.updated_at).toLocaleString('fr-FR')}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  {selectedDevis.date_debut && (
+                    <>
+                      <p className="text-xs text-muted-foreground">Date de début</p>
+                      <p className="font-medium text-sm">
+                        {new Date(selectedDevis.date_debut).toLocaleDateString('fr-FR')}
+                      </p>
+                    </>
+                  )}
+                  {selectedDevis.duree_jours != null && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Durée estimée: {selectedDevis.duree_jours} jour(s)
+                    </p>
+                  )}
+                  {selectedDevis.date_expiration && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Valable jusqu'au {new Date(selectedDevis.date_expiration).toLocaleDateString('fr-FR')}
+                    </p>
+                  )}
+                </div>
+              </div>
 
-                  {/* Footer */}
-                  <div className="border-t pt-4 text-center text-xs text-muted-foreground">
-                    <p>KaziPro - Plateforme de services professionnels</p>
+              {selectedDevis.demande && (
+                <div className="rounded-lg border bg-muted/30 p-4">
+                  <p className="text-xs text-muted-foreground mb-2">Demande associée</p>
+                  <p className="font-medium text-sm">{selectedDevis.demande.titre}</p>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                    {selectedDevis.demande.numero && (
+                      <Badge variant="outline">{selectedDevis.demande.numero}</Badge>
+                    )}
+                    {selectedDevis.demande.statut && (
+                      <Badge variant="secondary">{selectedDevis.demande.statut}</Badge>
+                    )}
+                    {selectedDevis.demande.type && (
+                      <Badge variant="outline" className="capitalize">{selectedDevis.demande.type}</Badge>
+                    )}
+                    {selectedDevis.demande.urgence === 'urgent' && (
+                      <Badge className="bg-orange-600">Urgent</Badge>
+                    )}
+                    {selectedDevis.demande.ville && (
+                      <span className="flex items-center gap-1 text-muted-foreground">
+                        <MapPin className="h-3 w-3" />
+                        {selectedDevis.demande.ville}
+                      </span>
+                    )}
+                    {selectedDevis.demande.budget_max != null && (
+                      <span className="text-muted-foreground">
+                        Budget max: {formatMoney(selectedDevis.demande.budget_max)}
+                      </span>
+                    )}
                   </div>
                 </div>
+              )}
 
-                {/* Actions */}
-                <div className="flex justify-end gap-2 mt-4 sm:mt-6">
-                  <Button variant="outline" onClick={() => { setShowPreviewModal(false); setSelectedDevis(null); }} className="text-sm">
-                    Fermer
-                  </Button>
+              {selectedDevis.description && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-2">Description</p>
+                  <p className="rounded-lg bg-muted p-3 text-sm whitespace-pre-line">{selectedDevis.description}</p>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+              )}
+
+              <div className="space-y-3">
+                <h4 className="font-semibold text-sm">Articles</h4>
+                {selectedDevis.items && selectedDevis.items.length > 0 ? (
+                  selectedDevis.items.map((item, index) => (
+                    <Card key={item.id ?? index} className="p-3">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-sm">{item.designation}</p>
+                          {item.type_ligne && (
+                            <Badge variant="secondary" className="text-xs">
+                              {typeLigneLabel[item.type_ligne] ?? item.type_ligne}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Qté: {item.quantite} {item.unite || 'unité'}</span>
+                          <span>P.U.: {formatMoney(item.prix_unitaire, selectedDevis.devise || 'FC')}</span>
+                        </div>
+                        <div className="text-sm font-medium text-right">
+                          {formatMoney(item.montant, selectedDevis.devise || 'FC')}
+                        </div>
+                      </div>
+                    </Card>
+                  ))
+                ) : (
+                  <p className="text-center text-xs text-muted-foreground py-4">
+                    Aucun article détaillé pour ce devis
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-lg border p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Montant HT</span>
+                  <span className="font-medium">{formatMoney(selectedDevis.montant_ht, selectedDevis.devise || 'FC')}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>TVA ({selectedDevis.tva}%)</span>
+                  <span className="font-medium">
+                    {formatMoney(selectedDevis.montant_ttc - selectedDevis.montant_ht, selectedDevis.devise || 'FC')}
+                  </span>
+                </div>
+                <div className="flex justify-between text-base font-bold border-t pt-2">
+                  <span>Total TTC</span>
+                  <span className="text-primary">{formatMoney(selectedDevis.montant_ttc, selectedDevis.devise || 'FC')}</span>
+                </div>
+                {selectedDevis.acompte_pourcentage != null && (
+                  <div className="flex justify-between text-sm border-t pt-2 text-muted-foreground">
+                    <span>Acompte ({selectedDevis.acompte_pourcentage}%)</span>
+                    <span className="font-medium text-foreground">
+                      {formatMoney(selectedDevis.acompte_montant, selectedDevis.devise || 'FC')}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </FormDrawer>
       </div>
     </DashboardLayout>
   );

@@ -1,15 +1,20 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { useAbortableFetch } from "@/hooks/useAbortableFetch";
+import { AdminListSkeleton } from "@/components/dashboard/AdminLoadingSkeleton";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Search, Send, Paperclip, MoreVertical, Phone, Video, Trash2, Archive, Pin, Loader2 } from "lucide-react";
+import { Search, Send, Paperclip, MoreVertical, Phone, Video, Trash2, Archive, Pin, Loader2, ArrowLeft } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { messagesApi } from "@/lib/api";
+import { getClientDisplayName, mapMessageToUi, unwrapPaginated } from "@/lib/client-helpers";
 import { toast } from "sonner";
+import { readMessagingSearchParams } from "@/lib/messaging";
 
 interface Message {
   id: string;
@@ -17,153 +22,164 @@ interface Message {
   receiver_id: string;
   content: string;
   created_at: string;
-  sender?: { full_name: string };
-  receiver?: { full_name: string };
 }
 
 interface Conversation {
   id: string;
   name: string;
-  avatar: string;
+  avatar?: string;
   lastMessage: string;
   time: string;
   unread: number;
-  online: boolean;
+  online?: boolean;
   mission: string;
   userId: string;
 }
 
-const mockConversations: Conversation[] = [
-  {
-    id: "1",
-    name: "Jean Mukeba",
-    avatar: "",
-    lastMessage: "Merci pour la confiance, je commence demain à 9h.",
-    time: "Il y a 5 min",
-    unread: 2,
-    online: true,
-    mission: "Rénovation salle de bain",
-    userId: "user1",
-  },
-  {
-    id: "2",
-    name: "Anne Mbuyi",
-    avatar: "",
-    lastMessage: "L'installation est terminée, tout fonctionne parfaitement !",
-    time: "Il y a 1h",
-    unread: 0,
-    online: false,
-    mission: "Installation climatisation",
-    userId: "user2",
-  },
-  {
-    id: "3",
-    name: "Marc Tshisekedi",
-    avatar: "",
-    lastMessage: "Pouvez-vous confirmer la date de début ?",
-    time: "Il y a 3h",
-    unread: 1,
-    online: true,
-    mission: "Peinture extérieure",
-    userId: "user3",
-  },
-];
+function partnerName(partenaire: Record<string, unknown> | null | undefined): string {
+  if (!partenaire) return "Utilisateur";
+  const client = partenaire.client as { prenom?: string; nom?: string } | undefined;
+  const prestataire = partenaire.prestataire as { prenom?: string; nom?: string; raison_sociale?: string } | undefined;
+  if (client?.prenom || client?.nom) return `${client.prenom ?? ""} ${client.nom ?? ""}`.trim();
+  if (prestataire?.raison_sociale) return prestataire.raison_sociale;
+  if (prestataire?.prenom || prestataire?.nom) return `${prestataire.prenom ?? ""} ${prestataire.nom ?? ""}`.trim();
+  return String(partenaire.name ?? "Utilisateur");
+}
 
 export default function MessagesPage() {
   const { user } = useAuth();
-  const [clientName, setClientName] = useState("Client");
-  const [conversations, setConversations] = useState<Conversation[]>(mockConversations);
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(mockConversations[0]);
+  const [searchParams] = useSearchParams();
+  const { partnerId, demandeId, name: partnerName, mission: missionTitle } =
+    readMessagingSearchParams(searchParams);
+  const pendingDemandeId = useRef<string | null>(demandeId);
+  if (demandeId) pendingDemandeId.current = demandeId;
+  const clientName = getClientDisplayName(user);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [showOptions, setShowOptions] = useState(false);
+  const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      fetchClientName();
-      fetchConversations();
-    }
-  }, [user]);
-
-  const fetchClientName = async () => {
+  const fetchMessages = useCallback(async (userId: string) => {
     if (!user) return;
     try {
-      const { data } = await supabase
-        .from("clients")
-        .select("full_name")
-        .eq("user_id", user.id)
-        .single();
-
-      if (data?.full_name) {
-        setClientName(data.full_name);
-      }
-    } catch (error) {
-      console.error("Error fetching client name:", error);
-    }
-  };
-
-  const fetchConversations = async () => {
-    if (!user) return;
-    try {
-      setLoading(true);
-      // Fetch messages for this user
-      const { data, error } = await supabase
-        .from("messages")
-        .select("*")
-        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      // Group messages by conversation
-      const convMap = new Map<string, Message[]>();
-      (data || []).forEach((msg: Message) => {
-        const otherId = msg.sender_id === user.id ? msg.receiver_id : msg.sender_id;
-        if (!convMap.has(otherId)) {
-          convMap.set(otherId, []);
-        }
-        convMap.get(otherId)!.push(msg);
-      });
-
-      // Convert to conversations (using mock data as fallback)
-      const newConversations = mockConversations.map(conv => ({
-        ...conv,
-        lastMessage: convMap.get(conv.userId)?.[0]?.content || conv.lastMessage,
-      }));
-
-      setConversations(newConversations);
-      if (newConversations.length > 0) {
-        setSelectedConversation(newConversations[0]);
-        fetchMessages(newConversations[0].userId);
-      }
-    } catch (error: any) {
-      toast.error("Erreur lors du chargement des messages");
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchMessages = async (userId: string) => {
-    if (!user) return;
-    try {
-      const { data, error } = await supabase
-        .from("messages")
-        .select("*")
-        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${user.id})`)
-        .order("created_at", { ascending: true });
-
-      if (error) throw error;
-      setMessages(data || []);
+      const res = await messagesApi.getMessages(userId);
+      const rows = unwrapPaginated(res as never).length
+        ? unwrapPaginated(res as never)
+        : unwrapPaginated((res as { data?: unknown[] }) ?? []);
+      setMessages(
+        rows.map((m) => mapMessageToUi(m as Record<string, unknown>) as Message),
+      );
     } catch (error) {
       console.error("Error fetching messages:", error);
     }
-  };
+  }, [user]);
+
+  const fetchConversations = useCallback(async (signal?: AbortSignal) => {
+    if (!user) return;
+    try {
+      setLoading(true);
+      const data = await messagesApi.getConversations();
+      const list = Array.isArray(data) ? data : [];
+
+      const newConversations: Conversation[] = list.map((conv: any) => {
+        const partner = conv.partenaire as Record<string, unknown> | undefined;
+        const partnerId = String(partner?.id ?? "");
+        const last = conv.dernier_message as Record<string, unknown> | undefined;
+        const createdAt = last?.created_at
+          ? new Date(String(last.created_at)).toLocaleTimeString("fr-FR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "";
+
+        return {
+          id: partnerId,
+          userId: partnerId,
+          name: partnerName(partner),
+          avatar: (partner?.avatar as string | undefined) ?? undefined,
+          lastMessage: String(last?.contenu ?? last?.content ?? ""),
+          time: createdAt,
+          unread: Number(conv.non_lus ?? 0),
+          mission: String((last?.demande as { titre?: string })?.titre ?? ""),
+        };
+      });
+
+      if (signal?.aborted) return;
+      setConversations(newConversations);
+      if (newConversations.length > 0) {
+        const first = newConversations[0];
+        setSelectedConversation((prev) => prev ?? first);
+        void fetchMessages(first.userId);
+      }
+    } catch (error: unknown) {
+      if (!signal?.aborted) {
+        toast.error("Erreur lors du chargement des messages");
+        console.error(error);
+      }
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  }, [user, fetchMessages]);
+
+  useAbortableFetch(Boolean(user), [user], async (signal) => {
+    if (!user || signal.aborted) return;
+    await fetchConversations(signal);
+  });
+
+  useEffect(() => {
+    if (!partnerId || loading) return;
+    setConversations((prev) => {
+      const existing = prev.find((c) => c.userId === partnerId);
+      if (existing) {
+        setSelectedConversation(existing);
+        setMobileThreadOpen(true);
+        return prev;
+      }
+      const draft: Conversation = {
+        id: partnerId,
+        userId: partnerId,
+        name: partnerName ?? "Prestataire",
+        lastMessage: "",
+        time: "",
+        unread: 0,
+        mission: missionTitle ?? "",
+      };
+      setSelectedConversation(draft);
+      setMessages([]);
+      setMobileThreadOpen(true);
+      return [draft, ...prev];
+    });
+  }, [partnerId, partnerName, missionTitle, loading]);
 
   const handleSelectConversation = (conv: Conversation) => {
     setSelectedConversation(conv);
+    setMobileThreadOpen(true);
     fetchMessages(conv.userId);
+  };
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedConversation || !user) return;
+    try {
+      setSending(true);
+      await messagesApi.send(selectedConversation.userId, {
+        contenu: newMessage.trim(),
+        ...(pendingDemandeId.current
+          ? { demande_id: pendingDemandeId.current }
+          : {}),
+      });
+      setNewMessage("");
+      await fetchMessages(selectedConversation.userId);
+      await fetchConversations();
+    } catch (error: unknown) {
+      toast.error("Erreur lors de l'envoi du message");
+      console.error(error);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -171,8 +187,7 @@ export default function MessagesPage() {
       <div className="h-[calc(100vh-180px)]">
         <Card className="h-full">
           <div className="flex h-full">
-            {/* Conversations list */}
-            <div className="w-full md:w-80 border-r border-border flex flex-col">
+            <div className={`${mobileThreadOpen ? "hidden md:flex" : "flex"} w-full md:w-80 border-r border-border flex-col`}>
               <div className="p-4 border-b border-border">
                 <h2 className="font-semibold mb-3">Messages</h2>
                 <div className="relative">
@@ -183,8 +198,19 @@ export default function MessagesPage() {
               <ScrollArea className="flex-1">
                 <div className="divide-y divide-border">
                   {loading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                    <div className="p-3">
+                      <AdminListSkeleton items={3} />
+                    </div>
+                  ) : conversations.length === 0 ? (
+                    <div className="space-y-3 p-4 text-center text-sm text-muted-foreground">
+                      <p>Aucun échange pour le moment.</p>
+                      <p>
+                        Les conversations apparaissent après un premier message avec un prestataire lié à
+                        une de vos demandes ou missions.
+                      </p>
+                      <Button variant="outline" size="sm" asChild className="w-full">
+                        <Link to="/dashboard/client/demandes">Mes demandes</Link>
+                      </Button>
                     </div>
                   ) : (
                     conversations.map((conv) => (
@@ -196,15 +222,10 @@ export default function MessagesPage() {
                         }`}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="relative">
-                            <Avatar>
-                              <AvatarImage src={conv.avatar} />
-                              <AvatarFallback>{conv.name.split(" ").map(n => n[0]).join("")}</AvatarFallback>
-                            </Avatar>
-                            {conv.online && (
-                              <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full" />
-                            )}
-                          </div>
+                          <Avatar>
+                            <AvatarImage src={conv.avatar} />
+                            <AvatarFallback>{conv.name.split(" ").map((n) => n[0]).join("")}</AvatarFallback>
+                          </Avatar>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
                               <h4 className="font-medium text-sm truncate">{conv.name}</h4>
@@ -213,9 +234,7 @@ export default function MessagesPage() {
                             <p className="text-xs text-muted-foreground truncate">{conv.mission}</p>
                             <p className="text-sm text-muted-foreground truncate mt-1">{conv.lastMessage}</p>
                           </div>
-                          {conv.unread > 0 && (
-                            <Badge className="ml-2">{conv.unread}</Badge>
-                          )}
+                          {conv.unread > 0 && <Badge className="ml-2">{conv.unread}</Badge>}
                         </div>
                       </button>
                     ))
@@ -224,29 +243,26 @@ export default function MessagesPage() {
               </ScrollArea>
             </div>
 
-            {/* Chat area */}
-            <div className="hidden md:flex flex-col flex-1">
+            <div className={`${mobileThreadOpen ? "flex" : "hidden md:flex"} flex-col flex-1`}>
               {selectedConversation ? (
                 <>
-                  {/* Chat header */}
+                  <div className="md:hidden px-4 pt-3">
+                    <Button variant="ghost" size="sm" onClick={() => setMobileThreadOpen(false)}>
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      Retour aux conversations
+                    </Button>
+                  </div>
                   <div className="p-4 border-b border-border flex items-center justify-between">
                     <div className="flex items-center gap-3 flex-1">
-                      <div className="relative">
-                        <Avatar>
-                          <AvatarImage src={selectedConversation.avatar} />
-                          <AvatarFallback>
-                            {selectedConversation.name.split(" ").map(n => n[0]).join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        {selectedConversation.online && (
-                          <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full" />
-                        )}
-                      </div>
+                      <Avatar>
+                        <AvatarImage src={selectedConversation.avatar} />
+                        <AvatarFallback>
+                          {selectedConversation.name.split(" ").map((n) => n[0]).join("")}
+                        </AvatarFallback>
+                      </Avatar>
                       <div>
                         <h3 className="font-medium">{selectedConversation.name}</h3>
-                        <p className="text-xs text-muted-foreground">
-                          {selectedConversation.online ? "En ligne" : "Hors ligne"} • {selectedConversation.mission}
-                        </p>
+                        <p className="text-xs text-muted-foreground">{selectedConversation.mission}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 relative">
@@ -257,12 +273,7 @@ export default function MessagesPage() {
                         <Video className="w-4 h-4" />
                       </Button>
                       <div className="relative">
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => setShowOptions(!showOptions)}
-                          title="Options"
-                        >
+                        <Button variant="ghost" size="icon" onClick={() => setShowOptions(!showOptions)} title="Options">
                           <MoreVertical className="w-4 h-4" />
                         </Button>
                         {showOptions && (
@@ -285,26 +296,32 @@ export default function MessagesPage() {
                     </div>
                   </div>
 
-                  {/* Messages */}
                   <ScrollArea className="flex-1 p-4">
                     <div className="space-y-4">
                       {messages.map((msg) => (
                         <div
                           key={msg.id}
-                          className={`flex ${msg.sender_id === user?.id ? "justify-end" : "justify-start"}`}
+                          className={`flex ${String(msg.sender_id) === String(user?.id) ? "justify-end" : "justify-start"}`}
                         >
                           <div
                             className={`max-w-[70%] rounded-lg p-3 ${
-                              msg.sender_id === user?.id
+                              String(msg.sender_id) === String(user?.id)
                                 ? "bg-primary text-primary-foreground"
                                 : "bg-muted"
                             }`}
                           >
                             <p className="text-sm">{msg.content}</p>
-                            <p className={`text-xs mt-1 ${
-                              msg.sender_id === user?.id ? "text-primary-foreground/70" : "text-muted-foreground"
-                            }`}>
-                              {new Date(msg.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                            <p
+                              className={`text-xs mt-1 ${
+                                String(msg.sender_id) === String(user?.id)
+                                  ? "text-primary-foreground/70"
+                                  : "text-muted-foreground"
+                              }`}
+                            >
+                              {new Date(msg.created_at).toLocaleTimeString("fr-FR", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
                             </p>
                           </div>
                         </div>
@@ -312,7 +329,6 @@ export default function MessagesPage() {
                     </div>
                   </ScrollArea>
 
-                  {/* Message input */}
                   <div className="p-4 border-t border-border">
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="icon">
@@ -322,17 +338,25 @@ export default function MessagesPage() {
                         placeholder="Tapez votre message..."
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
                         className="flex-1"
                       />
-                      <Button size="icon">
+                      <Button size="icon" onClick={handleSendMessage} disabled={sending || !newMessage.trim()}>
                         <Send className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
                 </>
               ) : (
-                <div className="flex items-center justify-center flex-1">
-                  <p className="text-muted-foreground">Sélectionnez une conversation</p>
+                <div className="flex flex-col items-center justify-center flex-1 gap-2 px-6 text-center text-muted-foreground">
+                  <p>Choisissez un contact dans la liste</p>
+                  <p className="text-xs">
+                    Vous pouvez aussi contacter un prestataire depuis le détail d&apos;une{" "}
+                    <Link to="/dashboard/client/demandes" className="text-primary underline">
+                      demande
+                    </Link>
+                    .
+                  </p>
                 </div>
               )}
             </div>

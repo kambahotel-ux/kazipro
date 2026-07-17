@@ -5,13 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Wrench, Mail, Lock, ArrowRight, Eye, EyeOff, User, MapPin } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { defaultDashboardForRole } from "@/lib/user-role";
 import { toast } from "sonner";
 import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
 
 const RegisterClient = () => {
   const navigate = useNavigate();
-  const { signUp } = useAuth();
+  const { signUp, refreshUser } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -45,8 +45,8 @@ const RegisterClient = () => {
       toast.error("Le mot de passe est requis");
       return false;
     }
-    if (formData.password.length < 6) {
-      toast.error("Le mot de passe doit contenir au moins 6 caractères");
+    if (formData.password.length < 8) {
+      toast.error("Le mot de passe doit contenir au moins 8 caractères");
       return false;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -68,29 +68,24 @@ const RegisterClient = () => {
     try {
       setLoading(true);
       
-      // Créer le compte Supabase avec OTP
-      await signUp(formData.email, formData.password, "client");
-      
-      // Créer le profil client (avant vérification OTP)
-      // Note: On utilise l'email comme identifiant temporaire
-      const { error: profileError } = await supabase
-        .from("clients")
-        .insert([
-          {
-            email: formData.email,
-            full_name: formData.fullName,
-            city: formData.city,
-            verified: false,
-          }
-        ]);
-      
-      if (profileError) {
-        console.warn("Profile creation warning:", profileError);
-        // On continue même si la création du profil échoue
-      }
-      
-      toast.success("Code OTP envoyé à votre email !");
-      navigate("/auth/verify-otp", { state: { email: formData.email } });
+      const parts = formData.fullName.trim().split(/\s+/);
+      const prenom = parts[0] ?? "";
+      const nom = parts.slice(1).join(" ") || prenom;
+
+      await signUp({
+        email: formData.email,
+        password: formData.password,
+        password_confirmation: formData.password,
+        prenom,
+        nom,
+        telephone: "",
+        ville: formData.city,
+        role: "client",
+      });
+
+      await refreshUser();
+      toast.success("Compte client créé avec succès !");
+      navigate(defaultDashboardForRole("client"));
     } catch (error: any) {
       toast.error(error.message || "Erreur lors de l'inscription");
     } finally {

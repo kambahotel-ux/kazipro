@@ -1,25 +1,33 @@
-import { Link, useLocation } from "react-router-dom";
-import { 
-  Home, 
-  FileText, 
-  MessageSquare, 
-  CreditCard, 
-  Star, 
-  Settings, 
-  User,
-  Briefcase,
-  Calendar,
-  TrendingUp,
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import {
+  Home,
+  FileText,
+  MessageSquare,
+  Star,
+  Settings,
   Users,
   AlertTriangle,
   BarChart3,
   Shield,
   LogOut,
-  Search,
   Receipt,
-  Car
+  Scale,
+  Briefcase,
+  CreditCard,
+  Bell,
+  Package,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePrestataireAccess } from "@/hooks/usePrestataireAccess";
+import { PrestataireVerificationBadge } from "@/components/prestataire/PrestataireVerificationBadge";
+import {
+  isPrestataireSidebarLinkActive,
+  isPrestataireMenuHrefAllowed,
+  PRESTATAIRE_PATHS,
+  PRESTATAIRE_SIDEBAR_LINKS,
+} from "@/lib/prestataire-nav";
 
 interface SidebarLink {
   icon: React.ElementType;
@@ -30,30 +38,19 @@ interface SidebarLink {
 interface DashboardSidebarProps {
   role: "client" | "prestataire" | "admin";
   isMobile?: boolean;
-  isVerified?: boolean; // Pour les prestataires
-  isProfileComplete?: boolean; // Pour les prestataires
+  isVerified?: boolean;
+  isProfileComplete?: boolean;
 }
 
 const clientLinks: SidebarLink[] = [
   { icon: Home, label: "Tableau de bord", href: "/dashboard/client" },
   { icon: FileText, label: "Mes demandes", href: "/dashboard/client/demandes" },
+  { icon: Briefcase, label: "Suivi missions", href: "/dashboard/client/missions" },
   { icon: MessageSquare, label: "Messages", href: "/dashboard/client/messages" },
   { icon: CreditCard, label: "Paiements", href: "/dashboard/client/paiements" },
+  { icon: Scale, label: "Litiges", href: "/dashboard/client/litiges" },
   { icon: Star, label: "Mes avis", href: "/dashboard/client/avis" },
   { icon: Settings, label: "Paramètres", href: "/dashboard/client/parametres" },
-];
-
-const prestataireLinks: SidebarLink[] = [
-  { icon: Home, label: "Tableau de bord", href: "/dashboard/prestataire" },
-  { icon: Search, label: "Opportunités", href: "/dashboard/prestataire/opportunites" },
-  { icon: Briefcase, label: "Missions", href: "/dashboard/prestataire/missions" },
-  { icon: FileText, label: "Contrats", href: "/dashboard/prestataire/contrats" },
-  { icon: FileText, label: "Devis envoyés", href: "/dashboard/prestataire/devis" },
-  { icon: Calendar, label: "Calendrier", href: "/dashboard/prestataire/calendrier" },
-  { icon: TrendingUp, label: "Revenus", href: "/dashboard/prestataire/revenus" },
-  { icon: MessageSquare, label: "Messages", href: "/dashboard/prestataire/messages" },
-  { icon: User, label: "Mon profil", href: "/dashboard/prestataire/profil" },
-  { icon: Settings, label: "Paramètres", href: "/dashboard/prestataire/parametres" },
 ];
 
 const adminLinks: SidebarLink[] = [
@@ -63,15 +60,17 @@ const adminLinks: SidebarLink[] = [
   { icon: FileText, label: "Demandes", href: "/dashboard/admin/demandes" },
   { icon: Receipt, label: "Devis", href: "/dashboard/admin/devis" },
   { icon: AlertTriangle, label: "Litiges", href: "/dashboard/admin/litiges" },
+  { icon: Package, label: "Location", href: "/dashboard/admin/location" },
+  { icon: Layers, label: "Catégories matériel", href: "/dashboard/admin/categories-materiel" },
   { icon: CreditCard, label: "Transactions", href: "/dashboard/admin/transactions" },
-  { icon: CreditCard, label: "Config Paiement", href: "/dashboard/admin/config-paiement" },
   { icon: BarChart3, label: "Rapports", href: "/dashboard/admin/rapports" },
-  { icon: Settings, label: "Configuration", href: "/dashboard/admin/configuration" },
+  { icon: Bell, label: "Notifications & WhatsApp", href: "/dashboard/admin/config-notifications" },
+  { icon: Settings, label: "Paramètres", href: "/dashboard/admin/parametres" },
 ];
 
 const linksByRole = {
   client: clientLinks,
-  prestataire: prestataireLinks,
+  prestataire: PRESTATAIRE_SIDEBAR_LINKS,
   admin: adminLinks,
 };
 
@@ -81,56 +80,85 @@ const roleLabels = {
   admin: "Administration",
 };
 
-export function DashboardSidebar({ role, isMobile = false, isVerified = true, isProfileComplete = true }: DashboardSidebarProps) {
+export function DashboardSidebar({
+  role,
+  isMobile = false,
+  isVerified = true,
+  isProfileComplete = true,
+}: DashboardSidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
+  const { validationStatus } = usePrestataireAccess();
   const links = linksByRole[role];
 
-  // Pour les prestataires non validés, seuls certains liens sont accessibles
-  const isProviderNotVerified = role === "prestataire" && (!isVerified || !isProfileComplete);
-  const allowedLinksForUnverified = [
-    "/dashboard/prestataire",
-    "/dashboard/prestataire/profil",
-    "/dashboard/prestataire/parametres"
-  ];
+  const menuAccess = { isVerified, isProfileComplete };
+  const lockReason =
+    !isProfileComplete
+      ? "Complétez votre profil pour débloquer ce menu"
+      : "Disponible après validation de votre compte par KaziPro";
 
-  // Lien du logo selon le rôle
-  const dashboardLink = role === "client" 
-    ? "/dashboard/client" 
-    : role === "prestataire" 
-    ? "/dashboard/prestataire" 
-    : "/dashboard/admin";
+  const dashboardLink =
+    role === "client"
+      ? "/dashboard/client"
+      : role === "prestataire"
+        ? PRESTATAIRE_PATHS.dashboard
+        : "/dashboard/admin";
 
-  const sidebarClasses = isMobile 
-    ? "flex flex-col w-full bg-card min-h-screen"
-    : "hidden lg:flex flex-col w-64 bg-card border-r border-border min-h-screen sticky top-0";
+  const sidebarClasses = isMobile
+    ? "flex min-h-screen w-full flex-col bg-sidebar text-sidebar-foreground"
+    : "hidden lg:flex sticky top-0 min-h-screen w-72 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground";
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } finally {
+      navigate("/connexion");
+    }
+  };
 
   return (
     <aside className={sidebarClasses}>
-      <div className="p-4 sm:p-6 border-b border-border">
+      <div className="border-b border-sidebar-border p-4 sm:p-5">
         <Link to={dashboardLink} className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-glow rounded-lg flex items-center justify-center flex-shrink-0">
-            <span className="text-primary-foreground font-bold text-sm">K</span>
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-sidebar-primary shadow-[0_12px_28px_-20px_hsl(var(--sidebar-primary)/0.8)]">
+            <span className="text-sm font-bold text-sidebar-primary-foreground">K</span>
           </div>
-          <span className="font-display font-bold text-lg text-foreground truncate">KaziPro</span>
+          <span className="truncate font-display text-lg font-bold text-sidebar-foreground">KaziPro</span>
         </Link>
-        <p className="text-xs text-muted-foreground mt-2">{roleLabels[role]}</p>
+        <p className="mt-2 text-xs font-medium text-sidebar-foreground/58">{roleLabels[role]}</p>
+        {role === "prestataire" ? (
+          <div className="mt-3">
+            <PrestataireVerificationBadge
+              status={validationStatus}
+              size="md"
+              linkToProfil={validationStatus !== "valide"}
+              className="w-full justify-center"
+            />
+          </div>
+        ) : null}
       </div>
 
-      <nav className="flex-1 p-3 sm:p-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 space-y-1 overflow-y-auto p-3 sm:p-4">
         {links.map((link) => {
-          const isActive = location.pathname === link.href;
-          const isDisabled = isProviderNotVerified && !allowedLinksForUnverified.includes(link.href);
-          
-          if (isDisabled) {
+          const isActive =
+            role === "prestataire"
+              ? isPrestataireSidebarLinkActive(location.pathname, link.href)
+              : location.pathname === link.href;
+
+          const isAllowed =
+            role !== "prestataire" || isPrestataireMenuHrefAllowed(link.href, menuAccess);
+
+          if (!isAllowed) {
             return (
               <div
                 key={link.href}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground/40 cursor-not-allowed opacity-50"
-                title="Disponible après validation de votre profil"
+                className="flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-sidebar-foreground/35"
+                title={lockReason}
               >
                 <link.icon className="w-5 h-5 flex-shrink-0" />
                 <span className="truncate">{link.label}</span>
-                <span className="ml-auto text-xs">🔒</span>
+                <span className="ml-auto text-xs">Verrouillé</span>
               </div>
             );
           }
@@ -140,22 +168,34 @@ export function DashboardSidebar({ role, isMobile = false, isVerified = true, is
               key={link.href}
               to={link.href}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
+                "group relative flex items-center gap-3 whitespace-nowrap rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/68 hover:bg-sidebar-accent/65 hover:text-sidebar-accent-foreground",
               )}
               title={link.label}
             >
-              <link.icon className="w-5 h-5 flex-shrink-0" />
+              {isActive && (
+                <span className="absolute left-0 h-5 w-0.5 rounded-full bg-sidebar-primary" />
+              )}
+              <link.icon
+                className={cn(
+                  "h-5 w-5 flex-shrink-0",
+                  isActive ? "text-sidebar-primary" : "text-sidebar-foreground/55 group-hover:text-sidebar-foreground",
+                )}
+              />
               <span className="truncate">{link.label}</span>
             </Link>
           );
         })}
       </nav>
 
-      <div className="p-3 sm:p-4 border-t border-border">
-        <button className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors w-full" title="Déconnexion">
+      <div className="border-t border-sidebar-border p-3 sm:p-4">
+        <button
+          onClick={handleSignOut}
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-sidebar-foreground/68 transition-colors hover:bg-destructive/15 hover:text-white"
+          title="Déconnexion"
+        >
           <LogOut className="w-5 h-5 flex-shrink-0" />
           <span className="truncate">Déconnexion</span>
         </button>

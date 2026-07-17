@@ -1,149 +1,91 @@
-import { useState, useEffect } from 'react';
-import { useConfigurationGlobale } from '@/hooks/usePaiementConfig';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { supabase } from '@/lib/supabase';
-import { toast } from 'sonner';
-import { 
-  DollarSign, 
-  Shield, 
-  Clock, 
-  Settings, 
-  AlertCircle,
-  Save,
-  RotateCcw,
-  TrendingUp
-} from 'lucide-react';
-import { ConfigurationPaiementGlobale } from '@/types/paiement';
-import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
+import { useState, useEffect } from "react";
+import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { AdminPageSkeleton } from "@/components/dashboard/AdminLoadingSkeleton";
+import { AdminSettingsHeader } from "@/components/dashboard/admin/AdminSettingsNav";
+import { SettingRow } from "@/components/dashboard/admin/SettingRow";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { configPaiementApi } from "@/lib/api";
+import {
+  ConfigPaiementAdmin,
+  DEFAULT_CONFIG_PAIEMENT,
+  MODES_PAIEMENT_OPTIONS,
+  mapConfigPaiementFromApi,
+  mapConfigPaiementToApi,
+} from "@/lib/config-paiement";
+import { toast } from "sonner";
+import { DollarSign, Shield, Clock, AlertCircle, Save, RotateCcw, Loader2, Package } from "lucide-react";
 
 export default function ConfigPaiementPage() {
-  const { config, loading, refetch } = useConfigurationGlobale();
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState<Partial<ConfigurationPaiementGlobale>>({
-    commission_main_oeuvre: 5,
-    commission_materiel: 2,
-    commission_deplacement: 5,
-    pourcentage_acompte_defaut: 30,
-    pourcentage_solde_defaut: 70,
-    delai_validation_defaut: 7,
-    delai_paiement_defaut: 30,
-    pourcentage_garantie_defaut: 0,
-    duree_garantie_defaut: 30,
-    permettre_desactivation: true,
-    permettre_choix_elements: true,
-    permettre_negociation_commission: false,
-    permettre_modification_acompte: true,
-    permettre_modification_delais: true,
-  });
-  const [raison, setRaison] = useState('');
+  const [savedConfig, setSavedConfig] = useState<ConfigPaiementAdmin>(DEFAULT_CONFIG_PAIEMENT);
+  const [formData, setFormData] = useState<ConfigPaiementAdmin>(DEFAULT_CONFIG_PAIEMENT);
+
+  const loadConfig = async () => {
+    try {
+      setLoading(true);
+      const data = await configPaiementApi.adminGet();
+      const mapped = mapConfigPaiementFromApi((data ?? {}) as Record<string, unknown>);
+      setSavedConfig(mapped);
+      setFormData(mapped);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Erreur chargement config");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (config) {
-      setFormData({
-        commission_main_oeuvre: config.commission_main_oeuvre,
-        commission_materiel: config.commission_materiel,
-        commission_deplacement: config.commission_deplacement,
-        pourcentage_acompte_defaut: config.pourcentage_acompte_defaut,
-        pourcentage_solde_defaut: config.pourcentage_solde_defaut,
-        delai_validation_defaut: config.delai_validation_defaut,
-        delai_paiement_defaut: config.delai_paiement_defaut,
-        pourcentage_garantie_defaut: config.pourcentage_garantie_defaut,
-        duree_garantie_defaut: config.duree_garantie_defaut,
-        permettre_desactivation: config.permettre_desactivation,
-        permettre_choix_elements: config.permettre_choix_elements,
-        permettre_negociation_commission: config.permettre_negociation_commission,
-        permettre_modification_acompte: config.permettre_modification_acompte,
-        permettre_modification_delais: config.permettre_modification_delais,
-      });
-    }
-  }, [config]);
+    loadConfig();
+  }, []);
 
   const handleSave = async () => {
     try {
       setSaving(true);
-
-      console.log('💾 Tentative de sauvegarde...', formData);
-
-      // Mettre à jour la configuration
-      const { data, error } = await supabase
-        .from('configuration_paiement_globale')
-        .update({
-          ...formData,
-          modified_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', '00000000-0000-0000-0000-000000000001')
-        .select();
-
-      if (error) {
-        console.error('❌ Erreur UPDATE:', error);
-        throw error;
-      }
-
-      console.log('✅ UPDATE réussi, données retournées:', data);
-
-      // Vérifier si des lignes ont été affectées
-      if (!data || data.length === 0) {
-        console.warn('⚠️ Aucune ligne affectée par l\'UPDATE');
-        toast.warning('Aucune modification effectuée. Vérifiez que la configuration existe.');
-        return;
-      }
-
-      toast.success('Configuration enregistrée avec succès');
-      setRaison('');
-      
-      // Recharger pour voir les nouvelles valeurs
-      await refetch();
-      
-      console.log('✅ Configuration rechargée');
-    } catch (error: any) {
-      console.error('❌ Erreur complète:', error);
-      toast.error(error.message || 'Erreur lors de l\'enregistrement');
+      const res = await configPaiementApi.adminUpdate(mapConfigPaiementToApi(formData));
+      const updated = mapConfigPaiementFromApi(
+        ((res as { config?: Record<string, unknown> }).config ?? res ?? formData) as Record<
+          string,
+          unknown
+        >,
+      );
+      setSavedConfig(updated);
+      setFormData(updated);
+      toast.success("Configuration paiement enregistrée");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Erreur lors de l'enregistrement");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleReset = () => {
-    if (config) {
-      setFormData({
-        commission_main_oeuvre: config.commission_main_oeuvre,
-        commission_materiel: config.commission_materiel,
-        commission_deplacement: config.commission_deplacement,
-        pourcentage_acompte_defaut: config.pourcentage_acompte_defaut,
-        pourcentage_solde_defaut: config.pourcentage_solde_defaut,
-        delai_validation_defaut: config.delai_validation_defaut,
-        delai_paiement_defaut: config.delai_paiement_defaut,
-        pourcentage_garantie_defaut: config.pourcentage_garantie_defaut,
-        duree_garantie_defaut: config.duree_garantie_defaut,
-        permettre_desactivation: config.permettre_desactivation,
-        permettre_choix_elements: config.permettre_choix_elements,
-        permettre_negociation_commission: config.permettre_negociation_commission,
-        permettre_modification_acompte: config.permettre_modification_acompte,
-        permettre_modification_delais: config.permettre_modification_delais,
-      });
-      setRaison('');
-      toast.info('Modifications annulées');
-    }
+  const toggleMode = (mode: string, checked: boolean) => {
+    setFormData((prev) => {
+      const modes = new Set(prev.modes_paiement);
+      if (checked) modes.add(mode);
+      else modes.delete(mode);
+      return { ...prev, modes_paiement: Array.from(modes) };
+    });
   };
 
   if (loading) {
     return (
       <DashboardLayout role="admin" userName="Admin" userRole="Administrateur">
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Chargement de la configuration...</p>
-          </div>
-        </div>
+        <AdminPageSkeleton />
       </DashboardLayout>
     );
   }
@@ -151,374 +93,464 @@ export default function ConfigPaiementPage() {
   return (
     <DashboardLayout role="admin" userName="Admin" userRole="Administrateur">
       <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-5xl">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-          <Settings className="w-8 h-8" />
-          Configuration Paiement
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Gérez les paramètres globaux du système de paiement KaziPro
-        </p>
-      </div>
+        <AdminSettingsHeader
+          title="Paiement & escrow"
+          description="Commission plateforme, acomptes par défaut, règles de séquestre et modes Mobile Money acceptés."
+        />
 
-      {/* Alert */}
-      <Alert>
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          Les modifications s'appliquent uniquement aux nouveaux devis créés après l'enregistrement.
-          Les devis existants conservent leurs paramètres d'origine.
-        </AlertDescription>
-      </Alert>
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Ces paramètres s&apos;appliquent aux nouveaux contrats et paiements. Les contrats existants
+            conservent leur répartition escrow enregistrée.
+          </AlertDescription>
+        </Alert>
 
-      {/* Section Commissions */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <DollarSign className="w-5 h-5" />
-            Commissions KaziPro
-          </CardTitle>
-          <CardDescription>
-            Définissez les taux de commission pour chaque type d'élément
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Commission main d'œuvre */}
-          <div className="space-y-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5" />
+              Commission plateforme
+            </CardTitle>
+            <CardDescription>
+              Pourcentage prélevé sur les montants libérés de l&apos;escrow
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
             <div className="flex justify-between items-center">
-              <Label className="text-base">Main d'œuvre</Label>
+              <Label>Taux de commission</Label>
               <span className="text-2xl font-bold text-primary">
-                {formData.commission_main_oeuvre}%
+                {formData.commission_plateforme_pct}%
               </span>
             </div>
             <Slider
-              value={[formData.commission_main_oeuvre || 5]}
+              value={[formData.commission_plateforme_pct]}
               onValueChange={([value]) =>
-                setFormData({ ...formData, commission_main_oeuvre: value })
-              }
-              min={0}
-              max={20}
-              step={0.5}
-              className="w-full"
-            />
-            <p className="text-sm text-muted-foreground">
-              Commission sur le coût de la main d'œuvre (0-20%)
-            </p>
-          </div>
-
-          <Separator />
-
-          {/* Commission matériel */}
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <Label className="text-base">Matériel</Label>
-              <span className="text-2xl font-bold text-primary">
-                {formData.commission_materiel}%
-              </span>
-            </div>
-            <Slider
-              value={[formData.commission_materiel || 2]}
-              onValueChange={([value]) =>
-                setFormData({ ...formData, commission_materiel: value })
-              }
-              min={0}
-              max={20}
-              step={0.5}
-              className="w-full"
-            />
-            <p className="text-sm text-muted-foreground">
-              Commission sur le coût du matériel (0-20%)
-            </p>
-          </div>
-
-          <Separator />
-
-          {/* Commission déplacement */}
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <Label className="text-base">Déplacement</Label>
-              <span className="text-2xl font-bold text-primary">
-                {formData.commission_deplacement}%
-              </span>
-            </div>
-            <Slider
-              value={[formData.commission_deplacement || 5]}
-              onValueChange={([value]) =>
-                setFormData({ ...formData, commission_deplacement: value })
-              }
-              min={0}
-              max={20}
-              step={0.5}
-              className="w-full"
-            />
-            <p className="text-sm text-muted-foreground">
-              Commission sur les frais de déplacement (0-20%)
-            </p>
-          </div>
-
-          {/* Exemple de calcul */}
-          <Alert className="bg-blue-50 border-blue-200">
-            <TrendingUp className="h-4 w-4 text-blue-600" />
-            <AlertDescription className="text-blue-900">
-              <strong>Exemple:</strong> Pour un devis de 100,000 FC (60k travaux + 30k matériel + 10k déplacement),
-              la commission totale serait de{' '}
-              <strong>
-                {(
-                  (60000 * (formData.commission_main_oeuvre || 5)) / 100 +
-                  (30000 * (formData.commission_materiel || 2)) / 100 +
-                  (10000 * (formData.commission_deplacement || 5)) / 100
-                ).toLocaleString()}{' '}
-                FC
-              </strong>
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-
-      {/* Section Sécurité */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="w-5 h-5" />
-            Sécurité des deux parties
-          </CardTitle>
-          <CardDescription>
-            Configurez le système d'acompte et de solde pour protéger clients et prestataires
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Acompte */}
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <Label className="text-base">Acompte (payé avant travaux)</Label>
-              <span className="text-2xl font-bold text-green-600">
-                {formData.pourcentage_acompte_defaut}%
-              </span>
-            </div>
-            <Slider
-              value={[formData.pourcentage_acompte_defaut || 30]}
-              onValueChange={([value]) =>
-                setFormData({
-                  ...formData,
-                  pourcentage_acompte_defaut: value,
-                  pourcentage_solde_defaut: 100 - value,
-                })
+                setFormData({ ...formData, commission_plateforme_pct: value })
               }
               min={0}
               max={100}
-              step={5}
-              className="w-full"
+              step={0.5}
             />
-            <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-              <div>20-30%: Sécurise client</div>
-              <div className="text-center font-semibold">30-40%: Équilibré ⭐</div>
-              <div className="text-right">40-50%: Sécurise prestataire</div>
-            </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          <div className="bg-muted p-4 rounded-lg">
-            <p className="text-sm">
-              <strong>Solde (payé après validation):</strong>{' '}
-              <span className="text-lg font-bold">{formData.pourcentage_solde_defaut}%</span>
-              <span className="text-muted-foreground ml-2">(calculé automatiquement)</span>
-            </p>
-          </div>
-
-          <Separator />
-
-          {/* Délai de validation */}
-          <div className="space-y-3">
-            <Label className="text-base">Délai de validation des travaux</Label>
-            <div className="flex gap-4 items-center">
-              <Input
-                type="number"
-                value={formData.delai_validation_defaut}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    delai_validation_defaut: parseInt(e.target.value) || 7,
-                  })
-                }
-                min={1}
-                max={90}
-                className="w-32"
-              />
-              <span className="text-muted-foreground">jours</span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Délai accordé au client pour valider les travaux. Après ce délai, validation automatique.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Section Garantie */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="w-5 h-5" />
-            Garantie (optionnel)
-          </CardTitle>
-          <CardDescription>
-            Retenez un pourcentage du solde pendant une période de garantie
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="w-5 h-5" />
+              Acompte par défaut
+            </CardTitle>
+            <CardDescription>
+              Pourcentage appliqué à chaque nouveau devis et contrat. Ex. 13 % → acompte de 13 % du montant de référence.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="flex justify-between items-center">
-              <Label className="text-base">Pourcentage de garantie</Label>
-              <span className="text-2xl font-bold">
-                {formData.pourcentage_garantie_defaut}%
+              <Label>Taux d&apos;acompte</Label>
+              <span className="text-2xl font-bold text-green-600">
+                {formData.acompte_pourcentage_defaut}%
               </span>
             </div>
             <Slider
-              value={[formData.pourcentage_garantie_defaut || 0]}
+              value={[formData.acompte_pourcentage_defaut]}
               onValueChange={([value]) =>
-                setFormData({ ...formData, pourcentage_garantie_defaut: value })
+                setFormData({ ...formData, acompte_pourcentage_defaut: value })
               }
               min={0}
-              max={20}
+              max={100}
               step={1}
-              className="w-full"
             />
+            <div className="space-y-2">
+              <Label>Base de calcul de l&apos;acompte</Label>
+              <Select
+                value={formData.acompte_base}
+                onValueChange={(value: "total_ttc" | "main_oeuvre") =>
+                  setFormData({ ...formData, acompte_base: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="total_ttc">
+                    % du montant total TTC (recommandé)
+                  </SelectItem>
+                  <SelectItem value="main_oeuvre">
+                    % de la main d&apos;œuvre uniquement
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                {formData.acompte_base === "total_ttc"
+                  ? `Sur un devis de 1 000 $, l'acompte sera ${formData.acompte_pourcentage_defaut}% = ${(1000 * formData.acompte_pourcentage_defaut) / 100} $.`
+                  : `L'acompte sera ${formData.acompte_pourcentage_defaut}% de la part main d'œuvre seulement (le % affiché sur le total peut être plus bas).`}
+              </p>
+            </div>
             <p className="text-sm text-muted-foreground">
-              0% = désactivé. Recommandé: 5-10% pour travaux avec garantie
+              Solde au contrat : {100 - formData.acompte_pourcentage_defaut}% du total TTC (montant exact calculé à l&apos;acceptation du devis).
             </p>
-          </div>
+          </CardContent>
+        </Card>
 
-          {formData.pourcentage_garantie_defaut! > 0 && (
-            <>
-              <Separator />
-              <div className="space-y-3">
-                <Label className="text-base">Durée de garantie</Label>
-                <div className="flex gap-4 items-center">
-                  <Input
-                    type="number"
-                    value={formData.duree_garantie_defaut}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        duree_garantie_defaut: parseInt(e.target.value) || 30,
-                      })
-                    }
-                    min={0}
-                    max={365}
-                    className="w-32"
-                  />
-                  <span className="text-muted-foreground">jours</span>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="w-5 h-5" />
+              Règles escrow
+            </CardTitle>
+            <CardDescription>Éléments du devis séquestrés avant libération au prestataire</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <SettingRow
+              label="Main d'œuvre en escrow"
+              description="Séquestrer les lignes main d'œuvre du devis."
+              checked={formData.escrow_main_oeuvre}
+              onCheckedChange={(checked) =>
+                setFormData({ ...formData, escrow_main_oeuvre: checked })
+              }
+            />
+
+            {formData.escrow_main_oeuvre && (
+              <div className="space-y-3 pl-2 border-l-2 border-muted">
+                <div className="flex justify-between items-center">
+                  <Label>% minimum main d&apos;œuvre séquestré</Label>
+                  <span className="font-bold">{formData.escrow_main_oeuvre_pct_min}%</span>
                 </div>
+                <Slider
+                  value={[formData.escrow_main_oeuvre_pct_min]}
+                  onValueChange={([value]) =>
+                    setFormData({ ...formData, escrow_main_oeuvre_pct_min: value })
+                  }
+                  min={0}
+                  max={100}
+                  step={5}
+                />
               </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+            )}
 
-      {/* Section Permissions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Permissions des prestataires</CardTitle>
-          <CardDescription>
-            Définissez ce que les prestataires peuvent configurer
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Désactivation du paiement KaziPro</Label>
-              <p className="text-sm text-muted-foreground">
-                Permettre aux prestataires de désactiver complètement le paiement via KaziPro
-              </p>
-            </div>
-            <Switch
-              checked={formData.permettre_desactivation}
+            <Separator />
+
+            <SettingRow
+              label="Transport en escrow"
+              description="Séquestrer les frais de transport."
+              checked={formData.escrow_transport}
               onCheckedChange={(checked) =>
-                setFormData({ ...formData, permettre_desactivation: checked })
+                setFormData({ ...formData, escrow_transport: checked })
               }
             />
-          </div>
 
-          <Separator />
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Choix des éléments</Label>
-              <p className="text-sm text-muted-foreground">
-                Permettre de choisir quels éléments passent par KaziPro (travaux, matériel, déplacement)
-              </p>
-            </div>
-            <Switch
-              checked={formData.permettre_choix_elements}
+            <SettingRow
+              label="Montant total du devis"
+              description="Séquestrer l'intégralité du montant (lignes « autre »)."
+              checked={formData.escrow_montant_devis_total}
               onCheckedChange={(checked) =>
-                setFormData({ ...formData, permettre_choix_elements: checked })
+                setFormData({ ...formData, escrow_montant_devis_total: checked })
               }
             />
-          </div>
+          </CardContent>
+        </Card>
 
-          <Separator />
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Modification de l'acompte</Label>
-              <p className="text-sm text-muted-foreground">
-                Permettre aux prestataires de modifier le pourcentage d'acompte
-              </p>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="w-5 h-5" />
+              Libération automatique
+            </CardTitle>
+            <CardDescription>
+              Délai après validation mission avant libération escrow (commande artisan{" "}
+              <code className="text-xs">escrow:auto-release</code>)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex gap-4 items-center">
+              <Input
+                type="number"
+                value={formData.delai_liberation_jours ?? ""}
+                placeholder="Désactivé"
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  setFormData({
+                    ...formData,
+                    delai_liberation_jours: v === "" ? null : Math.max(1, parseInt(v, 10) || 1),
+                  });
+                }}
+                min={1}
+                className="w-32"
+              />
+              <span className="text-muted-foreground">jours (vide = manuel uniquement)</span>
             </div>
-            <Switch
-              checked={formData.permettre_modification_acompte}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Modes de paiement acceptés</CardTitle>
+            <CardDescription>Modes proposés aux clients lors du paiement</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {MODES_PAIEMENT_OPTIONS.map(({ value, label }) => (
+              <div key={value} className="flex items-center gap-3">
+                <Checkbox
+                  id={`mode-${value}`}
+                  checked={formData.modes_paiement.includes(value)}
+                  onCheckedChange={(checked) => toggleMode(value, checked === true)}
+                />
+                <Label htmlFor={`mode-${value}`} className="font-normal cursor-pointer">
+                  {label}
+                </Label>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Location matériel
+            </CardTitle>
+            <CardDescription>
+              Escrow loyer/caution, commission location, modération des annonces et limites vidéo
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <SettingRow
+              label="Loyer en escrow"
+              description="Séquestrer le loyer jusqu'à la fin de la location."
+              checked={formData.escrow_location_loyer}
               onCheckedChange={(checked) =>
-                setFormData({ ...formData, permettre_modification_acompte: checked })
+                setFormData({ ...formData, escrow_location_loyer: checked })
               }
             />
-          </div>
-        </CardContent>
-      </Card>
+            <SettingRow
+              label="Caution obligatoire"
+              description="Exiger une caution sur chaque réservation."
+              checked={formData.escrow_caution_obligatoire}
+              onCheckedChange={(checked) =>
+                setFormData({ ...formData, escrow_caution_obligatoire: checked })
+              }
+            />
+            <SettingRow
+              label="Frais livraison en escrow"
+              description="Séquestrer les frais de livraison loueur."
+              checked={formData.escrow_livraison_materiel}
+              onCheckedChange={(checked) =>
+                setFormData({ ...formData, escrow_livraison_materiel: checked })
+              }
+            />
+            <div className="space-y-2">
+              <Label>Libération frais livraison</Label>
+              <Select
+                value={formData.escrow_livraison_liberation}
+                onValueChange={(value: "remise" | "retour") =>
+                  setFormData({ ...formData, escrow_livraison_liberation: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="remise">À la remise du matériel</SelectItem>
+                  <SelectItem value="retour">Au retour validé</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-      {/* Raison de la modification */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Raison de la modification (optionnel)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            placeholder="Ex: Ajustement des commissions pour la phase de lancement..."
-            value={raison}
-            onChange={(e) => setRaison(e.target.value)}
-            rows={3}
-          />
-        </CardContent>
-      </Card>
+            <Separator />
 
-      {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-4 sticky bottom-4 bg-background p-4 rounded-lg border shadow-lg">
-        <Button
-          onClick={handleSave}
-          disabled={saving}
-          size="lg"
-          className="flex-1"
-        >
-          {saving ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              Enregistrement...
-            </>
-          ) : (
-            <>
-              <Save className="w-4 h-4 mr-2" />
-              Enregistrer les modifications
-            </>
-          )}
-        </Button>
-        <Button
-          onClick={handleReset}
-          variant="outline"
-          size="lg"
-          disabled={saving}
-        >
-          <RotateCcw className="w-4 h-4 mr-2" />
-          Annuler
-        </Button>
+            <div className="flex justify-between items-center">
+              <Label>Commission location</Label>
+              <span className="text-xl font-bold text-primary">
+                {formData.commission_location_pct}%
+              </span>
+            </div>
+            <Slider
+              value={[formData.commission_location_pct]}
+              onValueChange={([value]) =>
+                setFormData({ ...formData, commission_location_pct: value })
+              }
+              min={0}
+              max={30}
+              step={0.5}
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Caution % défaut</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={formData.caution_pct_defaut}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      caution_pct_defaut: Number(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Plancher caution (FC)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={formData.caution_plancher_fc}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      caution_plancher_fc: Number(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Caution % min</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={formData.caution_pct_min}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      caution_pct_min: Number(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Caution % max</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={formData.caution_pct_max}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      caution_pct_max: Number(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Plafond caution (FC)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={formData.caution_plafond_fc}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      caution_plafond_fc: Number(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Inspection retour (jours)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={formData.delai_inspection_retour_jours}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      delai_inspection_retour_jours: Math.max(1, Number(e.target.value) || 1),
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <Separator />
+
+            <SettingRow
+              label="Modération des médias"
+              description="Les annonces passent en file d'attente avant publication."
+              checked={formData.moderation_medias_active}
+              onCheckedChange={(checked) =>
+                setFormData({ ...formData, moderation_medias_active: checked })
+              }
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Vidéo max annonce (Mo)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={formData.video_max_mo_annonce}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      video_max_mo_annonce: Number(e.target.value) || 1,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Vidéo max checklist (Mo)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={formData.video_max_mo_checklist}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      video_max_mo_checklist: Number(e.target.value) || 1,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Durée max vidéo (s)</Label>
+                <Input
+                  type="number"
+                  min={5}
+                  value={formData.video_duree_max_secondes}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      video_duree_max_secondes: Number(e.target.value) || 60,
+                    })
+                  }
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex flex-col sm:flex-row gap-4 sticky bottom-4 bg-background p-4 rounded-lg border shadow-lg">
+          <Button onClick={handleSave} disabled={saving} size="lg" className="flex-1">
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Enregistrement...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 mr-2" />
+                Enregistrer
+              </>
+            )}
+          </Button>
+          <Button
+            onClick={() => {
+              setFormData(savedConfig);
+              toast.info("Modifications annulées");
+            }}
+            variant="outline"
+            size="lg"
+            disabled={saving}
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Annuler
+          </Button>
+        </div>
       </div>
-    </div>
     </DashboardLayout>
   );
 }

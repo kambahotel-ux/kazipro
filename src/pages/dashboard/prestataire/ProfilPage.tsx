@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { useState, useEffect, useRef } from "react";
+import { ProfilePageSkeleton } from "@/components/dashboard/AdminLoadingSkeleton";
+import { PrestatairePageShell } from "@/components/prestataire/PrestatairePageShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,9 +36,20 @@ import {
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { prestatairesApi, uploadApi, avisApi, portfolioApi, API_BASE_URL } from "@/lib/api";
+import {
+  displayNameFromProfil,
+  getProfil,
+  prestataireIdFromUser,
+  getPrestataireValidationStatus,
+  isPrestataireValidated,
+  isPrestataireProfileComplete,
+  professionLabelFromProfil,
+} from "@/lib/kazipro-profile";
+import { unwrapPortfolio } from "@/lib/api-utils";
 import { toast } from "sonner";
 import ProfileCompletionSteps from "@/components/profile/ProfileCompletionSteps";
+import { PrestataireVerificationBadge } from "@/components/prestataire/PrestataireVerificationBadge";
 
 interface ProviderProfile {
   id: string;
@@ -77,6 +89,54 @@ interface ProviderProfile {
   adresse_siege?: string;
   ville_siege?: string;
   pays_siege?: string;
+}
+
+function mapApiToProviderProfile(
+  profileData: Record<string, unknown>,
+  user: { id: string; name?: string; email?: string },
+): ProviderProfile {
+  return {
+    id: String(profileData.id),
+    user_id: String(profileData.user_id ?? user.id),
+    full_name: displayNameFromProfil(profileData, user.name || "Prestataire"),
+    profession: professionLabelFromProfil(profileData),
+    bio: String(profileData.bio ?? ""),
+    phone: String(profileData.telephone ?? profileData.phone ?? ""),
+    email: String(profileData.email ?? user.email ?? ""),
+    address: String(profileData.adresse ?? profileData.address ?? ""),
+    city: String(profileData.ville ?? profileData.city ?? ""),
+    verified: isPrestataireValidated(profileData),
+    profile_completed:
+      Boolean(profileData.profile_completed) || isPrestataireProfileComplete(profileData),
+    created_at: String(profileData.created_at ?? ""),
+    experience_years: Number(profileData.experience_years ?? profileData.annees_experience ?? 0),
+    hourly_rate: Number(profileData.hourly_rate ?? profileData.tarif_horaire ?? 0),
+    availability: profileData.disponible ? "disponible" : "occupe",
+    id_document_url:
+      (profileData.piece_identite as string | undefined) ||
+      (profileData.id_document_url as string | undefined),
+    qualification_url:
+      (profileData.document_rccm as string | undefined) ||
+      (profileData.qualification_url as string | undefined),
+    type_prestataire:
+      (profileData.type_personne as ProviderProfile["type_prestataire"]) ||
+      (profileData.type_prestataire as ProviderProfile["type_prestataire"]),
+    nom: String(profileData.nom ?? ""),
+    prenom: String(profileData.prenom ?? ""),
+    date_naissance: String(profileData.date_naissance ?? ""),
+    numero_cni: String(profileData.numero_cni ?? ""),
+    raison_sociale: String(profileData.raison_sociale ?? ""),
+    forme_juridique: String(profileData.forme_juridique ?? ""),
+    numero_rccm: String(profileData.numero_rccm ?? ""),
+    numero_impot: String(profileData.numero_impot ?? ""),
+    numero_id_nat: String(profileData.numero_id_nat ?? ""),
+    representant_legal_nom: String(profileData.representant_legal_nom ?? ""),
+    representant_legal_prenom: String(profileData.representant_legal_prenom ?? ""),
+    representant_legal_fonction: String(profileData.representant_legal_fonction ?? ""),
+    adresse_siege: String(profileData.adresse_siege ?? ""),
+    ville_siege: String(profileData.ville_siege ?? ""),
+    pays_siege: String(profileData.pays_siege ?? ""),
+  };
 }
 
 interface Avis {
@@ -120,6 +180,125 @@ const professions = [
   "Coiffeur/Coiffeuse",
 ];
 
+function storageUrlFromUpload(up: { url?: string; path?: string }): string {
+  if (up.url) return up.url;
+  if (!up.path) return "";
+  const origin = API_BASE_URL.replace(/\/api\/?$/, "");
+  return `${origin}/storage/${up.path.replace(/^\//, "")}`;
+}
+
+function statsFromPrestataireData(profileData: Record<string, unknown>) {
+  const rating = Number(profileData.note_moyenne ?? 0);
+  return {
+    rating: Math.round(rating * 10) / 10,
+    reviewsCount: Number(profileData.nb_avis ?? 0),
+    missionsCompleted: Number(profileData.nb_missions ?? 0),
+    satisfactionRate: Math.round((rating / 5) * 100),
+  };
+}
+
+function mapPortfolioItems(
+  projets: Array<{
+    id: string;
+    titre: string;
+    description?: string;
+    photos?: string[];
+    images?: string[];
+    date_realisation?: string;
+    created_at?: string;
+  }>,
+  professionLabel: string,
+): PortfolioItem[] {
+  return projets.map((p) => ({
+    id: p.id,
+    titre: p.titre,
+    description: p.description ?? "",
+    images: p.photos ?? p.images ?? [],
+    date_realisation: p.date_realisation ?? p.created_at ?? "",
+    categorie: professionLabel,
+    created_at: p.created_at ?? "",
+  }));
+}
+
+type ProfilPageCache = {
+  userId: string;
+  profile: ProviderProfile;
+  formData: ReturnType<typeof createEmptyFormData>;
+  portfolio: PortfolioItem[];
+  stats: ReturnType<typeof statsFromPrestataireData>;
+  fetchedAt: number;
+};
+
+const PROFIL_CACHE_MS = 45_000;
+let profilPageCache: ProfilPageCache | null = null;
+
+function clearProfilPageCache() {
+  profilPageCache = null;
+}
+
+function createEmptyFormData() {
+  return {
+    full_name: "",
+    profession: "",
+    bio: "",
+    phone: "",
+    email: "",
+    address: "",
+    city: "",
+    experience_years: 0,
+    hourly_rate: 0,
+    availability: "disponible",
+    nom: "",
+    prenom: "",
+    date_naissance: "",
+    numero_cni: "",
+    raison_sociale: "",
+    forme_juridique: "",
+    numero_rccm: "",
+    numero_impot: "",
+    numero_id_nat: "",
+    representant_legal_nom: "",
+    representant_legal_prenom: "",
+    representant_legal_fonction: "",
+    adresse_siege: "",
+    ville_siege: "",
+    pays_siege: "",
+  };
+}
+
+function formDataFromProfile(
+  profileData: Record<string, unknown>,
+  user: { name?: string; email?: string },
+) {
+  return {
+    full_name: displayNameFromProfil(profileData, user.name || ""),
+    profession: professionLabelFromProfil(profileData),
+    bio: String(profileData.bio ?? ""),
+    phone: String(profileData.telephone ?? profileData.phone ?? ""),
+    email: String(profileData.email ?? user.email ?? ""),
+    address: String(profileData.adresse ?? profileData.address ?? ""),
+    city: String(profileData.ville ?? profileData.city ?? ""),
+    experience_years: Number(profileData.experience_years ?? profileData.annees_experience ?? 0),
+    hourly_rate: Number(profileData.hourly_rate ?? profileData.tarif_horaire ?? 0),
+    availability: profileData.disponible ? "disponible" : "occupe",
+    nom: String(profileData.nom ?? ""),
+    prenom: String(profileData.prenom ?? ""),
+    date_naissance: String(profileData.date_naissance ?? ""),
+    numero_cni: String(profileData.numero_cni ?? ""),
+    raison_sociale: String(profileData.raison_sociale ?? ""),
+    forme_juridique: String(profileData.forme_juridique ?? ""),
+    numero_rccm: String(profileData.numero_rccm ?? ""),
+    numero_impot: String(profileData.numero_impot ?? ""),
+    numero_id_nat: String(profileData.numero_id_nat ?? ""),
+    representant_legal_nom: String(profileData.representant_legal_nom ?? ""),
+    representant_legal_prenom: String(profileData.representant_legal_prenom ?? ""),
+    representant_legal_fonction: String(profileData.representant_legal_fonction ?? ""),
+    adresse_siege: String(profileData.adresse_siege ?? ""),
+    ville_siege: String(profileData.ville_siege ?? ""),
+    pays_siege: String(profileData.pays_siege ?? "RDC"),
+  };
+}
+
 const communes = [
   "Bandalungwa", "Barumbu", "Bumbu", "Gombe", "Kalamu",
   "Kasa-Vubu", "Kimbanseke", "Kinshasa", "Kintambo", "Kisenso",
@@ -128,7 +307,7 @@ const communes = [
   "Ngaliema", "Ngiri-Ngiri", "Nsele", "Selembao"
 ];
 
-export default function ProfilPage() {
+export default function ProfilPage({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
   const [profile, setProfile] = useState<ProviderProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -159,8 +338,11 @@ export default function ProfilPage() {
     satisfactionRate: 0,
   });
   
-  // Reviews
+  // Reviews (chargés à la demande — onglet Avis)
   const [reviews, setReviews] = useState<Avis[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [profileTab, setProfileTab] = useState("about");
+  const reviewsLoadedRef = useRef(false);
   
   // Horaires
   const [horaires, setHoraires] = useState<any[]>([]);
@@ -190,134 +372,113 @@ export default function ProfilPage() {
   };
   
   // Form data
-  const [formData, setFormData] = useState({
-    full_name: "",
-    profession: "",
-    bio: "",
-    phone: "",
-    email: "",
-    address: "",
-    city: "",
-    experience_years: 0,
-    hourly_rate: 0,
-    availability: "disponible",
-    // Personne physique
-    nom: "",
-    prenom: "",
-    date_naissance: "",
-    numero_cni: "",
-    // Personne morale
-    raison_sociale: "",
-    forme_juridique: "",
-    numero_rccm: "",
-    numero_impot: "",
-    numero_id_nat: "",
-    representant_legal_nom: "",
-    representant_legal_prenom: "",
-    representant_legal_fonction: "",
-    adresse_siege: "",
-    ville_siege: "",
-    pays_siege: "",
-  });
+  const [formData, setFormData] = useState(createEmptyFormData);
+
+  const profileFetchRef = useRef(false);
 
   useEffect(() => {
     if (user) {
-      fetchProfile();
-      fetchHoraires();
+      void fetchProfile();
     }
-  }, [user]);
+  }, [user?.id]);
 
-  // Charger le portfolio quand le profil est disponible
-  useEffect(() => {
-    if (profile) {
-      fetchPortfolio();
+  const applyProfilCache = (cached: ProfilPageCache) => {
+    setProfile(cached.profile);
+    setFormData(cached.formData);
+    setPortfolio(cached.portfolio);
+    setStats(cached.stats);
+    setServices([]);
+  };
+
+  const fetchProfile = async (force = false) => {
+    if (!user || (profileFetchRef.current && !force)) return;
+
+    if (force) {
+      clearProfilPageCache();
+      reviewsLoadedRef.current = false;
+      setReviews([]);
     }
-  }, [profile]);
 
-  const fetchProfile = async () => {
-    if (!user) return;
-    
+    const cached =
+      !force &&
+      profilPageCache &&
+      profilPageCache.userId === user.id &&
+      Date.now() - profilPageCache.fetchedAt < PROFIL_CACHE_MS
+        ? profilPageCache
+        : null;
+
+    if (cached) {
+      applyProfilCache(cached);
+      setLoading(false);
+      return;
+    }
+
+    profileFetchRef.current = true;
     try {
-      setLoading(true);
-      
-      // Récupérer le profil
-      const { data: profileData, error: profileError } = await supabase
-        .from("prestataires")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      if (!profile) setLoading(true);
+      const pid = prestataireIdFromUser(user);
+      let profileData: Record<string, unknown> | null = getProfil(user);
 
-      if (profileError) throw profileError;
-      
+      let portfolioItems: PortfolioItem[] = [];
+
+      if (pid) {
+        try {
+          const [prestataireRes, portfolioRes] = await Promise.all([
+            prestatairesApi.getById(pid),
+            prestatairesApi.getPortfolio(pid),
+          ]);
+          profileData = prestataireRes as Record<string, unknown>;
+          portfolioItems = mapPortfolioItems(
+            unwrapPortfolio(portfolioRes),
+            professionLabelFromProfil(profileData),
+          );
+        } catch {
+          profileData = getProfil(user);
+        }
+      }
+
       if (!profileData) {
         console.log("No provider profile found for user:", user.id);
-        setLoading(false);
         return;
       }
 
-      if (profileData) {
-        setProfile(profileData);
-        setFormData({
-          full_name: profileData.full_name || "",
-          profession: profileData.profession || "",
-          bio: profileData.bio || "",
-          phone: profileData.phone || "",
-          email: profileData.email || user.email || "",
-          address: profileData.address || "",
-          city: profileData.city || "",
-          experience_years: profileData.experience_years || 0,
-          hourly_rate: profileData.hourly_rate || 0,
-          availability: profileData.availability || "disponible",
-          // Personne physique
-          nom: profileData.nom || "",
-          prenom: profileData.prenom || "",
-          date_naissance: profileData.date_naissance || "",
-          numero_cni: profileData.numero_cni || "",
-          // Personne morale
-          raison_sociale: profileData.raison_sociale || "",
-          forme_juridique: profileData.forme_juridique || "",
-          numero_rccm: profileData.numero_rccm || "",
-          numero_impot: profileData.numero_impot || "",
-          numero_id_nat: profileData.numero_id_nat || "",
-          representant_legal_nom: profileData.representant_legal_nom || "",
-          representant_legal_prenom: profileData.representant_legal_prenom || "",
-          representant_legal_fonction: profileData.representant_legal_fonction || "",
-          adresse_siege: profileData.adresse_siege || "",
-          ville_siege: profileData.ville_siege || "",
-          pays_siege: profileData.pays_siege || "RDC",
-        });
+      const mappedProfile = mapApiToProviderProfile(profileData, user);
+      const nextFormData = formDataFromProfile(profileData, user);
+      const nextStats = statsFromPrestataireData(profileData);
 
-        // Récupérer les services
-        await fetchServices(profileData.id);
-        
-        // Récupérer les stats
-        await fetchStats(profileData.id);
-        
-        // Récupérer les avis
-        await fetchReviews(profileData.id);
-      }
-    } catch (error: any) {
+      setProfile(mappedProfile);
+      setFormData(nextFormData);
+      setPortfolio(portfolioItems);
+      setStats(nextStats);
+      setServices([]);
+
+      profilPageCache = {
+        userId: user.id,
+        profile: mappedProfile,
+        formData: nextFormData,
+        portfolio: portfolioItems,
+        stats: nextStats,
+        fetchedAt: Date.now(),
+      };
+    } catch (error: unknown) {
       console.error("Error fetching profile:", error);
       toast.error("Erreur lors du chargement du profil");
     } finally {
       setLoading(false);
+      profileFetchRef.current = false;
     }
   };
 
-  const fetchServices = async (providerId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("prestataire_services")
-        .select("*")
-        .eq("prestataire_id", providerId)
-        .order("principal", { ascending: false })
-        .order("service", { ascending: true });
-
-      if (error) throw error;
-      setServices(data || []);
-    } catch (error) {
-      console.error("Error fetching services:", error);
+  const handleProfileTabChange = (tab: string) => {
+    setProfileTab(tab);
+    if (tab === "reviews" && profile?.id && !reviewsLoadedRef.current) {
+      reviewsLoadedRef.current = true;
+      void loadReviews(profile.id);
     }
+  };
+
+  const fetchServices = async (_providerId: string) => {
+    setServices([]);
   };
 
   const handleAddService = async () => {
@@ -325,186 +486,49 @@ export default function ProfilPage() {
       toast.error("Veuillez sélectionner un service");
       return;
     }
-
-    try {
-      const { error } = await supabase
-        .from("prestataire_services")
-        .insert({
-          prestataire_id: profile.id,
-          service: newService.service,
-          niveau_competence: newService.niveau,
-          annees_experience: newService.experience,
-          tarif_horaire: newService.tarif || null,
-          principal: false,
-        });
-
-      if (error) throw error;
-
-      toast.success("Service ajouté avec succès");
-      setShowAddService(false);
-      setNewService({ service: "", niveau: "intermediaire", experience: 0, tarif: 0 });
-      fetchServices(profile.id);
-    } catch (error: any) {
-      console.error("Error adding service:", error);
-      toast.error("Erreur lors de l'ajout du service");
-    }
+    toast.info("Gestion des services bientôt disponible via l'API");
   };
 
-  const handleDeleteService = async (serviceId: string) => {
-    if (!profile) return;
-
-    try {
-      const { error } = await supabase
-        .from("prestataire_services")
-        .delete()
-        .eq("id", serviceId);
-
-      if (error) throw error;
-
-      toast.success("Service supprimé");
-      fetchServices(profile.id);
-    } catch (error: any) {
-      console.error("Error deleting service:", error);
-      toast.error("Erreur lors de la suppression");
-    }
+  const handleDeleteService = async (_serviceId: string) => {
+    toast.info("Gestion des services bientôt disponible via l'API");
   };
 
-  const handleSetPrincipal = async (serviceId: string, serviceName: string) => {
-    if (!profile) return;
-
-    try {
-      // Appeler la fonction SQL pour définir le service principal
-      const { error } = await supabase.rpc('set_principal_service', {
-        p_prestataire_id: profile.id,
-        p_service: serviceName,
-      });
-
-      if (error) throw error;
-
-      toast.success("Service principal mis à jour");
-      fetchProfile();
-    } catch (error: any) {
-      console.error("Error setting principal service:", error);
-      toast.error("Erreur lors de la mise à jour");
-    }
+  const handleSetPrincipal = async (_serviceId: string, _serviceName: string) => {
+    toast.info("Gestion des services bientôt disponible via l'API");
   };
 
-  const fetchStats = async (providerId: string) => {
+  const loadReviews = async (providerId: string) => {
     try {
-      // Récupérer les avis
-      const { data: avisData } = await supabase
-        .from("avis")
-        .select("rating")
-        .eq("prestataire_id", providerId);
-
-      if (avisData && avisData.length > 0) {
-        const avgRating = avisData.reduce((sum, a) => sum + a.rating, 0) / avisData.length;
-        const satisfaction = (avgRating / 5) * 100;
-        
-        setStats(prev => ({
-          ...prev,
-          rating: Math.round(avgRating * 10) / 10,
-          reviewsCount: avisData.length,
-          satisfactionRate: Math.round(satisfaction),
-        }));
-      }
-
-      // Récupérer les missions complétées
-      const { data: missionsData } = await supabase
-        .from("missions")
-        .select("id")
-        .eq("prestataire_id", providerId)
-        .eq("status", "terminee");
-
-      if (missionsData) {
-        setStats(prev => ({
-          ...prev,
-          missionsCompleted: missionsData.length,
-        }));
-      }
-    } catch (error) {
-      console.error("Error fetching stats:", error);
-    }
-  };
-
-  const fetchReviews = async (providerId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("avis")
-        .select(`
-          id,
-          rating,
-          commentaire,
-          created_at,
-          client_id,
-          demande_id
-        `)
-        .eq("prestataire_id", providerId)
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-      setReviews(data as any || []);
+      setLoadingReviews(true);
+      const avisRes = await avisApi.getByPrestataire(providerId);
+      const data = Array.isArray(avisRes) ? avisRes : avisRes.data ?? avisRes.avis ?? [];
+      setReviews(
+        data.slice(0, 10).map((a: { id: string; note?: number; rating?: number; commentaire?: string; created_at?: string; client_id?: string; demande_id?: string }) => ({
+          id: a.id,
+          rating: a.note ?? a.rating ?? 0,
+          commentaire: a.commentaire,
+          created_at: a.created_at,
+          client_id: a.client_id,
+          demande_id: a.demande_id,
+        }))
+      );
     } catch (error) {
       console.error("Error fetching reviews:", error);
-    }
-  };
-
-  const fetchHoraires = async () => {
-    if (!user) return;
-
-    try {
-      setLoadingHoraires(true);
-
-      // Get prestataire ID
-      const { data: prestataireData } = await supabase
-        .from("prestataires")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!prestataireData) return;
-
-      // Fetch horaires
-      const { data, error } = await supabase
-        .from("horaires_travail")
-        .select("*")
-        .eq("prestataire_id", prestataireData.id)
-        .order("jour_semaine");
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        // Normaliser le format des heures
-        const normalizedData = data.map(h => ({
-          ...h,
-          heure_debut: h.heure_debut.substring(0, 5),
-          heure_fin: h.heure_fin.substring(0, 5)
-        }));
-        setHoraires(normalizedData);
-      }
-    } catch (error: any) {
-      console.error("Error fetching horaires:", error);
     } finally {
-      setLoadingHoraires(false);
+      setLoadingReviews(false);
     }
   };
 
-  const fetchPortfolio = async () => {
-    if (!profile) return;
-
+  const refreshPortfolio = async (providerId: string, professionLabel: string) => {
     try {
       setLoadingPortfolio(true);
-
-      const { data, error } = await supabase
-        .from("portfolio_items")
-        .select("*")
-        .eq("prestataire_id", profile.id)
-        .order("date_realisation", { ascending: false });
-
-      if (error) throw error;
-      setPortfolio(data || []);
-    } catch (error: any) {
+      const res = await prestatairesApi.getPortfolio(providerId);
+      const items = mapPortfolioItems(unwrapPortfolio(res), professionLabel);
+      setPortfolio(items);
+      if (profilPageCache?.userId === user?.id) {
+        profilPageCache = { ...profilPageCache, portfolio: items, fetchedAt: Date.now() };
+      }
+    } catch (error: unknown) {
       console.error("Error fetching portfolio:", error);
     } finally {
       setLoadingPortfolio(false);
@@ -530,38 +554,11 @@ export default function ProfilPage() {
     try {
       setUploadingPortfolio(true);
 
-      // Upload des images
-      const imageUrls: string[] = [];
-      for (const file of portfolioImages) {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${profile.id}/portfolio_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('portfolio-images')
-          .upload(fileName, file, { upsert: true });
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('portfolio-images')
-          .getPublicUrl(fileName);
-
-        imageUrls.push(publicUrl);
-      }
-
-      // Créer l'item portfolio
-      const { error: insertError } = await supabase
-        .from("portfolio_items")
-        .insert({
-          prestataire_id: profile.id,
-          titre: newPortfolio.titre,
-          description: newPortfolio.description || null,
-          categorie: profile.profession,
-          date_realisation: newPortfolio.date_realisation,
-          images: imageUrls,
-        });
-
-      if (insertError) throw insertError;
+      await portfolioApi.create(String(profile.id), {
+        titre: newPortfolio.titre,
+        description: newPortfolio.description || undefined,
+        images: portfolioImages,
+      });
 
       toast.success("Réalisation ajoutée avec succès");
       setShowAddPortfolio(false);
@@ -571,7 +568,7 @@ export default function ProfilPage() {
         date_realisation: new Date().toISOString().split('T')[0]
       });
       setPortfolioImages([]);
-      fetchPortfolio();
+      void refreshPortfolio(String(profile.id), profile.profession);
     } catch (error: any) {
       console.error("Error adding portfolio:", error);
       toast.error("Erreur lors de l'ajout de la réalisation");
@@ -586,15 +583,10 @@ export default function ProfilPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from("portfolio_items")
-        .delete()
-        .eq("id", portfolioId);
-
-      if (error) throw error;
+      await portfolioApi.delete(portfolioId);
 
       toast.success("Réalisation supprimée");
-      fetchPortfolio();
+      if (profile) void refreshPortfolio(String(profile.id), profile.profession);
     } catch (error: any) {
       console.error("Error deleting portfolio:", error);
       toast.error("Erreur lors de la suppression");
@@ -607,17 +599,15 @@ export default function ProfilPage() {
     try {
       setSaving(true);
 
-      const updateData: any = {
-        full_name: formData.full_name,
-        profession: formData.profession,
+      const updateData: Record<string, unknown> = {
         bio: formData.bio,
-        phone: formData.phone,
+        telephone: formData.phone,
         email: formData.email,
-        address: formData.address,
-        city: formData.city,
-        experience_years: formData.experience_years,
-        hourly_rate: formData.hourly_rate,
-        availability: formData.availability,
+        adresse: formData.address,
+        ville: formData.city,
+        annees_experience: formData.experience_years,
+        tarif_horaire: formData.hourly_rate,
+        disponible: formData.availability === "disponible",
       };
 
       // Ajouter les champs selon le type
@@ -640,12 +630,7 @@ export default function ProfilPage() {
         updateData.pays_siege = formData.pays_siege || "RDC";
       }
 
-      const { error } = await supabase
-        .from("prestataires")
-        .update(updateData)
-        .eq("id", profile.id);
-
-      if (error) throw error;
+      await prestatairesApi.update(String(profile.id), updateData);
 
       toast.success("Profil mis à jour avec succès");
       setIsEditing(false);
@@ -711,29 +696,12 @@ export default function ProfilPage() {
     try {
       setUploadingDocument(true);
 
-      // Upload vers Supabase Storage
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${type}_document_${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('prestataire-documents')
-        .upload(fileName, file, { upsert: true });
+      const docType = type === 'id' ? 'cni' : 'autre';
+      const up = await uploadApi.uploadDocument(file, docType, String(user.id));
+      const docUrl = storageUrlFromUpload(up);
 
-      if (uploadError) throw uploadError;
-
-      // Obtenir l'URL publique
-      const { data: { publicUrl } } = supabase.storage
-        .from('prestataire-documents')
-        .getPublicUrl(fileName);
-
-      // Mettre à jour la base de données
-      const updateField = type === 'id' ? 'id_document_url' : 'qualification_url';
-      const { error: updateError } = await supabase
-        .from('prestataires')
-        .update({ [updateField]: publicUrl })
-        .eq('id', profile.id);
-
-      if (updateError) throw updateError;
+      const updateField = type === 'id' ? 'piece_identite' : 'document_rccm';
+      await prestatairesApi.update(String(profile.id), { [updateField]: docUrl });
 
       toast.success("Document mis à jour avec succès");
       
@@ -744,7 +712,7 @@ export default function ProfilPage() {
         setNewQualificationDoc(null);
       }
       
-      fetchProfile();
+      await fetchProfile(true);
     } catch (error: any) {
       console.error("Erreur lors de l'upload:", error);
       toast.error("Erreur lors de la mise à jour du document");
@@ -763,17 +731,11 @@ export default function ProfilPage() {
     try {
       setUploadingDocument(true);
 
-      // Mettre à jour la base de données (supprimer l'URL)
-      const updateField = type === 'id' ? 'id_document_url' : 'qualification_url';
-      const { error } = await supabase
-        .from('prestataires')
-        .update({ [updateField]: null })
-        .eq('id', profile.id);
-
-      if (error) throw error;
+      const updateField = type === 'id' ? 'piece_identite' : 'document_rccm';
+      await prestatairesApi.update(String(profile.id), { [updateField]: null });
 
       toast.success("Document supprimé avec succès");
-      fetchProfile();
+      await fetchProfile(true);
     } catch (error: any) {
       console.error("Erreur lors de la suppression:", error);
       toast.error("Erreur lors de la suppression du document");
@@ -800,28 +762,10 @@ export default function ProfilPage() {
     try {
       setUploadingPhoto(true);
 
-      // Upload vers Supabase Storage
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${profile.id}/profile_${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('profile-photos')
-        .upload(fileName, file, { upsert: true });
+      const up = await uploadApi.uploadProfilePhoto(file);
+      const photoUrl = up.url ?? up.path ?? '';
 
-      if (uploadError) throw uploadError;
-
-      // Obtenir l'URL publique
-      const { data: { publicUrl } } = supabase.storage
-        .from('profile-photos')
-        .getPublicUrl(fileName);
-
-      // Mettre à jour la base de données
-      const { error: updateError } = await supabase
-        .from('prestataires')
-        .update({ photo_url: publicUrl })
-        .eq('id', profile.id);
-
-      if (updateError) throw updateError;
+      await prestatairesApi.update(String(profile.id), { photo: photoUrl, photo_url: photoUrl });
 
       toast.success("Photo de profil mise à jour avec succès");
       fetchProfile();
@@ -848,24 +792,20 @@ export default function ProfilPage() {
 
   if (loading) {
     return (
-      <DashboardLayout 
-        role="prestataire" 
+      <PrestatairePageShell embedded={embedded} 
         userName="Prestataire" 
         userRole="Prestataire"
         isVerified={false}
         isProfileComplete={false}
       >
-        <div className="flex items-center justify-center h-48 md:h-64 px-4">
-          <Loader2 className="w-6 h-6 md:w-8 md:h-8 animate-spin text-primary" />
-        </div>
-      </DashboardLayout>
+        <ProfilePageSkeleton />
+      </PrestatairePageShell>
     );
   }
 
   if (!profile) {
     return (
-      <DashboardLayout 
-        role="prestataire" 
+      <PrestatairePageShell embedded={embedded} 
         userName="Prestataire" 
         userRole="Prestataire"
         isVerified={false}
@@ -890,30 +830,33 @@ export default function ProfilPage() {
             </Button>
           </CardContent>
         </Card>
-      </DashboardLayout>
+      </PrestatairePageShell>
     );
   }
 
   // Si le profil n'est pas complet, afficher le wizard de complétion
   if (profile && !profile.profile_completed) {
     return (
-      <DashboardLayout 
-        role="prestataire" 
+      <PrestatairePageShell embedded={embedded} 
         userName={profile.full_name} 
         userRole={profile.profession}
         isVerified={profile.verified}
         isProfileComplete={false}
       >
         <div className="max-w-5xl mx-auto py-6">
-          <ProfileCompletionSteps onComplete={fetchProfile} />
+          <ProfileCompletionSteps
+            onComplete={() => {
+              portfolioLoadedForRef.current = null;
+              void fetchProfile();
+            }}
+          />
         </div>
-      </DashboardLayout>
+      </PrestatairePageShell>
     );
   }
 
   return (
-    <DashboardLayout 
-      role="prestataire" 
+    <PrestatairePageShell embedded={embedded} 
       userName={profile.full_name} 
       userRole={profile.profession}
       isVerified={profile.verified}
@@ -955,16 +898,14 @@ export default function ProfilPage() {
                 </div>
                 
                 <div className="flex-1 space-y-3 md:space-y-4 text-center sm:text-left">
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 md:gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
                         <h1 className="text-lg md:text-2xl font-display font-bold truncate">{profile.full_name}</h1>
-                        {profile.verified && (
-                          <Badge variant="default" className="flex items-center gap-1 text-xs">
-                            <Shield className="w-3 h-3" />
-                            Vérifié
-                          </Badge>
-                        )}
+                        <PrestataireVerificationBadge
+                          status={getPrestataireValidationStatus(profile as unknown as Record<string, unknown>)}
+                          size="lg"
+                        />
                       </div>
                       <p className="text-sm md:text-base text-muted-foreground truncate">{profile.profession}</p>
                     </div>
@@ -1045,7 +986,7 @@ export default function ProfilPage() {
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="about" className="space-y-3 md:space-y-4">
+        <Tabs value={profileTab} onValueChange={handleProfileTabChange} className="space-y-3 md:space-y-4">
           <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 text-xs md:text-sm">
             <TabsTrigger value="about" className="text-xs md:text-sm">À propos</TabsTrigger>
             <TabsTrigger value="services" className="text-xs md:text-sm">Services ({services.length})</TabsTrigger>
@@ -1105,12 +1046,7 @@ export default function ProfilPage() {
                     checked={(profile as any).disponible || false}
                     onCheckedChange={async (checked) => {
                       try {
-                        const { error } = await supabase
-                          .from("prestataires")
-                          .update({ disponible: checked })
-                          .eq("id", profile.id);
-
-                        if (error) throw error;
+                        await prestatairesApi.update(String(profile.id), { disponible: checked });
 
                         toast.success(checked ? "Vous êtes maintenant disponible" : "Vous êtes maintenant indisponible");
                         fetchProfile();
@@ -1292,7 +1228,7 @@ export default function ProfilPage() {
                           service.principal ? 'border-secondary bg-secondary/5' : 'border-border'
                         }`}
                       >
-                        <div className="flex items-start justify-between">
+                        <div className="flex items-center justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
                               <h4 className="font-semibold">{service.service}</h4>
@@ -2347,7 +2283,11 @@ export default function ProfilPage() {
                 <CardTitle>Avis clients</CardTitle>
               </CardHeader>
               <CardContent>
-                {reviews.length === 0 ? (
+                {loadingReviews ? (
+                  <div className="flex items-center justify-center py-12 text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : reviews.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
                     <Star className="w-12 h-12 mx-auto mb-3 opacity-50" />
                     <p>Aucun avis pour le moment</p>
@@ -2357,7 +2297,7 @@ export default function ProfilPage() {
                   <div className="space-y-4">
                     {reviews.map((review) => (
                       <div key={review.id} className="p-4 border border-border rounded-lg space-y-3">
-                        <div className="flex items-start justify-between">
+                        <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <Avatar>
                               <AvatarFallback>
@@ -2397,6 +2337,6 @@ export default function ProfilPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </DashboardLayout>
+    </PrestatairePageShell>
   );
 }

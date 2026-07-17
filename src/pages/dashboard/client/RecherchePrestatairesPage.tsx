@@ -1,25 +1,17 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  Search, 
-  MapPin, 
-  Star, 
-  Shield, 
-  Loader2, 
-  User,
-  Briefcase,
-  Filter,
-  X
-} from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { Search, MapPin, Star, Shield, Loader2, User, Briefcase, Filter, X } from "lucide-react";
+import { prestatairesApi } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { getClientDisplayName, getPaginatedTotal, mapPrestataireToUi, unwrapPaginated } from "@/lib/client-helpers";
 import { toast } from "sonner";
+import { AdminListSkeleton, PageHeaderSkeleton } from "@/components/dashboard/AdminLoadingSkeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface Prestataire {
@@ -55,140 +47,51 @@ const communes = [
   "Kasa-Vubu", "Kimbanseke", "Kinshasa", "Kintambo", "Kisenso",
   "Lemba", "Limete", "Lingwala", "Makala", "Maluku",
   "Masina", "Matete", "Mont-Ngafula", "Ndjili", "Ngaba",
-  "Ngaliema", "Ngiri-Ngiri", "Nsele", "Selembao"
+  "Ngaliema", "Ngiri-Ngiri", "Nsele", "Selembao",
 ];
 
 export default function RecherchePrestatairesPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
-  
+
   const [prestataires, setPrestataires] = useState<Prestataire[]>([]);
   const [totalPrestataires, setTotalPrestataires] = useState<number>(0);
   const [loading, setLoading] = useState(true);
-  const [clientName, setClientName] = useState("Client");
-  
-  // Filtres
+  const clientName = getClientDisplayName(user);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProfession, setSelectedProfession] = useState<string>(searchParams.get("profession") || "");
   const [selectedCity, setSelectedCity] = useState<string>("");
   const [showVerifiedOnly, setShowVerifiedOnly] = useState(false);
-  const [showAvailableOnly, setShowAvailableOnly] = useState(false); // Désactivé par défaut
+  const [showAvailableOnly, setShowAvailableOnly] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      fetchClientName();
-      fetchPrestataires();
-    }
+    if (user) fetchPrestataires();
   }, [user, selectedProfession, selectedCity, showVerifiedOnly, showAvailableOnly]);
-
-  const fetchClientName = async () => {
-    if (!user) return;
-
-    try {
-      const { data } = await supabase
-        .from("clients")
-        .select("full_name")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (data) {
-        setClientName(data.full_name);
-      }
-    } catch (error) {
-      console.error("Error fetching client name:", error);
-    }
-  };
 
   const fetchPrestataires = async () => {
     try {
       setLoading(true);
-      console.log("Fetching prestataires with filters:", { 
-        selectedProfession, 
-        selectedCity, 
-        showVerifiedOnly, 
-        showAvailableOnly 
+      const res = await prestatairesApi.getAll({
+        search: searchQuery || undefined,
+        ville: selectedCity || undefined,
+        disponible: showAvailableOnly ? true : undefined,
+        per_page: 100,
       });
+      let rows = unwrapPaginated(res).map((p) => mapPrestataireToUi(p as Record<string, unknown>)) as Prestataire[];
 
-      // D'abord, récupérer le nombre total de prestataires disponibles (sans filtres)
-      const { count: totalCount } = await supabase
-        .from("prestataires")
-        .select("*", { count: "exact", head: true })
-        .eq("profile_completed", true);
-
-      if (totalCount !== null) {
-        setTotalPrestataires(totalCount);
-      }
-
-      let query = supabase
-        .from("prestataires")
-        .select("*")
-        .eq("profile_completed", true);
-
-      // Filtres
       if (selectedProfession) {
-        query = query.eq("profession", selectedProfession);
+        rows = rows.filter((p) => p.profession?.toLowerCase().includes(selectedProfession.toLowerCase()));
       }
-
-      if (selectedCity) {
-        query = query.eq("city", selectedCity);
-      }
-
       if (showVerifiedOnly) {
-        query = query.eq("verified", true);
+        rows = rows.filter((p) => p.verified);
       }
 
-      if (showAvailableOnly) {
-        query = query.eq("disponible", true);
-      }
-
-      const { data, error } = await query.order("created_at", { ascending: false });
-
-      console.log("Prestataires query result:", { data, error, filters: { selectedProfession, selectedCity, showVerifiedOnly, showAvailableOnly } });
-
-      if (error) {
-        console.error("Error fetching prestataires:", error);
-        throw error;
-      }
-
-      // Enrichir avec les stats
-      const prestataireWithStats = await Promise.all(
-        (data || []).map(async (prestataire) => {
-          try {
-            // Récupérer les avis
-            const { data: avisData } = await supabase
-              .from("avis")
-              .select("rating")
-              .eq("prestataire_id", prestataire.id);
-
-            let rating = 0;
-            let reviews_count = 0;
-
-            if (avisData && avisData.length > 0) {
-              rating = avisData.reduce((sum, a) => sum + a.rating, 0) / avisData.length;
-              reviews_count = avisData.length;
-            }
-
-            return {
-              ...prestataire,
-              rating: Math.round(rating * 10) / 10,
-              reviews_count,
-            };
-          } catch (err) {
-            console.error("Error fetching stats for prestataire:", prestataire.id, err);
-            return {
-              ...prestataire,
-              rating: 0,
-              reviews_count: 0,
-            };
-          }
-        })
-      );
-
-      console.log("Final prestataires with stats:", prestataireWithStats.length);
-      setPrestataires(prestataireWithStats);
-    } catch (error: any) {
+      setTotalPrestataires(getPaginatedTotal(res));
+      setPrestataires(rows);
+    } catch (error: unknown) {
       console.error("Error fetching prestataires:", error);
       toast.error("Erreur lors du chargement des prestataires");
       setPrestataires([]);
@@ -213,36 +116,28 @@ export default function RecherchePrestatairesPage() {
     setSelectedProfession("");
     setSelectedCity("");
     setShowVerifiedOnly(false);
-    setShowAvailableOnly(true);
+    setShowAvailableOnly(false);
   };
 
-  const getInitials = (name: string) => {
-    return name.split(" ").map(n => n[0]).join("").toUpperCase();
-  };
-
+  const getInitials = (name: string) => name.split(" ").map((n) => n[0]).join("").toUpperCase();
   const hasActiveFilters = selectedProfession || selectedCity || showVerifiedOnly || showAvailableOnly;
 
   return (
     <DashboardLayout role="client" userName={clientName} userRole="Client">
       <div className="space-y-4 md:space-y-6 p-3 md:p-0">
-        {/* Header - Mobile Optimized */}
         <div>
           <h1 className="text-lg md:text-2xl lg:text-3xl font-bold">Trouver un prestataire</h1>
           <p className="text-xs md:text-sm lg:text-base text-muted-foreground mt-1">
-            {loading ? (
-              "Chargement des prestataires..."
-            ) : hasActiveFilters || searchQuery ? (
-              `${filteredPrestataires.length} prestataire${filteredPrestataires.length > 1 ? 's' : ''} trouvé${filteredPrestataires.length > 1 ? 's' : ''} sur ${totalPrestataires} disponible${totalPrestataires > 1 ? 's' : ''}`
-            ) : (
-              `Recherchez parmi ${totalPrestataires} prestataire${totalPrestataires > 1 ? 's' : ''} qualifié${totalPrestataires > 1 ? 's' : ''}`
-            )}
+            {loading
+              ? "Chargement des prestataires..."
+              : hasActiveFilters || searchQuery
+                ? `${filteredPrestataires.length} prestataire${filteredPrestataires.length > 1 ? "s" : ""} trouvé${filteredPrestataires.length > 1 ? "s" : ""} sur ${totalPrestataires} disponible${totalPrestataires > 1 ? "s" : ""}`
+                : `Recherchez parmi ${totalPrestataires} prestataire${totalPrestataires > 1 ? "s" : ""} qualifié${totalPrestataires > 1 ? "s" : ""}`}
           </p>
         </div>
 
-        {/* Barre de recherche et filtres - Mobile Optimized */}
         <Card>
           <CardContent className="p-3 md:p-6 space-y-3 md:space-y-4">
-            {/* Recherche */}
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -269,14 +164,12 @@ export default function RecherchePrestatairesPage() {
               </Button>
             </div>
 
-            {/* Filtres avancés - Mobile Optimized */}
             {showFilters && (
               <div className="border-t pt-3 md:pt-4 space-y-3 md:space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-                  {/* Profession */}
                   <div>
                     <label className="text-xs md:text-sm font-medium mb-2 block">Profession</label>
-                    <Select value={selectedProfession} onValueChange={(value) => setSelectedProfession(value === "all" ? "" : value)}>
+                    <Select value={selectedProfession} onValueChange={(v) => setSelectedProfession(v === "all" ? "" : v)}>
                       <SelectTrigger className="text-sm h-10">
                         <SelectValue placeholder="Toutes" />
                       </SelectTrigger>
@@ -290,11 +183,9 @@ export default function RecherchePrestatairesPage() {
                       </SelectContent>
                     </Select>
                   </div>
-
-                  {/* Ville */}
                   <div>
                     <label className="text-xs md:text-sm font-medium mb-2 block">Commune</label>
-                    <Select value={selectedCity} onValueChange={(value) => setSelectedCity(value === "all" ? "" : value)}>
+                    <Select value={selectedCity} onValueChange={(v) => setSelectedCity(v === "all" ? "" : v)}>
                       <SelectTrigger className="text-sm h-10">
                         <SelectValue placeholder="Toutes" />
                       </SelectTrigger>
@@ -309,8 +200,6 @@ export default function RecherchePrestatairesPage() {
                     </Select>
                   </div>
                 </div>
-
-                {/* Boutons de filtre - Mobile Optimized */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Button
                     variant={showVerifiedOnly ? "default" : "outline"}
@@ -321,7 +210,6 @@ export default function RecherchePrestatairesPage() {
                     <Shield className="w-3 h-3 md:w-4 md:h-4 mr-2" />
                     Vérifiés uniquement
                   </Button>
-
                   <Button
                     variant={showAvailableOnly ? "default" : "outline"}
                     onClick={() => setShowAvailableOnly(!showAvailableOnly)}
@@ -331,8 +219,6 @@ export default function RecherchePrestatairesPage() {
                     Disponibles uniquement
                   </Button>
                 </div>
-
-                {/* Bouton réinitialiser */}
                 {hasActiveFilters && (
                   <div className="flex justify-center sm:justify-end pt-2 border-t">
                     <Button variant="ghost" size="sm" onClick={handleClearFilters} className="text-xs md:text-sm">
@@ -346,19 +232,17 @@ export default function RecherchePrestatairesPage() {
           </CardContent>
         </Card>
 
-        {/* Résultats - Mobile Optimized */}
         {loading ? (
-          <div className="flex items-center justify-center py-8 md:py-12">
-            <Loader2 className="w-6 h-6 md:w-8 md:h-8 animate-spin text-primary" />
+          <div className="space-y-4">
+            <PageHeaderSkeleton />
+            <AdminListSkeleton items={4} />
           </div>
         ) : filteredPrestataires.length === 0 ? (
           <Card>
             <CardContent className="p-6 md:p-12 text-center">
               <User className="w-8 h-8 md:w-12 md:h-12 mx-auto mb-3 md:mb-4 text-muted-foreground opacity-50" />
               <h3 className="text-base md:text-lg font-semibold mb-2">Aucun prestataire trouvé</h3>
-              <p className="text-sm text-muted-foreground mb-3 md:mb-4">
-                Essayez de modifier vos critères de recherche
-              </p>
+              <p className="text-sm text-muted-foreground mb-3 md:mb-4">Essayez de modifier vos critères de recherche</p>
               {hasActiveFilters && (
                 <Button variant="outline" onClick={handleClearFilters} size="sm">
                   Réinitialiser les filtres
@@ -376,77 +260,49 @@ export default function RecherchePrestatairesPage() {
               >
                 <CardContent className="p-3 md:p-6">
                   <div className="flex items-start gap-3 md:gap-4">
-                    {/* Avatar - Mobile Optimized */}
                     <Avatar className="w-10 h-10 md:w-16 md:h-16 shrink-0">
                       <AvatarImage src={prestataire.photo_url || ""} />
-                      <AvatarFallback className="text-xs md:text-lg">
-                        {getInitials(prestataire.full_name)}
-                      </AvatarFallback>
+                      <AvatarFallback className="text-xs md:text-lg">{getInitials(prestataire.full_name)}</AvatarFallback>
                     </Avatar>
-
-                    {/* Info - Mobile Optimized */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-semibold text-sm md:text-base lg:text-lg truncate">
-                          {prestataire.full_name}
-                        </h3>
-                        {prestataire.verified && (
-                          <Shield className="w-3 h-3 md:w-4 md:h-4 text-primary flex-shrink-0" />
-                        )}
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="font-semibold text-sm md:text-base lg:text-lg truncate">{prestataire.full_name}</h3>
+                        {prestataire.verified && <Shield className="w-3 h-3 md:w-4 md:h-4 text-primary flex-shrink-0" />}
                       </div>
-
                       <p className="text-xs md:text-sm text-muted-foreground flex items-center gap-1 mt-1">
                         <Briefcase className="w-3 h-3 shrink-0" />
                         <span className="truncate">{prestataire.profession}</span>
                       </p>
-
                       {prestataire.city && (
                         <p className="text-xs md:text-sm text-muted-foreground flex items-center gap-1 mt-1">
                           <MapPin className="w-3 h-3 shrink-0" />
                           <span className="truncate">{prestataire.city}</span>
                         </p>
                       )}
-
-                      {/* Rating - Mobile Optimized */}
                       {prestataire.reviews_count && prestataire.reviews_count > 0 && (
                         <div className="flex items-center gap-1 mt-2">
                           <Star className="w-3 h-3 md:w-4 md:h-4 fill-yellow-400 text-yellow-400 shrink-0" />
                           <span className="text-xs md:text-sm font-medium">{prestataire.rating}</span>
-                          <span className="text-xs text-muted-foreground truncate">
-                            ({prestataire.reviews_count} avis)
-                          </span>
+                          <span className="text-xs text-muted-foreground truncate">({prestataire.reviews_count} avis)</span>
                         </div>
                       )}
-
-                      {/* Bio - Mobile Optimized */}
                       {prestataire.bio && (
-                        <p className="text-xs md:text-sm text-muted-foreground line-clamp-2 mt-2 break-words">
-                          {prestataire.bio}
-                        </p>
+                        <p className="text-xs md:text-sm text-muted-foreground line-clamp-2 mt-2 break-words">{prestataire.bio}</p>
                       )}
-
-                      {/* Badges - Mobile Optimized */}
                       <div className="flex flex-wrap gap-1 md:gap-2 mt-2 md:mt-3">
-                        {prestataire.experience_years && prestataire.experience_years > 0 && (
-                          <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                            {prestataire.experience_years} ans
-                          </Badge>
-                        )}
                         {prestataire.disponible && (
                           <Badge variant="default" className="text-xs bg-green-600 px-2 py-0.5">
                             Disponible
                           </Badge>
                         )}
-                        {prestataire.hourly_rate && (
+                        {prestataire.hourly_rate ? (
                           <Badge variant="outline" className="text-xs px-2 py-0.5">
                             {prestataire.hourly_rate} FC/h
                           </Badge>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   </div>
-
-                  {/* Bouton - Mobile Optimized */}
                   <Button className="w-full mt-3 md:mt-4 h-9" size="sm">
                     <span className="text-xs md:text-sm">Voir le profil</span>
                   </Button>

@@ -1,149 +1,113 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { supabase } from "@/lib/supabase";
+import { setAuthToken } from "@/lib/auth-token";
+import { useAuth } from "@/contexts/AuthContext";
+import { defaultDashboardForRole, resolveUserRoleSafe } from "@/lib/user-role";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+
+function parseHashParams(): URLSearchParams {
+  const raw = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  return new URLSearchParams(raw);
+}
+
+function stripUrlHash() {
+  const { pathname, search } = window.location;
+  window.history.replaceState(null, "", `${pathname}${search}`);
+}
 
 const AuthCallback = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { refreshUser } = useAuth();
   const [status, setStatus] = useState<"loading" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState("");
+  const mode = searchParams.get("mode") || "signin";
 
   useEffect(() => {
-    handleCallback();
-  }, []);
+    let active = true;
 
-  const handleCallback = async () => {
-    try {
-      // Récupérer le mode depuis les paramètres URL
-      const mode = searchParams.get("mode") || "signin";
+    const run = async () => {
+      try {
+        const hashParams = parseHashParams();
+        const queryToken = searchParams.get("token");
+        const oauthError = hashParams.get("error") || searchParams.get("error");
+        const token = hashParams.get("token") || queryToken;
 
-      // Vérifier la session
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-      if (sessionError) throw sessionError;
-      if (!session) {
-        throw new Error("Aucune session trouvée");
-      }
-
-      const user = session.user;
-
-      // Vérifier si c'est un admin
-      if (user.email === "admin@kazipro.com") {
-        toast.success("Connexion réussie !");
-        navigate("/dashboard/admin");
-        return;
-      }
-
-      // Vérifier si l'utilisateur a déjà un profil
-      const { data: existingProvider } = await supabase
-        .from("prestataires")
-        .select("id, verified")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (existingProvider) {
-        // Rediriger vers le dashboard, l'alerte s'affichera si nécessaire
-        toast.success("Connexion réussie !");
-        navigate("/dashboard/prestataire");
-        return;
-      }
-
-      const { data: existingClient } = await supabase
-        .from("clients")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (existingClient) {
-        toast.success("Connexion réussie !");
-        navigate("/dashboard/client");
-        return;
-      }
-
-      // Si pas de profil existant, créer selon le mode
-      if (mode === "signup-provider") {
-        // Créer un profil prestataire incomplet
-        const providerData: any = {
-          user_id: user.id,
-          full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Prestataire",
-          profession: "À définir",
-          verified: false,
-          profile_completed: false, // Profil incomplet
-        };
-
-        // Ajouter l'email si disponible
-        if (user.email) {
-          providerData.email = user.email;
+        if (oauthError) {
+          const rawDesc = hashParams.get("error_description") || searchParams.get("message");
+          let decodedDesc: string | null = null;
+          if (rawDesc) {
+            try {
+              decodedDesc = decodeURIComponent(rawDesc.replace(/\+/g, " "));
+            } catch {
+              decodedDesc = rawDesc.replace(/\+/g, " ");
+            }
+          }
+          const human =
+            decodedDesc ||
+            (oauthError === "access_denied"
+              ? "Connexion annulée ou refusée."
+              : `Erreur OAuth (${oauthError}).`);
+          stripUrlHash();
+          throw new Error(human);
         }
 
-        const { error: providerError } = await supabase
-          .from("prestataires")
-          .insert(providerData);
-
-        if (providerError) throw providerError;
-
-        toast.success("Compte créé ! Complétez votre profil pour commencer.");
-        navigate("/dashboard/prestataire");
-      } else {
-        // Créer un profil client (par défaut)
-        const clientData: any = {
-          user_id: user.id,
-          full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Utilisateur",
-        };
-
-        // Ajouter l'email si la colonne existe
-        if (user.email) {
-          clientData.email = user.email;
+        if (!token) {
+          throw new Error("Aucun jeton d'authentification reçu");
         }
 
-        const { error: clientError } = await supabase
-          .from("clients")
-          .insert(clientData);
+        setAuthToken(token);
+        stripUrlHash();
 
-        if (clientError) throw clientError;
+        const appUser = await refreshUser();
+        if (!active) return;
+        if (!appUser) {
+          throw new Error("Impossible de charger le profil utilisateur");
+        }
 
-        toast.success("Connexion réussie !");
-        navigate("/dashboard/client");
+        const role = await resolveUserRoleSafe(appUser, { timeoutMs: 3000, retries: 1 });
+        if (!active) return;
+
+        if (role) {
+          toast.success("Connexion réussie !");
+          navigate(defaultDashboardForRole(role), { replace: true });
+          return;
+        }
+
+        if (mode === "signup-provider") {
+          toast.success("Compte créé ! Complétez votre profil pour commencer.");
+          navigate("/dashboard/prestataire", { replace: true });
+          return;
+        }
+
+        toast.warning("Session active mais rôle introuvable. Redirection vers l'accueil.");
+        navigate("/", { replace: true });
+      } catch (error: unknown) {
+        if (!active) return;
+        console.error("Erreur lors du callback OAuth:", error);
+        setStatus("error");
+        setErrorMessage(error instanceof Error ? error.message : "Une erreur est survenue");
+        toast.error("Erreur lors de l'authentification");
+        setTimeout(() => navigate("/connexion"), 3000);
       }
-    } catch (error: any) {
-      console.error("Erreur lors du callback OAuth:", error);
-      setStatus("error");
-      setErrorMessage(error.message || "Une erreur est survenue");
-      toast.error("Erreur lors de l'authentification");
-      
-      // Rediriger vers la page de connexion après 3 secondes
-      setTimeout(() => {
-        navigate("/connexion");
-      }, 3000);
-    }
-  };
+    };
+
+    run();
+    return () => {
+      active = false;
+    };
+  }, [navigate, mode, searchParams, refreshUser]);
 
   if (status === "error") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/30">
         <div className="text-center space-y-4">
-          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
-            <svg
-              className="w-8 h-8 text-destructive"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </div>
           <h2 className="text-xl font-semibold">Erreur d'authentification</h2>
           <p className="text-muted-foreground">{errorMessage}</p>
-          <p className="text-sm text-muted-foreground">
-            Redirection vers la page de connexion...
-          </p>
+          <p className="text-sm text-muted-foreground">Redirection vers la page de connexion...</p>
         </div>
       </div>
     );

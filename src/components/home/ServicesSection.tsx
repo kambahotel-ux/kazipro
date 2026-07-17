@@ -1,23 +1,26 @@
 import { Link } from "react-router-dom";
-import { useState, useEffect } from "react";
-import { 
-  Zap, 
-  Droplets, 
-  Hammer, 
-  PaintBucket, 
-  Wind, 
-  Wrench,
+import { useState, useEffect, type ComponentType } from "react";
+import {
+  Zap,
+  Droplets,
+  Hammer,
+  PaintBucket,
+  Wind,
   ArrowRight,
   HardHat,
   Sofa,
   Car,
   Laptop,
-  Briefcase
+  Briefcase,
+  LayoutGrid,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { professionsApi, prestatairesApi } from "@/lib/api";
+import { unwrapPaginated } from "@/lib/api-utils";
+import { useHomePrestataires } from "@/contexts/HomePrestatairesContext";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Icon mapping
-const iconMap: Record<string, any> = {
+const iconMap: Record<string, ComponentType<{ className?: string }>> = {
   "Électricité": Zap,
   "Électricien": Zap,
   "Plomberie": Droplets,
@@ -64,52 +67,58 @@ interface Service {
   id: string;
   nom: string;
   description: string;
-  icon: any;
+  icon: ComponentType<{ className?: string }>;
   color: string;
   providers: number;
 }
 
 const ServicesSection = () => {
+  const homeStats = useHomePrestataires();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchServices();
-  }, []);
+    if (homeStats && homeStats.professions.length > 0) {
+      buildServices(homeStats.professions, homeStats.providers);
+      setLoading(homeStats.loading);
+      return;
+    }
+    void fetchServices();
+  }, [homeStats]);
+
+  const buildServices = (
+    professions: Array<{ id: number; nom: string; description?: string }>,
+    providers: Array<{ profession_id?: number }>,
+  ) => {
+    const topProfessions = professions.slice(0, 6);
+    const servicesWithCounts = topProfessions.map((profession) => {
+      const count = providers.filter(
+        (p) => Number(p.profession_id) === Number(profession.id),
+      ).length;
+      return {
+        id: String(profession.id),
+        nom: profession.nom,
+        description: profession.description || `Services de ${profession.nom.toLowerCase()}`,
+        icon: iconMap[profession.nom] || Briefcase,
+        color: colorMap[profession.nom] || "from-gray-400 to-gray-600",
+        providers: count,
+      };
+    });
+    setServices(servicesWithCounts);
+    setLoading(false);
+  };
 
   const fetchServices = async () => {
     try {
-      // Fetch top 6 professions
-      const { data: professions, error } = await supabase
-        .from("professions")
-        .select("*")
-        .eq("actif", true)
-        .order("nom")
-        .limit(6);
+      const professions = (await professionsApi.getAll()) as Array<{
+        id: number;
+        nom: string;
+        description?: string;
+      }>;
 
-      if (error) throw error;
-
-      // Count providers for each profession
-      const servicesWithCounts = await Promise.all(
-        (professions || []).map(async (profession) => {
-          const { count } = await supabase
-            .from("prestataires")
-            .select("*", { count: "exact", head: true })
-            .eq("profession", profession.nom)
-            .eq("verified", true);
-
-          return {
-            id: profession.id,
-            nom: profession.nom,
-            description: profession.description || `Services de ${profession.nom.toLowerCase()}`,
-            icon: iconMap[profession.nom] || Briefcase,
-            color: colorMap[profession.nom] || "from-gray-400 to-gray-600",
-            providers: count || 0,
-          };
-        })
-      );
-
-      setServices(servicesWithCounts);
+      const listRes = await prestatairesApi.getAll({ per_page: 100 });
+      const providers = unwrapPaginated<{ profession_id?: number }>(listRes);
+      buildServices(professions, providers);
     } catch (error) {
       console.error("Erreur lors du chargement des services:", error);
     } finally {
@@ -117,70 +126,113 @@ const ServicesSection = () => {
     }
   };
 
+  const skeletonCards = Array.from({ length: 6 });
+
   return (
-    <section className="py-12 md:py-24 lg:py-32 bg-background">
-      <div className="container mx-auto px-4">
-        {/* Header - Mobile Optimized */}
-        <div className="text-center max-w-3xl mx-auto mb-8 md:mb-16">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-display font-bold text-foreground mb-4 md:mb-6 px-2">
-            Nos services professionnels
+    <section className="py-10 sm:py-16 md:py-24 lg:py-28 bg-background relative overflow-hidden">
+      <div
+        className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent pointer-events-none"
+        aria-hidden
+      />
+      <div className="container mx-auto px-3 sm:px-4 lg:px-8 relative">
+        <div className="text-center max-w-3xl mx-auto mb-6 sm:mb-10 md:mb-14">
+          <p className="inline-flex items-center justify-center gap-2 text-[10px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-3 sm:mb-4">
+            <LayoutGrid className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-secondary shrink-0" />
+            Nos métiers
+          </p>
+          <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-display font-bold text-foreground mb-3 sm:mb-4 md:mb-5 tracking-tight px-1">
+            Une expertise pour chaque besoin
           </h2>
-          <p className="text-muted-foreground text-base md:text-lg lg:text-xl leading-relaxed px-4">
-            Des experts qualifiés dans tous les domaines pour répondre à vos besoins.
+          <p className="text-muted-foreground text-sm sm:text-base md:text-lg lg:text-xl leading-relaxed px-1 max-sm:mx-auto max-sm:max-w-[min(100%,22rem)]">
+            Comparez les profils et demandez vos devis en quelques minutes.
           </p>
         </div>
 
-        {/* Services Grid - Mobile First */}
         {loading ? (
-          <div className="text-center py-8 md:py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-4 border-secondary border-t-transparent"></div>
-            <p className="text-muted-foreground mt-4 text-base md:text-lg">Chargement des services...</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 lg:gap-8 max-w-6xl mx-auto">
+            {skeletonCards.map((_, i) => (
+              <div
+                key={i}
+                className="rounded-xl sm:rounded-2xl border border-border bg-card p-4 sm:p-6 md:p-8 space-y-3 sm:space-y-4"
+              >
+                <Skeleton className="w-10 h-10 sm:w-12 sm:h-14 rounded-lg sm:rounded-xl" />
+                <Skeleton className="h-5 sm:h-7 w-3/4 rounded-md" />
+                <Skeleton className="h-3.5 sm:h-4 w-full rounded-md" />
+                <Skeleton className="h-3.5 sm:h-4 w-5/6 rounded-md" />
+                <Skeleton className="h-10 sm:h-12 w-full rounded-md mt-2 sm:mt-4" />
+              </div>
+            ))}
+          </div>
+        ) : services.length === 0 ? (
+          <div className="text-center max-w-md mx-auto py-8 sm:py-12 rounded-xl sm:rounded-2xl border border-dashed border-border bg-muted/30 px-4 sm:px-6">
+            <p className="text-muted-foreground text-sm sm:text-base mb-5 sm:mb-6 leading-relaxed">
+              Les professions seront disponibles dès leur configuration dans l&apos;administration.
+              Vous pouvez tout de même explorer le catalogue général des services.
+            </p>
+            <Link
+              to="/services"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-secondary text-secondary-foreground rounded-xl font-semibold hover:bg-secondary/90 shadow-md transition-colors"
+            >
+              Voir les services
+              <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8 max-w-6xl mx-auto">
-              {services.map((service, index) => (
-                <Link
-                  key={service.id}
-                  to={`/services/${service.id}`}
-                  className="group relative bg-card rounded-xl md:rounded-2xl p-4 md:p-8 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 md:hover:-translate-y-2 border border-border"
-                >
-                  {/* Icon - Mobile Optimized */}
-                  <div className={`w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-gradient-to-br ${service.color} flex items-center justify-center mb-4 md:mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg`}>
-                    <service.icon className="w-6 h-6 md:w-8 md:h-8 text-white" />
-                  </div>
-
-                  {/* Content - Mobile Responsive */}
-                  <h3 className="text-lg sm:text-xl md:text-2xl font-display font-bold text-foreground mb-2 md:mb-3 group-hover:text-secondary transition-colors leading-tight">
-                    {service.nom}
-                  </h3>
-                  <p className="text-muted-foreground leading-relaxed mb-4 md:mb-6 line-clamp-2 text-sm md:text-base">
-                    {service.description}
-                  </p>
-
-                  {/* Footer - Mobile Optimized */}
-                  <div className="flex items-center justify-between pt-4 md:pt-6 border-t border-border">
-                    <span className="text-xs md:text-sm text-muted-foreground">
-                      <span className="font-bold text-sm md:text-lg text-foreground">{service.providers}</span> pro{service.providers > 1 ? 's' : ''}
-                    </span>
-                    <div className="flex items-center text-secondary font-semibold text-sm md:text-base">
-                      <span className="hidden sm:inline">Découvrir</span>
-                      <span className="sm:hidden">Voir</span>
-                      <ArrowRight className="w-4 h-4 md:w-5 md:h-5 ml-1 md:ml-2 group-hover:translate-x-1 md:group-hover:translate-x-2 transition-transform" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 lg:gap-8 max-w-6xl mx-auto">
+              {services.map((service) => {
+                const Icon = service.icon;
+                return (
+                  <Link
+                    key={service.id}
+                    to={`/services/${service.id}`}
+                    className="group relative flex flex-row sm:flex-col gap-3 sm:gap-0 bg-card rounded-xl sm:rounded-2xl p-3.5 sm:p-6 md:p-8 border border-border/80 shadow-sm active:scale-[0.99] sm:hover:shadow-xl sm:hover:border-secondary/25 transition-all duration-300 sm:hover:-translate-y-0.5 md:hover:-translate-y-1 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <div
+                      className={`w-11 h-11 sm:w-14 sm:h-14 shrink-0 rounded-xl sm:rounded-2xl bg-gradient-to-br ${service.color} flex items-center justify-center sm:mb-4 md:mb-5 group-hover:scale-[1.04] transition-transform duration-300 shadow-md`}
+                    >
+                      <Icon className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
                     </div>
-                  </div>
-                </Link>
-              ))}
+
+                    <div className="min-w-0 flex flex-col flex-1 sm:block">
+                      <h3 className="text-[15px] sm:text-xl md:text-2xl font-display font-bold text-foreground sm:mb-2 group-hover:text-secondary transition-colors leading-snug">
+                        {service.nom}
+                      </h3>
+                      <p className="hidden sm:block text-muted-foreground leading-relaxed text-sm md:text-base line-clamp-2 flex-1 sm:mb-4 md:mb-5">
+                        {service.description}
+                      </p>
+
+                      <div className="flex items-center justify-between gap-2 pt-3 sm:pt-4 md:pt-5 border-t border-border mt-auto sm:mt-0 max-sm:border-0 max-sm:pt-0 max-sm:mt-1">
+                        <span className="text-xs sm:text-sm text-muted-foreground truncate">
+                          <span className="font-semibold tabular-nums text-foreground text-sm sm:text-base">
+                            {service.providers}
+                          </span>{" "}
+                          <span className="hidden sm:inline">
+                            prestataire{service.providers !== 1 ? "s" : ""}
+                          </span>
+                          <span className="sm:hidden">
+                            pro{service.providers !== 1 ? "s" : ""}
+                          </span>
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-xs sm:text-sm font-semibold text-secondary shrink-0">
+                          <span className="hidden sm:inline">Découvrir</span>
+                          <span className="sm:hidden">Voir</span>
+                          <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:translate-x-0.5 transition-transform" />
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
 
-            {/* CTA - Mobile Optimized */}
-            <div className="text-center mt-8 md:mt-16 px-4">
-              <Link 
-                to="/services" 
-                className="inline-flex items-center gap-2 md:gap-3 px-6 md:px-8 py-3 md:py-4 bg-secondary text-secondary-foreground rounded-xl font-semibold hover:bg-secondary/90 transition-all hover:gap-3 md:hover:gap-5 shadow-lg hover:shadow-xl text-sm md:text-base"
+            <div className="text-center mt-6 sm:mt-10 md:mt-14 px-1">
+              <Link
+                to="/services"
+                className="inline-flex items-center justify-center gap-2 w-full max-w-sm sm:max-w-none sm:w-auto mx-auto px-5 sm:px-8 py-2.5 sm:py-3.5 rounded-xl bg-foreground text-background font-semibold text-xs sm:text-sm md:text-base hover:bg-foreground/90 transition-colors shadow-md"
               >
-                Voir tous les services
-                <ArrowRight className="w-4 h-4 md:w-5 md:h-5" />
+                Tous les services
+                <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </Link>
             </div>
           </>

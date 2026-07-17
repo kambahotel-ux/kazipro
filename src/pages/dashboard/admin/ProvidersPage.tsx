@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { AdminListSkeleton } from "@/components/dashboard/AdminLoadingSkeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,46 +8,112 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle, XCircle, Eye, Loader2, Star, Award, MapPin, FileText, Search, X } from "lucide-react";
+import { CheckCircle, XCircle, Eye, Star, Award, MapPin, FileText, Search, X, Phone, Clock } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { adminApi } from "@/lib/api";
+import { unwrapPaginated } from "@/lib/api-utils";
+import { displayNameFromProfil, professionLabelFromProfil } from "@/lib/kazipro-profile";
 import { toast } from "sonner";
 import { DateRangeFilter } from "@/components/filters/DateRangeFilter";
+import { FormDrawer } from "@/components/ui/FormDrawer";
+import { SlideToConfirm } from "@/components/ui/SlideToConfirm";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Provider {
   id: string;
   user_id: string;
   full_name: string;
   profession: string;
+  profession_categorie?: string;
   bio?: string;
   localisation?: string;
+  ville?: string;
+  quartier?: string;
   verified: boolean;
+  statut_validation?: string;
   documents_verified: boolean;
   rating: number;
-  missions_completed?: number;
+  nb_avis: number;
+  missions_completed: number;
   created_at: string;
   id_document_url?: string;
   qualification_url?: string;
+  piece_identite?: string;
+  document_rccm?: string;
+  statut_certification?: string;
+  certifie?: boolean;
+  certifie_le?: string;
+  motif_rejet?: string;
+  motif_rejet_certification?: string;
+  type_personne?: "physique" | "morale";
   email?: string;
-  // Champs personne physique/morale
-  type_prestataire?: 'physique' | 'morale';
-  // Personne physique
+  telephone?: string;
+  tarif_horaire?: number | null;
+  zones_intervention?: string[];
+  disponible?: boolean;
+  photo?: string;
   nom?: string;
   prenom?: string;
-  date_naissance?: string;
-  numero_cni?: string;
-  // Personne morale
   raison_sociale?: string;
-  forme_juridique?: string;
   numero_rccm?: string;
-  numero_impot?: string;
-  numero_id_nat?: string;
-  representant_legal_nom?: string;
-  representant_legal_prenom?: string;
-  representant_legal_fonction?: string;
-  adresse_siege?: string;
-  ville_siege?: string;
-  pays_siege?: string;
+}
+
+function strOrUndef(value: unknown): string | undefined {
+  if (value == null || value === "") return undefined;
+  const s = String(value).trim();
+  return s && s !== "—" ? s : undefined;
+}
+
+function mapPrestataireRow(prestataire: Record<string, unknown>): Provider {
+  const user = prestataire.user as Record<string, unknown> | undefined;
+  const professionObj = prestataire.profession as Record<string, unknown> | undefined;
+  const ville = strOrUndef(prestataire.ville);
+  const quartier = strOrUndef(prestataire.quartier);
+  const pieceIdentite = strOrUndef(prestataire.piece_identite);
+  const documentRccm = strOrUndef(prestataire.document_rccm);
+  const typePersonne = (prestataire.type_personne as "physique" | "morale") ?? "physique";
+
+  return {
+    id: String(prestataire.id),
+    user_id: String(prestataire.user_id ?? ""),
+    full_name: displayNameFromProfil(prestataire),
+    nom: strOrUndef(prestataire.nom),
+    prenom: strOrUndef(prestataire.prenom),
+    profession: professionLabelFromProfil(prestataire) || strOrUndef(professionObj?.nom) || "Non renseignée",
+    profession_categorie: strOrUndef(professionObj?.categorie),
+    bio: strOrUndef(prestataire.bio),
+    ville,
+    quartier,
+    localisation: [ville, quartier].filter(Boolean).join(" — ") || "Non spécifié",
+    verified: prestataire.statut_validation === "valide",
+    statut_validation: String(prestataire.statut_validation ?? ""),
+    documents_verified: !!(pieceIdentite || documentRccm),
+    email: strOrUndef(user?.email) ?? strOrUndef(prestataire.email) ?? "Email non disponible",
+    telephone: strOrUndef(prestataire.telephone) ?? strOrUndef(user?.telephone),
+    rating: Number(prestataire.note_moyenne ?? 0),
+    nb_avis: Number(prestataire.nb_avis ?? 0),
+    missions_completed: Number(prestataire.nb_missions ?? prestataire.missions_completees ?? 0),
+    tarif_horaire: prestataire.tarif_horaire != null ? Number(prestataire.tarif_horaire) : null,
+    zones_intervention: Array.isArray(prestataire.zones_intervention)
+      ? (prestataire.zones_intervention as string[])
+      : [],
+    disponible: prestataire.disponible !== false,
+    photo: strOrUndef(prestataire.photo) ?? strOrUndef(user?.avatar),
+    created_at: String(prestataire.created_at ?? new Date().toISOString()),
+    piece_identite: pieceIdentite,
+    document_rccm: documentRccm,
+    id_document_url: pieceIdentite,
+    qualification_url: documentRccm,
+    statut_certification: String(prestataire.statut_certification ?? "non_demande"),
+    certifie: prestataire.certifie === true,
+    certifie_le: strOrUndef(prestataire.certifie_le),
+    motif_rejet: strOrUndef(prestataire.motif_rejet),
+    motif_rejet_certification: strOrUndef(prestataire.motif_rejet_certification),
+    type_personne: typePersonne,
+    raison_sociale: strOrUndef(prestataire.raison_sociale),
+    numero_rccm: strOrUndef(prestataire.numero_rccm),
+  };
 }
 
 export default function ProvidersPage() {
@@ -55,6 +122,8 @@ export default function ProvidersPage() {
   const [loading, setLoading] = useState(true);
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [rejectTarget, setRejectTarget] = useState<{ id: string; type: "provider" | "certification" } | null>(null);
+  const [rejectMotif, setRejectMotif] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   
   // Filters
@@ -77,25 +146,10 @@ export default function ProvidersPage() {
     if (!user) return;
     try {
       setLoading(true);
-      
-      // Récupérer les prestataires
-      const { data: prestatairesData, error: prestatairesError } = await supabase
-        .from("prestataires")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (prestatairesError) throw prestatairesError;
-
-      // Mapper les données avec valeurs par défaut
-      const providersWithDefaults = (prestatairesData || []).map((prestataire: any) => ({
-        ...prestataire,
-        email: prestataire.email || "Email non disponible",
-        missions_completed: prestataire.missions_completed || 0,
-        localisation: prestataire.localisation || "Non spécifié",
-      }));
-
-      setProviders(providersWithDefaults);
-    } catch (error: any) {
+      const res = await adminApi.getPrestataires({ per_page: 500 });
+      const rows = unwrapPaginated<Record<string, unknown>>(res);
+      setProviders(rows.map(mapPrestataireRow));
+    } catch (error: unknown) {
       console.error("Erreur:", error);
       toast.error("Erreur lors du chargement des prestataires");
     } finally {
@@ -105,58 +159,53 @@ export default function ProvidersPage() {
 
   const handleVerify = async (providerId: string) => {
     try {
-      console.log("🔄 Tentative de vérification du prestataire:", providerId);
-      
-      const { data, error } = await supabase
-        .from("prestataires")
-        .update({ 
-          verified: true,
-          documents_verified: true 
-        })
-        .eq("id", providerId)
-        .select();
-
-      if (error) {
-        console.error("❌ Erreur vérification:", error);
-        throw error;
-      }
-      
-      console.log("✅ Prestataire vérifié:", data);
+      await adminApi.validerPrestataire(providerId);
       toast.success("Prestataire vérifié avec succès");
       await fetchProviders();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("❌ Erreur complète:", error);
-      toast.error(`Erreur: ${error.message || "Erreur lors de la vérification"}`);
+      toast.error(`Erreur: ${error instanceof Error ? error.message : "Erreur lors de la vérification"}`);
     }
   };
 
-  const handleReject = async (providerId: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir rejeter ce prestataire? Cette action est irréversible.")) return;
-    
+  const handleReject = async (providerId: string, motif?: string) => {
+    const finalMotif = motif?.trim() || "Rejeté par l'administrateur";
     try {
-      console.log("🔄 Tentative de rejet du prestataire:", providerId);
-      
-      // Marquer comme non vérifié au lieu de supprimer
-      const { data, error } = await supabase
-        .from("prestataires")
-        .update({ 
-          verified: false,
-          documents_verified: false 
-        })
-        .eq("id", providerId)
-        .select();
-
-      if (error) {
-        console.error("❌ Erreur rejet:", error);
-        throw error;
-      }
-      
-      console.log("✅ Prestataire rejeté:", data);
+      await adminApi.rejeterPrestataire(providerId, finalMotif);
       toast.success("Prestataire rejeté");
       await fetchProviders();
-    } catch (error: any) {
+      setShowDetailsModal(false);
+      setRejectTarget(null);
+      setRejectMotif("");
+    } catch (error: unknown) {
       console.error("❌ Erreur complète:", error);
-      toast.error(`Erreur: ${error.message || "Erreur lors du rejet"}`);
+      toast.error(`Erreur: ${error instanceof Error ? error.message : "Erreur lors du rejet"}`);
+      throw error;
+    }
+  };
+
+  const handleApprouverCertification = async (providerId: string) => {
+    try {
+      await adminApi.approuverCertification(providerId);
+      toast.success("Certification approuvée");
+      await fetchProviders();
+      setShowDetailsModal(false);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Erreur certification");
+    }
+  };
+
+  const handleRejeterCertification = async (providerId: string, motif?: string) => {
+    const finalMotif = motif?.trim() || "Documents non conformes";
+    try {
+      await adminApi.rejeterCertification(providerId, finalMotif);
+      toast.success("Certification rejetée");
+      await fetchProviders();
+      setRejectTarget(null);
+      setRejectMotif("");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Erreur certification");
+      throw error;
     }
   };
 
@@ -231,14 +280,14 @@ export default function ProvidersPage() {
   };
 
   const ProviderCard = ({ provider, isPending }: { provider: Provider; isPending: boolean }) => (
-    <Card className="hover:shadow-lg transition-shadow">
-      <CardContent className="pt-4 sm:pt-6">
-        <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
-          <div className="flex items-start gap-3 sm:gap-4 flex-1 w-full">
+    <Card className="transition-shadow hover:shadow-card">
+      <CardContent className="px-4 pt-5 pb-3 sm:px-5 sm:pt-5 sm:pb-4">
+        <div className="flex flex-col gap-3 sm:min-h-[112px] sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="flex w-full flex-1 items-center gap-3 sm:gap-4">
             <Avatar className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
               <AvatarFallback className="text-xs sm:text-sm">{provider.full_name.split(" ").map(n => n[0]).join("")}</AvatarFallback>
             </Avatar>
-            <div className="flex-1 min-w-0">
+            <div className="flex flex-1 min-w-0 flex-col justify-center">
               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
                 <h3 className="font-semibold text-sm sm:text-base truncate">{provider.full_name}</h3>
                 {provider.verified && (
@@ -266,7 +315,7 @@ export default function ProvidersPage() {
               </div>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:self-center">
             <Button
               variant="outline"
               size="sm"
@@ -274,29 +323,23 @@ export default function ProvidersPage() {
                 setSelectedProvider(provider);
                 setShowDetailsModal(true);
               }}
-              className="w-full sm:w-auto text-xs sm:text-sm"
+              className="w-full sm:w-auto"
             >
-              <Eye className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+              <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
               Détails
             </Button>
             {isPending && (
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 w-full sm:w-auto">
                 <Button
                   size="sm"
-                  onClick={() => handleVerify(provider.id)}
-                  className="flex-1 sm:flex-none text-xs sm:text-sm"
+                  onClick={() => {
+                    setSelectedProvider(provider);
+                    setShowDetailsModal(true);
+                  }}
+                  className="w-full sm:w-auto"
                 >
-                  <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                  Vérifier
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => handleReject(provider.id)}
-                  className="flex-1 sm:flex-none text-xs sm:text-sm"
-                >
-                  <XCircle className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                  Rejeter
+                  <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                  Examiner
                 </Button>
               </div>
             )}
@@ -314,59 +357,14 @@ export default function ProvidersPage() {
           <p className="text-sm sm:text-base text-muted-foreground">Vérifiez et gérez les prestataires</p>
         </div>
 
-        {/* Stats */}
-        <div className="block sm:hidden">
-          {/* Version mobile compacte */}
-          <Card>
-            <CardContent className="pt-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="text-center">
-                  <p className="text-lg font-bold">{filteredProviders.length}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {hasActiveFilters ? 'Filtrés' : 'Total'}
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold text-yellow-600">{pendingProviders.length}</p>
-                  <p className="text-xs text-muted-foreground">En attente</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold text-green-600">{verifiedProviders.length}</p>
-                  <p className="text-xs text-muted-foreground">Vérifiés</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="hidden sm:grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-          {/* Version desktop */}
-          <Card>
-            <CardContent className="pt-4 sm:pt-6">
-              <div className="text-center">
-                <p className="text-2xl sm:text-3xl font-bold">{filteredProviders.length}</p>
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  {hasActiveFilters ? 'Résultats filtrés' : 'Total prestataires'}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 sm:pt-6">
-              <div className="text-center">
-                <p className="text-2xl sm:text-3xl font-bold text-yellow-600">{pendingProviders.length}</p>
-                <p className="text-xs sm:text-sm text-muted-foreground">En attente de vérification</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 sm:pt-6">
-              <div className="text-center">
-                <p className="text-2xl sm:text-3xl font-bold text-green-600">{verifiedProviders.length}</p>
-                <p className="text-xs sm:text-sm text-muted-foreground">Vérifiés</p>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="relative max-w-xl">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Nom ou email..."
+            value={filters.search}
+            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            className="pl-10 h-10 sm:h-11 text-sm sm:text-base"
+          />
         </div>
 
         {/* Filters Toggle Button */}
@@ -390,19 +388,11 @@ export default function ProvidersPage() {
         {/* Filters */}
         {showFilters && (
           <Card>
-            <CardContent className="pt-4 sm:pt-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Nom ou email..."
-                  value={filters.search}
-                  onChange={(e) => setFilters({...filters, search: e.target.value})}
-                  className="pl-10 h-10 sm:h-11 text-sm sm:text-base"
-                />
-              </div>
-              
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Filtres</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-2 sm:pt-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4">
               {/* Profession */}
               <Select value={filters.profession} onValueChange={(v) => setFilters({...filters, profession: v})}>
                 <SelectTrigger className="h-10 sm:h-11 text-sm sm:text-base">
@@ -478,9 +468,7 @@ export default function ProvidersPage() {
 
           <TabsContent value="pending" className="space-y-3 sm:space-y-4">
             {loading ? (
-              <div className="flex items-center justify-center py-8 sm:py-12">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
+              <AdminListSkeleton items={3} />
             ) : pendingProviders.length === 0 ? (
               <Card>
                 <CardContent className="py-8 sm:py-12 text-center text-muted-foreground text-sm sm:text-base">
@@ -498,9 +486,7 @@ export default function ProvidersPage() {
 
           <TabsContent value="verified" className="space-y-3 sm:space-y-4">
             {loading ? (
-              <div className="flex items-center justify-center py-8 sm:py-12">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
+              <AdminListSkeleton items={3} />
             ) : verifiedProviders.length === 0 ? (
               <Card>
                 <CardContent className="py-8 sm:py-12 text-center text-muted-foreground text-sm sm:text-base">
@@ -517,169 +503,77 @@ export default function ProvidersPage() {
           </TabsContent>
         </Tabs>
 
-        {/* Details Modal */}
-        {showDetailsModal && selectedProvider && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-auto">
-            <Card className="w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg sm:text-xl">{selectedProvider.full_name}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 sm:space-y-6">
-                {/* Type de prestataire */}
-                {selectedProvider.type_prestataire && (
-                  <div className="bg-muted p-3 sm:p-4 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl sm:text-2xl">
-                        {selectedProvider.type_prestataire === 'physique' ? '👤' : '🏢'}
-                      </span>
-                      <div>
-                        <p className="text-xs sm:text-sm text-muted-foreground">Type de prestataire</p>
-                        <p className="font-semibold text-sm sm:text-base">
-                          {selectedProvider.type_prestataire === 'physique' 
-                            ? 'Personne Physique (Individu)' 
-                            : 'Personne Morale (Entreprise)'}
-                        </p>
-                      </div>
+        <FormDrawer
+          open={showDetailsModal && !!selectedProvider}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowDetailsModal(false);
+              setSelectedProvider(null);
+            }
+          }}
+          title={selectedProvider?.full_name ?? "Prestataire"}
+          description="Examen du dossier et validation"
+        >
+          {selectedProvider && (
+            <div className="space-y-4 sm:space-y-6">
+                <div className="bg-muted p-3 sm:p-4 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl sm:text-2xl">
+                      {selectedProvider.type_personne === "morale" ? "🏢" : "👤"}
+                    </span>
+                    <div>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Type de prestataire</p>
+                      <p className="font-semibold text-sm sm:text-base">
+                        {selectedProvider.type_personne === "morale"
+                          ? "Personne morale (Entreprise)"
+                          : "Personne physique (Individu)"}
+                      </p>
                     </div>
                   </div>
-                )}
+                </div>
 
-                {/* Informations selon le type */}
-                {selectedProvider.type_prestataire === 'physique' ? (
-                  // PERSONNE PHYSIQUE
-                  <div className="bg-blue-50/50 dark:bg-blue-950/20 p-3 sm:p-4 rounded-lg border-2 border-blue-200 dark:border-blue-800 space-y-3 sm:space-y-4">
+                {selectedProvider.type_personne === "physique" ? (
+                  <div className="bg-blue-50/50 dark:bg-blue-950/20 p-3 sm:p-4 rounded-lg border border-blue-200 dark:border-blue-800 space-y-3">
                     <h3 className="font-semibold text-blue-900 dark:text-blue-100 text-sm sm:text-base">
-                      Informations personnelles
+                      Identité
                     </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {selectedProvider.prenom && (
                         <div>
-                          <p className="text-xs sm:text-sm text-muted-foreground">Prénom</p>
-                          <p className="font-medium text-sm sm:text-base">{selectedProvider.prenom}</p>
+                          <p className="text-xs text-muted-foreground">Prénom</p>
+                          <p className="font-medium text-sm">{selectedProvider.prenom}</p>
                         </div>
                       )}
                       {selectedProvider.nom && (
                         <div>
-                          <p className="text-xs sm:text-sm text-muted-foreground">Nom</p>
-                          <p className="font-medium text-sm sm:text-base">{selectedProvider.nom}</p>
-                        </div>
-                      )}
-                      {selectedProvider.date_naissance && (
-                        <div>
-                          <p className="text-xs sm:text-sm text-muted-foreground">Date de naissance</p>
-                          <p className="font-medium text-sm sm:text-base">
-                            {new Date(selectedProvider.date_naissance).toLocaleDateString('fr-FR')}
-                          </p>
-                        </div>
-                      )}
-                      {selectedProvider.numero_cni && (
-                        <div>
-                          <p className="text-xs sm:text-sm text-muted-foreground">Numéro CNI / Passeport</p>
-                          <p className="font-medium text-sm sm:text-base">{selectedProvider.numero_cni}</p>
+                          <p className="text-xs text-muted-foreground">Nom</p>
+                          <p className="font-medium text-sm">{selectedProvider.nom}</p>
                         </div>
                       )}
                     </div>
                   </div>
-                ) : selectedProvider.type_prestataire === 'morale' ? (
-                  // PERSONNE MORALE
-                  <div className="bg-green-50/50 dark:bg-green-950/20 p-3 sm:p-4 rounded-lg border-2 border-green-200 dark:border-green-800 space-y-3 sm:space-y-4">
-                    <div>
-                      <h3 className="font-semibold text-green-900 dark:text-green-100 mb-3 text-sm sm:text-base">
-                        Informations de l'entreprise
-                      </h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                        {selectedProvider.raison_sociale && (
-                          <div>
-                            <p className="text-xs sm:text-sm text-muted-foreground">Raison sociale</p>
-                            <p className="font-medium text-sm sm:text-base">{selectedProvider.raison_sociale}</p>
-                          </div>
-                        )}
-                        {selectedProvider.forme_juridique && (
-                          <div>
-                            <p className="text-xs sm:text-sm text-muted-foreground">Forme juridique</p>
-                            <p className="font-medium text-sm sm:text-base">{selectedProvider.forme_juridique}</p>
-                          </div>
-                        )}
-                        {selectedProvider.numero_rccm && (
-                          <div>
-                            <p className="text-xs sm:text-sm text-muted-foreground">Numéro RCCM</p>
-                            <p className="font-medium text-sm sm:text-base">{selectedProvider.numero_rccm}</p>
-                          </div>
-                        )}
-                        {selectedProvider.numero_impot && (
-                          <div>
-                            <p className="text-xs sm:text-sm text-muted-foreground">Numéro fiscal</p>
-                            <p className="font-medium text-sm sm:text-base">{selectedProvider.numero_impot}</p>
-                          </div>
-                        )}
-                        {selectedProvider.numero_id_nat && (
-                          <div>
-                            <p className="text-xs sm:text-sm text-muted-foreground">Numéro ID Nationale</p>
-                            <p className="font-medium text-sm sm:text-base">{selectedProvider.numero_id_nat}</p>
-                          </div>
-                        )}
-                      </div>
+                ) : (
+                  <div className="bg-green-50/50 dark:bg-green-950/20 p-3 sm:p-4 rounded-lg border border-green-200 dark:border-green-800 space-y-3">
+                    <h3 className="font-semibold text-green-900 dark:text-green-100 text-sm sm:text-base">
+                      Entreprise
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {selectedProvider.raison_sociale && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Raison sociale</p>
+                          <p className="font-medium text-sm">{selectedProvider.raison_sociale}</p>
+                        </div>
+                      )}
+                      {selectedProvider.numero_rccm && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Numéro RCCM</p>
+                          <p className="font-medium text-sm">{selectedProvider.numero_rccm}</p>
+                        </div>
+                      )}
                     </div>
-                    
-                    {(selectedProvider.representant_legal_nom || selectedProvider.representant_legal_prenom) && (
-                      <div>
-                        <h3 className="font-semibold text-green-900 dark:text-green-100 mb-3 text-sm sm:text-base">
-                          Représentant légal
-                        </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                          {selectedProvider.representant_legal_nom && (
-                            <div>
-                              <p className="text-xs sm:text-sm text-muted-foreground">Nom</p>
-                              <p className="font-medium text-sm sm:text-base">{selectedProvider.representant_legal_nom}</p>
-                            </div>
-                          )}
-                          {selectedProvider.representant_legal_prenom && (
-                            <div>
-                              <p className="text-xs sm:text-sm text-muted-foreground">Prénom</p>
-                              <p className="font-medium text-sm sm:text-base">{selectedProvider.representant_legal_prenom}</p>
-                            </div>
-                          )}
-                          {selectedProvider.representant_legal_fonction && (
-                            <div>
-                              <p className="text-xs sm:text-sm text-muted-foreground">Fonction</p>
-                              <p className="font-medium text-sm sm:text-base">{selectedProvider.representant_legal_fonction}</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {(selectedProvider.adresse_siege || selectedProvider.ville_siege) && (
-                      <div>
-                        <h3 className="font-semibold text-green-900 dark:text-green-100 mb-3 text-sm sm:text-base">
-                          Siège social
-                        </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                          {selectedProvider.adresse_siege && (
-                            <div>
-                              <p className="text-xs sm:text-sm text-muted-foreground">Adresse</p>
-                              <p className="font-medium text-sm sm:text-base">{selectedProvider.adresse_siege}</p>
-                            </div>
-                          )}
-                          {selectedProvider.ville_siege && (
-                            <div>
-                              <p className="text-xs sm:text-sm text-muted-foreground">Ville</p>
-                              <p className="font-medium text-sm sm:text-base">{selectedProvider.ville_siege}</p>
-                            </div>
-                          )}
-                          {selectedProvider.pays_siege && (
-                            <div>
-                              <p className="text-xs sm:text-sm text-muted-foreground">Pays</p>
-                              <p className="font-medium text-sm sm:text-base">{selectedProvider.pays_siege}</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
-                ) : null}
+                )}
 
-                {/* Informations professionnelles */}
                 <div className="bg-muted p-3 sm:p-4 rounded-lg">
                   <h3 className="font-semibold mb-3 text-sm sm:text-base">Informations professionnelles</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -687,35 +581,65 @@ export default function ProvidersPage() {
                       <p className="text-xs sm:text-sm text-muted-foreground">Email</p>
                       <p className="font-medium text-sm sm:text-base break-all">{selectedProvider.email}</p>
                     </div>
+                    {selectedProvider.telephone && (
+                      <div>
+                        <p className="text-xs sm:text-sm text-muted-foreground">Téléphone</p>
+                        <p className="font-medium text-sm sm:text-base flex items-center gap-1">
+                          <Phone className="w-3.5 h-3.5" />
+                          {selectedProvider.telephone}
+                        </p>
+                      </div>
+                    )}
                     <div>
                       <p className="text-xs sm:text-sm text-muted-foreground">Profession</p>
                       <p className="font-medium text-sm sm:text-base">{selectedProvider.profession}</p>
+                      {selectedProvider.profession_categorie && (
+                        <p className="text-xs text-muted-foreground">{selectedProvider.profession_categorie}</p>
+                      )}
                     </div>
                     <div>
                       <p className="text-xs sm:text-sm text-muted-foreground">Localisation</p>
-                      <p className="font-medium text-sm sm:text-base">{selectedProvider.localisation || "Non spécifié"}</p>
+                      <p className="font-medium text-sm sm:text-base">{selectedProvider.localisation}</p>
+                    </div>
+                    {selectedProvider.tarif_horaire != null && (
+                      <div>
+                        <p className="text-xs sm:text-sm text-muted-foreground">Tarif horaire</p>
+                        <p className="font-medium text-sm sm:text-base">
+                          {selectedProvider.tarif_horaire.toLocaleString("fr-FR")} FC/h
+                        </p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Disponibilité</p>
+                      <Badge variant={selectedProvider.disponible ? "default" : "secondary"} className="text-xs">
+                        {selectedProvider.disponible ? "Disponible" : "Indisponible"}
+                      </Badge>
                     </div>
                     <div>
                       <p className="text-xs sm:text-sm text-muted-foreground">Note moyenne</p>
                       <p className="font-medium text-sm sm:text-base flex items-center gap-1">
                         <Star className="w-4 h-4 text-yellow-500" />
-                        {selectedProvider.rating?.toFixed(1) || "0.0"}/5
+                        {selectedProvider.rating.toFixed(1)}/5
+                        <span className="text-xs text-muted-foreground">({selectedProvider.nb_avis} avis)</span>
                       </p>
                     </div>
                     <div>
                       <p className="text-xs sm:text-sm text-muted-foreground">Missions complétées</p>
-                      <p className="font-medium text-sm sm:text-base">{selectedProvider.missions_completed || 0}</p>
+                      <p className="font-medium text-sm sm:text-base">{selectedProvider.missions_completed}</p>
                     </div>
                     <div>
                       <p className="text-xs sm:text-sm text-muted-foreground">Statut vérification</p>
                       <div className="flex flex-wrap gap-2">
                         <Badge variant={selectedProvider.verified ? "default" : "secondary"} className="text-xs">
-                          {selectedProvider.verified ? "✅ Vérifié" : "⏳ En attente"}
+                          {selectedProvider.verified ? "Vérifié" : "En attente"}
                         </Badge>
                         <Badge variant={selectedProvider.documents_verified ? "default" : "secondary"} className="text-xs">
-                          {selectedProvider.documents_verified ? "📄 Docs OK" : "📄 Docs à vérifier"}
+                          {selectedProvider.documents_verified ? "Docs OK" : "Docs à vérifier"}
                         </Badge>
                       </div>
+                      {selectedProvider.motif_rejet && (
+                        <p className="text-xs text-red-600 mt-1">Motif rejet : {selectedProvider.motif_rejet}</p>
+                      )}
                     </div>
                     <div>
                       <p className="text-xs sm:text-sm text-muted-foreground">Inscrit le</p>
@@ -724,6 +648,22 @@ export default function ProvidersPage() {
                       </p>
                     </div>
                   </div>
+
+                  {selectedProvider.zones_intervention && selectedProvider.zones_intervention.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-xs sm:text-sm text-muted-foreground mb-2 flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5" />
+                        Zones d'intervention
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedProvider.zones_intervention.map((zone) => (
+                          <Badge key={zone} variant="outline" className="text-xs">
+                            {zone}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {selectedProvider.bio && (
@@ -740,7 +680,8 @@ export default function ProvidersPage() {
                       {selectedProvider.id_document_url && (
                         <div className="bg-muted p-3 sm:p-4 rounded-lg">
                           <p className="text-xs sm:text-sm font-medium mb-3 flex items-center gap-2">
-                            📄 Carte d'électeur / Passeport
+                            <FileText className="w-4 h-4" />
+                            Pièce d'identité
                           </p>
                           {selectedProvider.id_document_url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                             <div className="space-y-2">
@@ -753,111 +694,189 @@ export default function ProvidersPage() {
                                 href={selectedProvider.id_document_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-xs text-secondary hover:underline inline-flex items-center gap-1"
+                                className="text-xs text-secondary hover:underline"
                               >
                                 Ouvrir en plein écran →
                               </a>
                             </div>
                           ) : (
-                            <div className="border-2 border-dashed border-border rounded-lg p-4 sm:p-6 text-center">
-                              <FileText className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-2 text-muted-foreground" />
-                              <p className="text-xs sm:text-sm text-muted-foreground mb-2">Document PDF</p>
-                              <a
-                                href={selectedProvider.id_document_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs sm:text-sm text-secondary hover:underline inline-flex items-center gap-1"
-                              >
-                                Ouvrir le PDF →
-                              </a>
-                            </div>
+                            <a
+                              href={selectedProvider.id_document_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-secondary hover:underline inline-flex items-center gap-1"
+                            >
+                              <FileText className="w-4 h-4" />
+                              Ouvrir le document →
+                            </a>
                           )}
                         </div>
                       )}
                       {selectedProvider.qualification_url && (
                         <div className="bg-muted p-3 sm:p-4 rounded-lg">
                           <p className="text-xs sm:text-sm font-medium mb-3 flex items-center gap-2">
-                            🎓 Document de qualification
+                            <FileText className="w-4 h-4" />
+                            Document RCCM
                           </p>
                           {selectedProvider.qualification_url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                             <div className="space-y-2">
                               <img
                                 src={selectedProvider.qualification_url}
-                                alt="Document de qualification"
+                                alt="Document RCCM"
                                 className="w-full h-auto rounded border border-border max-h-64 sm:max-h-96 object-contain bg-white"
                               />
                               <a
                                 href={selectedProvider.qualification_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-xs text-secondary hover:underline inline-flex items-center gap-1"
+                                className="text-xs text-secondary hover:underline"
                               >
                                 Ouvrir en plein écran →
                               </a>
                             </div>
                           ) : (
-                            <div className="border-2 border-dashed border-border rounded-lg p-4 sm:p-6 text-center">
-                              <FileText className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-2 text-muted-foreground" />
-                              <p className="text-xs sm:text-sm text-muted-foreground mb-2">Document PDF</p>
-                              <a
-                                href={selectedProvider.qualification_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs sm:text-sm text-secondary hover:underline inline-flex items-center gap-1"
-                              >
-                                Ouvrir le PDF →
-                              </a>
-                            </div>
+                            <a
+                              href={selectedProvider.qualification_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-secondary hover:underline inline-flex items-center gap-1"
+                            >
+                              <FileText className="w-4 h-4" />
+                              Ouvrir le PDF →
+                            </a>
                           )}
                         </div>
                       )}
                     </div>
                   ) : (
                     <div className="bg-muted p-3 sm:p-4 rounded-lg text-center text-xs sm:text-sm text-muted-foreground">
-                      <p>📎 Aucun document soumis</p>
+                      <p>Aucun document soumis</p>
                       <p className="text-xs mt-1">Le prestataire n'a pas encore uploadé ses documents</p>
                     </div>
                   )}
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-border">
-                  <Button
-                    variant="outline"
-                    className="flex-1 text-sm"
-                    onClick={() => setShowDetailsModal(false)}
-                  >
-                    Fermer
-                  </Button>
-                  {!selectedProvider.verified && (
-                    <>
+                <div className="bg-muted p-3 sm:p-4 rounded-lg">
+                  <h3 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                    <Award className="w-4 h-4" />
+                    Certification
+                  </h3>
+                  <Badge variant="outline" className="mb-2">
+                    {selectedProvider.statut_certification === "certifie" || selectedProvider.certifie
+                      ? "Certifié"
+                      : selectedProvider.statut_certification === "en_attente"
+                        ? "En attente"
+                        : selectedProvider.statut_certification === "rejete"
+                          ? "Rejetée"
+                          : "Non demandée"}
+                  </Badge>
+                  {selectedProvider.certifie_le && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      Certifié le {new Date(selectedProvider.certifie_le).toLocaleDateString("fr-FR")}
+                    </p>
+                  )}
+                  {selectedProvider.motif_rejet_certification && (
+                    <p className="text-xs text-red-600 mt-1">
+                      Motif rejet certification : {selectedProvider.motif_rejet_certification}
+                    </p>
+                  )}
+                  {selectedProvider.statut_certification === "en_attente" && (
+                    <div className="space-y-3 mt-2">
+                      <SlideToConfirm
+                        label="Approuver la certification de ce prestataire"
+                        hint="Glisser pour approuver"
+                        variant="success"
+                        successMessage="Certification approuvée"
+                        onConfirm={async () => {
+                          await handleApprouverCertification(selectedProvider.id);
+                        }}
+                      />
                       <Button
-                        className="flex-1 text-sm"
-                        onClick={async () => {
-                          await handleVerify(selectedProvider.id);
-                          setShowDetailsModal(false);
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          setRejectTarget({ id: selectedProvider.id, type: "certification" });
+                          setRejectMotif("");
                         }}
                       >
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Vérifier
+                        <XCircle className="w-4 h-4 mr-1" />
+                        Rejeter la certification
                       </Button>
-                      <Button
-                        variant="destructive"
-                        className="flex-1 text-sm"
-                        onClick={async () => {
-                          await handleReject(selectedProvider.id);
-                          setShowDetailsModal(false);
-                        }}
-                      >
-                        <XCircle className="w-4 h-4 mr-2" />
-                        Rejeter
-                      </Button>
-                    </>
+                    </div>
                   )}
                 </div>
-              </CardContent>
-            </Card>
+
+                {!selectedProvider.verified && (
+                  <div className="space-y-3 pt-4 border-t border-border">
+                    <SlideToConfirm
+                      label="Valider et activer ce prestataire sur la plateforme"
+                      hint="Glisser pour vérifier"
+                      variant="success"
+                      successMessage="Prestataire vérifié"
+                      onConfirm={async () => {
+                        await handleVerify(selectedProvider.id);
+                        setShowDetailsModal(false);
+                      }}
+                    />
+                    <Button
+                      variant="outline"
+                      className="w-full text-sm"
+                      onClick={() => {
+                        setRejectTarget({ id: selectedProvider.id, type: "provider" });
+                        setRejectMotif("");
+                      }}
+                    >
+                      <XCircle className="w-4 h-4 mr-2" />
+                      Rejeter le prestataire
+                    </Button>
+                  </div>
+                )}
+            </div>
+          )}
+        </FormDrawer>
+
+        <FormDrawer
+          open={!!rejectTarget}
+          onOpenChange={(open) => {
+            if (!open) {
+              setRejectTarget(null);
+              setRejectMotif("");
+            }
+          }}
+          title={rejectTarget?.type === "certification" ? "Rejeter la certification" : "Rejeter le prestataire"}
+          description="Cette action est irréversible. Indiquez un motif."
+        >
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="reject-motif">Motif du rejet</Label>
+              <Textarea
+                id="reject-motif"
+                value={rejectMotif}
+                onChange={(e) => setRejectMotif(e.target.value)}
+                placeholder="Motif obligatoire…"
+                rows={3}
+              />
+            </div>
+            {rejectTarget && (
+              <SlideToConfirm
+                label="Confirmer le rejet définitif"
+                hint="Glisser pour rejeter"
+                variant="destructive"
+                disabled={!rejectMotif.trim()}
+                successMessage="Rejet enregistré"
+                onConfirm={async () => {
+                  if (rejectTarget.type === "certification") {
+                    await handleRejeterCertification(rejectTarget.id, rejectMotif);
+                  } else {
+                    await handleReject(rejectTarget.id, rejectMotif);
+                  }
+                }}
+              />
+            )}
           </div>
-        )}
+        </FormDrawer>
       </div>
     </DashboardLayout>
   );

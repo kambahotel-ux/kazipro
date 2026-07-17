@@ -22,3 +22,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Backend Laravel
+backend/vendor/
+backend/.env
+backend/.env.backup
+backend/.env.production
+backend/storage/*.key
+backend/.phpunit.result.cache
+backend/auth.json
+backend/public/hot
+backend/public/storage
+backend/storage/logs/*.log

@@ -11,7 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Upload, X, MapPin, DollarSign, Calendar, AlertCircle, CheckCircle, ArrowLeft, Loader, Target, Users, Search as SearchIcon, User, Eye } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { demandesApi, professionsApi, prestatairesApi, uploadApi } from "@/lib/api";
+import {
+  getClientDisplayName,
+  mapPrestataireToUi,
+  unwrapPaginated,
+} from "@/lib/client-helpers";
 import { toast } from "sonner";
 
 const communes = [
@@ -35,6 +40,7 @@ export default function NouvelleDemandePages() {
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [services, setServices] = useState<string[]>([]);
+  const [professionMap, setProfessionMap] = useState<Record<string, number>>({});
   const [loadingServices, setLoadingServices] = useState(true);
   const [formData, setFormData] = useState({
     title: "",
@@ -58,10 +64,9 @@ export default function NouvelleDemandePages() {
   useEffect(() => {
     loadServices();
     if (user) {
-      fetchClientName();
+      setClientName(getClientDisplayName(user));
     }
     
-    // Pré-sélectionner un prestataire si l'ID est dans l'URL
     const prestataireId = searchParams.get("prestataire");
     if (prestataireId) {
       loadPreselectedProvider(prestataireId);
@@ -77,20 +82,18 @@ export default function NouvelleDemandePages() {
   const loadServices = async () => {
     try {
       setLoadingServices(true);
-      const { data, error } = await supabase
-        .from("professions")
-        .select("nom")
-        .eq("actif", true)
-        .order("nom");
-
-      if (error) throw error;
-      
-      const serviceNames = data?.map(p => p.nom) || [];
+      const data = await professionsApi.getAll();
+      const rows = Array.isArray(data) ? data : data.data ?? [];
+      const map: Record<string, number> = {};
+      const serviceNames = rows.map((p: { id: number; nom: string }) => {
+        map[p.nom] = p.id;
+        return p.nom;
+      });
+      setProfessionMap(map);
       setServices(serviceNames);
     } catch (error) {
       console.error("Error loading services:", error);
       toast.error("Erreur lors du chargement des services");
-      // Fallback to default services
       setServices([
         "Électricité",
         "Plomberie",
@@ -109,38 +112,22 @@ export default function NouvelleDemandePages() {
     }
   };
 
-  const fetchClientName = async () => {
-    if (!user) return;
-    try {
-      const { data } = await supabase
-        .from("clients")
-        .select("full_name")
-        .eq("user_id", user.id)
-        .single();
-
-      if (data?.full_name) {
-        setClientName(data.full_name);
-      }
-    } catch (error) {
-      console.error("Error fetching client name:", error);
-    }
-  };
-
   const loadAvailableProviders = async () => {
     try {
-      let query = supabase
-        .from("prestataires")
-        .select("id, full_name, profession, bio, rating, verified, created_at")
-        .eq("verified", true);
-
-      if (formData.service) {
-        query = query.eq("profession", formData.service);
+      const params: { search?: string; profession_id?: number } = {};
+      if (formData.service && professionMap[formData.service]) {
+        params.profession_id = professionMap[formData.service];
       }
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setAvailableProviders(data || []);
+      const res = await prestatairesApi.getAll({
+        ...params,
+        disponible: true,
+        per_page: 50,
+      });
+      const rows = unwrapPaginated(res).map((p) =>
+        mapPrestataireToUi(p as Record<string, unknown>),
+      );
+      setAvailableProviders(rows);
     } catch (error) {
       console.error("Error loading providers:", error);
     }
@@ -148,27 +135,20 @@ export default function NouvelleDemandePages() {
 
   const loadPreselectedProvider = async (prestataireId: string) => {
     try {
-      const { data, error } = await supabase
-        .from("prestataires")
-        .select("id, full_name, profession, bio, rating, verified, created_at")
-        .eq("id", prestataireId)
-        .maybeSingle();
+      const data = await prestatairesApi.getById(prestataireId);
+      if (!data) return;
 
-      if (error) throw error;
-      
-      if (data) {
-        // Passer en mode demande directe
-        setFormData(prev => ({ 
-          ...prev, 
-          type: "directe",
-          service: data.profession // Pré-remplir le service
-        }));
-        
-        // Pré-sélectionner le prestataire
-        setSelectedProviders([data]);
-        
-        toast.success(`${data.full_name} a été pré-sélectionné pour votre demande`);
-      }
+      const provider = mapPrestataireToUi(data as Record<string, unknown>);
+
+      setFormData((prev) => ({
+        ...prev,
+        type: "directe",
+        service: String(provider.profession ?? prev.service),
+      }));
+
+      setSelectedProviders([provider]);
+
+      toast.success(`${provider.full_name} a été pré-sélectionné pour votre demande`);
     } catch (error) {
       console.error("Error loading preselected provider:", error);
     }
@@ -295,120 +275,59 @@ export default function NouvelleDemandePages() {
     try {
       setSubmitting(true);
 
-      // Get client ID
-      let { data: clientData, error: clientError } = await supabase
-        .from("clients")
-        .select("id")
-        .eq("user_id", user.id)
-        .single();
+      const professionId = formData.service ? professionMap[formData.service] : undefined;
+      const firstProvider =
+        formData.type === "directe" && selectedProviders.length > 0
+          ? selectedProviders[0]
+          : null;
+      const useDirecte =
+        formData.type === "directe" && selectedProviders.length === 1;
 
-      // If client doesn't exist, create it
-      if (clientError && clientError.code === 'PGRST116') {
-        const { data: newClient, error: createError } = await supabase
-          .from("clients")
-          .insert([
-            {
-              user_id: user.id,
-              full_name: user.email?.split('@')[0] || 'Client',
-              city: formData.commune,
-              verified: false,
-            }
-          ])
-          .select()
-          .single();
+      const payload: Record<string, unknown> = {
+        type: useDirecte ? "directe" : formData.type === "directe" ? "publique" : formData.type,
+        titre: formData.title,
+        description: formData.description,
+        ville: "Kinshasa",
+        quartier: formData.commune,
+        budget_max: parseInt(formData.budgetMax) || parseInt(formData.budgetMin) || 0,
+        urgence: formData.urgency,
+      };
 
-        if (createError) throw createError;
-        clientData = newClient;
-      } else if (clientError) {
-        throw clientError;
-      }
+      if (professionId) payload.profession_id = professionId;
+      if (useDirecte && firstProvider) payload.prestataire_cible_id = firstProvider.id;
 
-      // Create demande
-      const { data: demandeData, error: demandeError } = await supabase
-        .from("demandes")
-        .insert([
-          {
-            client_id: clientData.id,
-            titre: formData.title,
-            title: formData.title, // Pour compatibilité
-            description: formData.description,
-            profession: formData.service,
-            service: formData.service, // Pour compatibilité
-            localisation: formData.commune,
-            location: formData.commune, // Pour compatibilité
-            budget: parseInt(formData.budgetMax) || parseInt(formData.budgetMin) || 0,
-            budget_min: parseInt(formData.budgetMin) || 0, // Pour compatibilité
-            budget_max: parseInt(formData.budgetMax) || 0, // Pour compatibilité
-            urgence: formData.urgency,
-            statut: "en_attente",
-            type: formData.type,
+      const response = await demandesApi.create(payload);
+      const demandeData =
+        (response as { demande?: { id: string | number } }).demande ?? response;
+      const demandeId = String((demandeData as { id: string | number }).id);
+
+      if (formData.type === "directe" && selectedProviders.length > 1) {
+        for (const provider of selectedProviders) {
+          try {
+            await demandesApi.inviter(demandeId, {
+              prestataire_id: provider.id,
+            });
+          } catch (inviteErr) {
+            console.error("Invitation error:", inviteErr);
           }
-        ])
-        .select()
-        .single();
-
-      if (demandeError) throw demandeError;
-
-      // Create invitations for direct requests
-      if (formData.type === "directe" && selectedProviders.length > 0) {
-        const invitations = selectedProviders.map(provider => ({
-          demande_id: demandeData.id,
-          prestataire_id: provider.id,
-          status: "pending",
-        }));
-
-        const { error: invitationError } = await supabase
-          .from("demande_invitations")
-          .insert(invitations);
-
-        if (invitationError) {
-          console.error("Error creating invitations:", invitationError);
-          toast.error("Demande créée mais erreur lors de l'envoi des invitations");
         }
       }
 
-      // Upload images if any and get their URLs
-      const imageUrls: string[] = [];
       if (formData.images.length > 0) {
-        for (let i = 0; i < formData.images.length; i++) {
-          const file = formData.images[i];
-          const fileName = `${demandeData.id}/${Date.now()}-${i}`;
-          
-          const { error: uploadError } = await supabase.storage
-            .from("demandes")
-            .upload(fileName, file);
-
-          if (uploadError) {
-            console.warn("Image upload warning:", uploadError);
-          } else {
-            // Get public URL for the uploaded image
-            const { data: urlData } = supabase.storage
-              .from("demandes")
-              .getPublicUrl(fileName);
-            
-            if (urlData?.publicUrl) {
-              imageUrls.push(urlData.publicUrl);
-            }
-          }
-        }
-
-        // Update demande with image URLs
-        if (imageUrls.length > 0) {
-          const { error: updateError } = await supabase
-            .from("demandes")
-            .update({ images: imageUrls })
-            .eq("id", demandeData.id);
-
-          if (updateError) {
-            console.warn("Error updating images:", updateError);
-          }
+        try {
+          await uploadApi.uploadDemandeImages(formData.images, demandeId);
+        } catch (uploadErr) {
+          console.warn("Image upload warning:", uploadErr);
+          toast.warning("Demande créée mais certaines images n'ont pas pu être uploadées");
         }
       }
 
       toast.success("Demande créée avec succès !");
       navigate("/dashboard/client/demandes");
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors de la création de la demande");
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Erreur lors de la création de la demande";
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { PrestatairePageShell } from "@/components/prestataire/PrestatairePageShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,17 +7,52 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  Search, Plus, Eye, Edit, Trash2, DollarSign, CheckCircle, Clock, 
-  Loader, Send, FileText, Download, X, Save, Copy
+import {
+  Search,
+  Plus,
+  Eye,
+  Edit,
+  Trash2,
+  DollarSign,
+  CheckCircle,
+  Clock,
+  Loader,
+  Send,
+  FileText,
+  Download,
+  X,
+  Save,
+  Copy,
+  MoreHorizontal,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
-import { StatsCard } from "@/components/dashboard/StatsCard";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { useAbortableFetch } from "@/hooks/useAbortableFetch";
+import { devisApi } from "@/lib/api";
+import { parsePaginatedMeta, unwrapPaginated } from "@/lib/api-utils";
+import { mapDevisToUi } from "@/lib/client-helpers";
+import { displayNameFromProfil, getProfil, prestataireIdFromUser } from "@/lib/kazipro-profile";
 import { toast } from "sonner";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { DateRangeFilter } from "@/components/filters/DateRangeFilter";
+import { FormDrawer } from "@/components/ui/FormDrawer";
+import { AdminListSkeleton } from "@/components/dashboard/AdminLoadingSkeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  DevisStatusBadge,
+  PrestataireDevisCard,
+  type PrestataireDevisCardData,
+} from "@/components/devis/PrestataireDevisCard";
+import { PrestataireEmptyState } from "@/components/prestataire/PrestataireEmptyState";
+import { formatMontant } from "@/lib/devis-form";
 
 interface DevisItem {
   id?: string;
@@ -54,15 +89,24 @@ interface Devis {
   client_name?: string;
   client_phone?: string;
   client_email?: string;
+  location?: string;
+  items_count?: number;
+  items_preview?: string[];
 }
 
-export default function DevisPage() {
+type DevisPageProps = { embedded?: boolean };
+
+export default function DevisPage({ embedded = false }: DevisPageProps) {
   const { user } = useAuth();
   const [providerName, setProviderName] = useState("Prestataire");
   const [providerId, setProviderId] = useState<string | null>(null);
   const [devisList, setDevisList] = useState<Devis[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [totalDevis, setTotalDevis] = useState(0);
+  const PAGE_SIZE = 20;
   
   // Additional filters
   const [filters, setFilters] = useState({
@@ -77,6 +121,7 @@ export default function DevisPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [selectedDevis, setSelectedDevis] = useState<Devis | null>(null);
   const [editingDevis, setEditingDevis] = useState<Devis | null>(null);
   
@@ -99,92 +144,106 @@ export default function DevisPage() {
     }
   }, [user]);
 
-  useEffect(() => {
-    if (providerId) {
-      fetchDevis();
-    }
-  }, [providerId]);
+  useAbortableFetch(Boolean(providerId), [providerId, page, filters.search, filters.status, filters.startDate, filters.endDate], async (signal) => {
+    if (!providerId || signal.aborted) return;
+    await fetchDevis(page, signal);
+  });
 
   const fetchProviderInfo = async () => {
     if (!user) return;
     try {
-      const { data } = await supabase
-        .from("prestataires")
-        .select("id, full_name")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (data) {
-        setProviderName(data.full_name);
-        setProviderId(data.id);
+      const profil = getProfil(user);
+      const pid = prestataireIdFromUser(user);
+      if (profil && pid) {
+        setProviderName(displayNameFromProfil(profil, user.name || "Prestataire"));
+        setProviderId(pid);
       }
     } catch (error) {
       console.error("Error fetching provider:", error);
     }
   };
 
-  const fetchDevis = async () => {
-    if (!providerId) return;
+  const mapRawToDevis = (raw: Record<string, unknown>): Devis => {
+    const mapped = mapDevisToUi(raw);
+    const demande = raw.demande as Record<string, unknown> | undefined;
+    const client = raw.client ?? demande?.client;
+    const lineItems = (mapped.items ?? []).map((it) => ({
+      ...it,
+      quantite: Number(it.quantite ?? 1),
+      prix_unitaire: Number(it.prix_unitaire ?? 0),
+      montant: Number(it.montant ?? 0),
+      unite: String(it.unite ?? "unité"),
+      designation: String(it.designation ?? "—"),
+    }));
+    const ville = demande?.ville ? String(demande.ville) : "";
+    const quartier = demande?.quartier ? String(demande.quartier) : "";
+    const location = [ville, quartier].filter(Boolean).join(" · ") || undefined;
+    return {
+      ...mapped,
+      id: String(raw.id),
+      numero: String(mapped.numero ?? raw.numero ?? ""),
+      titre: String(demande?.titre ?? mapped.titre ?? "Devis"),
+      description: raw.description ? String(raw.description) : mapped.description,
+      prestataire_id: String(raw.prestataire_id ?? providerId),
+      statut: (mapped.statut ?? "envoye") as Devis["statut"],
+      date_creation: String(mapped.created_at ?? raw.created_at ?? new Date().toISOString()),
+      created_at: String(raw.created_at ?? new Date().toISOString()),
+      montant_ht: Number(mapped.montant_ht ?? raw.montant_ht ?? 0),
+      montant_ttc: Number(mapped.montant_ttc ?? raw.montant_ttc ?? 0),
+      tva: Number(mapped.taux_tva ?? raw.tva ?? 16),
+      devise: String(raw.devise ?? mapped.devise ?? "CDF"),
+      items: lineItems,
+      items_count: lineItems.length,
+      items_preview: lineItems.map((it) => it.designation).filter(Boolean),
+      location,
+      client_name: client ? displayNameFromProfil(client as Record<string, unknown>) : undefined,
+    } as Devis;
+  };
 
+  const openDevisPreview = async (devis: Devis) => {
+    setSelectedDevis(devis);
+    setShowPreviewModal(true);
+    setPreviewLoading(true);
+    try {
+      const full = await devisApi.getById(devis.id);
+      setSelectedDevis(mapRawToDevis(full as Record<string, unknown>));
+    } catch (error) {
+      console.error(error);
+      toast.error("Impossible de charger le détail du devis");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const fetchDevis = async (targetPage = 1, signal?: AbortSignal) => {
+    if (!providerId) return;
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("devis")
-        .select("*")
-        .eq("prestataire_id", providerId)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      // Fetch items and client info for each devis
-      const devisWithDetails = await Promise.all(
-        (data || []).map(async (devis) => {
-          // Fetch items
-          const { data: itemsData } = await supabase
-            .from("devis_pro_items")
-            .select("*")
-            .eq("devis_id", devis.id)
-            .order("created_at", { ascending: true });  // ✅ Tri par created_at au lieu de ordre
-          
-          // Fetch client info if devis is linked to a demande
-          let clientInfo = {};
-          if (devis.demande_id) {
-            const { data: demandeData } = await supabase
-              .from("demandes")
-              .select(`
-                client_id,
-                clients:client_id (
-                  full_name
-                )
-              `)
-              .eq("id", devis.demande_id)
-              .maybeSingle();
-
-            if (demandeData?.clients) {
-              const client = Array.isArray(demandeData.clients) 
-                ? demandeData.clients[0] 
-                : demandeData.clients;
-              
-              clientInfo = {
-                client_name: client.full_name
-              };
-            }
-          }
-          
-          return { 
-            ...devis, 
-            items: itemsData || [],
-            ...clientInfo
-          };
-        })
+      const res = await devisApi.getAll(
+        {
+          page: targetPage,
+          per_page: PAGE_SIZE,
+          search: filters.search.trim() || undefined,
+          statut: filters.status !== "all" ? filters.status : undefined,
+          date_from: filters.startDate || undefined,
+          date_to: filters.endDate || undefined,
+        },
+        { force: true },
       );
+      const meta = parsePaginatedMeta(res);
+      const rows = unwrapPaginated<Record<string, unknown>>(res);
+      const devisWithDetails = rows.map((raw) => mapRawToDevis(raw));
 
       setDevisList(devisWithDetails);
-    } catch (error: any) {
+      setPage(meta.current_page || targetPage);
+      setLastPage(Math.max(1, meta.last_page || 1));
+      setTotalDevis(meta.total ?? rows.length);
+    } catch (error: unknown) {
+      if (signal?.aborted) return;
       toast.error("Erreur lors du chargement des devis");
       console.error(error);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
@@ -243,56 +302,29 @@ export default function DevisPage() {
     try {
       const { montant_ht, montant_ttc } = calculateTotals();
       
-      // Générer le numéro
-      const { data: numeroData } = await supabase.rpc('generate_devis_numero');
-      const numero = numeroData || `DEV-${Date.now()}`;
-      
-      // Créer le devis
-      const { data: devisData, error: devisError } = await supabase
-        .from("devis")
-        .insert({
-          numero,
-          prestataire_id: providerId,
-          titre: formData.titre,
-          description: formData.description,
-          notes: formData.notes,
-          conditions: formData.conditions,
-          amount: montant_ttc, // Pour compatibilité avec l'ancienne structure
-          montant_ht,
-          tva: formData.tva,
-          montant_ttc,
-          statut,
-          status: statut === 'envoye' ? 'pending' : 'pending', // Pour compatibilité
-          date_creation: new Date().toISOString(),
-          date_envoi: statut === 'envoye' ? new Date().toISOString() : null,
-          date_expiration: statut === 'envoye' ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null,
-        })
-        .select()
-        .single();
-
-      if (devisError) throw devisError;
-
-      // Créer les lignes
-      const itemsToInsert = items.map((item, index) => ({
-        devis_id: devisData.id,
-        designation: item.designation,
-        quantite: item.quantite,
-        unite: item.unite,
-        prix_unitaire: item.prix_unitaire,
-        montant: item.montant,
-        ordre: index,
-      }));
-
-      const { error: itemsError } = await supabase
-        .from("devis_pro_items")
-        .insert(itemsToInsert);
-
-      if (itemsError) throw itemsError;
+      await devisApi.create({
+        prestataire_id: providerId,
+        titre: formData.titre,
+        description: formData.description,
+        notes: formData.notes,
+        conditions: formData.conditions,
+        montant_ht,
+        tva: formData.tva,
+        montant_ttc,
+        statut,
+        items: items.map((item) => ({
+          designation: item.designation,
+          quantite: item.quantite,
+          unite: item.unite,
+          prix_unitaire: item.prix_unitaire,
+          montant: item.montant,
+        })),
+      });
 
       toast.success(statut === 'brouillon' ? "Devis créé en brouillon" : "Devis envoyé avec succès");
       setShowCreateModal(false);
       resetForm();
-      fetchDevis();
+      fetchDevis(page);
     } catch (error: any) {
       toast.error(error.message || "Erreur lors de la création");
       console.error(error);
@@ -314,15 +346,10 @@ export default function DevisPage() {
     if (!confirm("Êtes-vous sûr de vouloir supprimer ce devis ?")) return;
 
     try {
-      const { error } = await supabase
-        .from("devis")
-        .delete()
-        .eq("id", devisId);
-
-      if (error) throw error;
+      await devisApi.delete(devisId);
 
       toast.success("Devis supprimé");
-      fetchDevis();
+      fetchDevis(page);
     } catch (error: any) {
       toast.error("Erreur lors de la suppression");
     }
@@ -370,55 +397,29 @@ export default function DevisPage() {
     try {
       const { montant_ht, montant_ttc } = calculateTotals();
       
-      // Mettre à jour le devis
-      const { error: devisError } = await supabase
-        .from("devis")
-        .update({
-          titre: formData.titre,
-          description: formData.description,
-          notes: formData.notes,
-          conditions: formData.conditions,
-          amount: montant_ttc,
-          montant_ht,
-          tva: formData.tva,
-          montant_ttc,
-          statut,
-          status: statut === 'envoye' ? 'pending' : 'pending',
-          date_envoi: statut === 'envoye' ? new Date().toISOString() : editingDevis.date_envoi,
-          date_expiration: statut === 'envoye' ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : editingDevis.date_expiration,
-        })
-        .eq("id", editingDevis.id);
-
-      if (devisError) throw devisError;
-
-      // Supprimer les anciennes lignes
-      await supabase
-        .from("devis_pro_items")
-        .delete()
-        .eq("devis_id", editingDevis.id);
-
-      // Créer les nouvelles lignes
-      const itemsToInsert = items.map((item, index) => ({
-        devis_id: editingDevis.id,
-        designation: item.designation,
-        quantite: item.quantite,
-        unite: item.unite,
-        prix_unitaire: item.prix_unitaire,
-        montant: item.montant,
-        ordre: index,
-      }));
-
-      const { error: itemsError } = await supabase
-        .from("devis_pro_items")
-        .insert(itemsToInsert);
-
-      if (itemsError) throw itemsError;
+      await devisApi.update(String(editingDevis.id), {
+        titre: formData.titre,
+        description: formData.description,
+        notes: formData.notes,
+        conditions: formData.conditions,
+        montant_ht,
+        tva: formData.tva,
+        montant_ttc,
+        statut,
+        items: items.map((item) => ({
+          designation: item.designation,
+          quantite: item.quantite,
+          unite: item.unite,
+          prix_unitaire: item.prix_unitaire,
+          montant: item.montant,
+        })),
+      });
 
       toast.success(statut === 'brouillon' ? "Devis mis à jour" : "Devis envoyé avec succès");
       setShowEditModal(false);
       setEditingDevis(null);
       resetForm();
-      fetchDevis();
+      fetchDevis(page);
     } catch (error: any) {
       toast.error(error.message || "Erreur lors de la mise à jour");
       console.error(error);
@@ -430,11 +431,7 @@ export default function DevisPage() {
       toast.info("Génération du PDF en cours...");
       
       // Récupérer les informations d'entreprise du prestataire
-      const { data: entrepriseData } = await supabase
-        .from('entreprise_info')
-        .select('*')
-        .eq('prestataire_id', devis.prestataire_id)
-        .maybeSingle();
+      const entrepriseData = null;
       
       // Utiliser les infos entreprise ou fallback sur le nom du prestataire
       const companyName = entrepriseData?.nom_entreprise || providerName;
@@ -672,80 +669,20 @@ export default function DevisPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from("devis")
-        .update({
-          statut: 'envoye',
-          status: 'pending',
-          date_envoi: new Date().toISOString(),
-          date_expiration: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        })
-        .eq("id", devis.id);
-
-      if (error) throw error;
+      await devisApi.update(String(devis.id), { statut: 'envoye' });
 
       toast.success("Devis envoyé au client avec succès!");
-      fetchDevis();
+      fetchDevis(page);
     } catch (error: any) {
       toast.error("Erreur lors de l'envoi du devis");
       console.error(error);
     }
   };
 
-  const getStats = () => {
-    const brouillons = filteredDevis.filter(d => d.statut === 'brouillon').length;
-    const envoyes = filteredDevis.filter(d => d.statut === 'envoye').length;
-    const acceptes = filteredDevis.filter(d => d.statut === 'accepte').length;
-    const totalMontant = filteredDevis
-      .filter(d => d.statut === 'accepte')
-      .reduce((sum, d) => sum + d.montant_ttc, 0);
-
-    return [
-      { title: "Brouillons", value: brouillons.toString(), subtitle: "À finaliser", icon: <Edit className="w-5 h-5" /> },
-      { title: "Envoyés", value: envoyes.toString(), subtitle: "En attente", icon: <Send className="w-5 h-5" /> },
-      { title: "Acceptés", value: acceptes.toString(), subtitle: "Validés", icon: <CheckCircle className="w-5 h-5" /> },
-      { title: "Montant accepté", value: `${totalMontant.toLocaleString()} FC`, subtitle: "Total", icon: <DollarSign className="w-5 h-5" /> },
-    ];
-  };
-
   const filteredDevis = useMemo(() => {
-    return devisList.filter(d => {
-      // Search filter
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        if (!(d.titre || '').toLowerCase().includes(searchLower) &&
-            !(d.numero || '').toLowerCase().includes(searchLower)) {
-          return false;
-        }
-      }
-      
-      // Status filter
-      if (filters.status !== 'all' && d.statut !== filters.status) {
-        return false;
-      }
-      
-      // Devise filter
-      if (filters.devise !== 'all' && (d.devise || 'FC') !== filters.devise) {
-        return false;
-      }
-      
-      // Date range filter
-      if (filters.startDate) {
-        const devisDate = new Date(d.created_at);
-        const startDate = new Date(filters.startDate);
-        if (devisDate < startDate) return false;
-      }
-      
-      if (filters.endDate) {
-        const devisDate = new Date(d.created_at);
-        const endDate = new Date(filters.endDate);
-        endDate.setHours(23, 59, 59, 999);
-        if (devisDate > endDate) return false;
-      }
-      
-      return true;
-    });
-  }, [devisList, filters]);
+    if (filters.devise === 'all') return devisList;
+    return devisList.filter((d) => (d.devise || 'FC') === filters.devise);
+  }, [devisList, filters.devise]);
 
   // Get unique devises for filter dropdown
   const devises = useMemo(() => {
@@ -765,66 +702,92 @@ export default function DevisPage() {
       startDate: '',
       endDate: '',
     });
+    setPage(1);
   };
 
-  const getStatusBadge = (statut: string) => {
-    const badges = {
-      brouillon: <Badge variant="secondary">Brouillon</Badge>,
-      en_attente: <Badge className="bg-yellow-600">En attente</Badge>,
-      envoye: <Badge className="bg-blue-600">Envoyé</Badge>,
-      accepte: <Badge className="bg-green-600">Accepté</Badge>,
-      refuse: <Badge variant="destructive">Refusé</Badge>,
-      expire: <Badge variant="outline">Expiré</Badge>,
-    };
-    return badges[statut as keyof typeof badges] || <Badge>{statut}</Badge>;
-  };
+  const toCardData = (devis: Devis): PrestataireDevisCardData => ({
+    id: devis.id,
+    numero: devis.numero,
+    titre: devis.titre,
+    description: devis.description,
+    statut: devis.statut,
+    montant_ht: devis.montant_ht,
+    montant_ttc: devis.montant_ttc,
+    tva: devis.tva,
+    devise: devis.devise,
+    created_at: devis.created_at,
+    client_name: devis.client_name,
+    location: devis.location,
+    items_count: devis.items_count,
+    items_preview: devis.items_preview,
+  });
+
+  const DevisActionsMenu = ({ devis }: { devis: Devis }) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="icon" className="h-9 w-9">
+          <MoreHorizontal className="w-4 h-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem
+          className="gap-2"
+          onClick={() => openDevisPreview(devis)}
+        >
+          <Eye className="w-4 h-4" />
+          Voir
+        </DropdownMenuItem>
+        {devis.statut === "brouillon" && (
+          <>
+            <DropdownMenuItem className="gap-2" onClick={() => handleEditDevis(devis)}>
+              <Edit className="w-4 h-4" />
+              Modifier
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2" onClick={() => handleSendToClient(devis)}>
+              <Send className="w-4 h-4" />
+              Envoyer
+            </DropdownMenuItem>
+          </>
+        )}
+        <DropdownMenuItem className="gap-2" onClick={() => handleExportPDF(devis)}>
+          <Download className="w-4 h-4" />
+          Télécharger PDF
+        </DropdownMenuItem>
+        <DropdownMenuItem className="gap-2" onClick={() => handleDuplicateDevis(devis)}>
+          <Copy className="w-4 h-4" />
+          Dupliquer
+        </DropdownMenuItem>
+        {(devis.statut === "brouillon" || devis.statut === "refuse") && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="gap-2 text-destructive focus:text-destructive"
+              onClick={() => handleDeleteDevis(devis.id)}
+            >
+              <Trash2 className="w-4 h-4" />
+              Supprimer
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   return (
-    <DashboardLayout role="prestataire" userName={providerName} userRole="Prestataire">
+    <PrestatairePageShell embedded={embedded} userName={providerName} userRole="Prestataire">
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          {!embedded && (
           <div>
             <h1 className="text-xl sm:text-2xl font-display font-bold">Mes Devis</h1>
             <p className="text-sm sm:text-base text-muted-foreground">Créez et gérez vos devis professionnels</p>
           </div>
-          <Button onClick={() => setShowCreateModal(true)} className="text-sm">
+          )}
+          <Button onClick={() => setShowCreateModal(true)} className={`text-sm ${embedded ? 'ml-auto' : ''}`}>
             <Plus className="w-4 h-4 mr-2" />
             <span className="hidden sm:inline">Nouveau devis</span>
             <span className="sm:hidden">Nouveau</span>
           </Button>
-        </div>
-
-        {/* Stats - Mobile: Single card with 2x2 grid (4 stats), Desktop: Separate cards */}
-        <div className="block sm:hidden">
-          <Card>
-            <CardContent className="p-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="text-center">
-                  <p className="text-lg font-bold">{getStats()[0].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[0].title}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold">{getStats()[1].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[1].title}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold">{getStats()[2].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[2].title}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-bold">{getStats()[3].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[3].title}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-        
-        <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {getStats().map((stat) => (
-            <StatsCard key={stat.title} {...stat} />
-          ))}
         </div>
 
         {/* Filters Toggle Button */}
@@ -840,7 +803,7 @@ export default function DevisPage() {
           
           {hasActiveFilters && !showFilters && (
             <Badge variant="secondary">
-              Filtres actifs: {filteredDevis.length} résultat(s)
+              Filtres actifs: {totalDevis} résultat(s)
             </Badge>
           )}
         </div>
@@ -857,12 +820,15 @@ export default function DevisPage() {
                   placeholder="Rechercher..." 
                   className="pl-10"
                   value={filters.search}
-                  onChange={(e) => setFilters({...filters, search: e.target.value})}
+                  onChange={(e) => {
+                    setFilters({ ...filters, search: e.target.value });
+                    setPage(1);
+                  }}
                 />
               </div>
               
               {/* Status */}
-              <Select value={filters.status} onValueChange={(v) => setFilters({...filters, status: v})}>
+              <Select value={filters.status} onValueChange={(v) => { setFilters({ ...filters, status: v }); setPage(1); }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Statut" />
                 </SelectTrigger>
@@ -877,7 +843,7 @@ export default function DevisPage() {
               </Select>
               
               {/* Devise */}
-              <Select value={filters.devise} onValueChange={(v) => setFilters({...filters, devise: v})}>
+              <Select value={filters.devise} onValueChange={(v) => { setFilters({ ...filters, devise: v }); setPage(1); }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Devise" />
                 </SelectTrigger>
@@ -895,8 +861,8 @@ export default function DevisPage() {
               <DateRangeFilter
                 startDate={filters.startDate}
                 endDate={filters.endDate}
-                onStartDateChange={(d) => setFilters({...filters, startDate: d})}
-                onEndDateChange={(d) => setFilters({...filters, endDate: d})}
+                onStartDateChange={(d) => { setFilters({ ...filters, startDate: d }); setPage(1); }}
+                onEndDateChange={(d) => { setFilters({ ...filters, endDate: d }); setPage(1); }}
                 label="Période de création"
               />
             </div>
@@ -904,7 +870,7 @@ export default function DevisPage() {
             {/* Results bar */}
             <div className="flex items-center justify-between">
               <Badge variant="secondary">
-                {filteredDevis.length} résultat(s)
+                {totalDevis} résultat(s)
               </Badge>
               
               {hasActiveFilters && (
@@ -920,136 +886,87 @@ export default function DevisPage() {
 
         {/* Devis List */}
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader className="w-6 h-6 animate-spin" />
-          </div>
+          <AdminListSkeleton items={4} />
         ) : filteredDevis.length === 0 ? (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground mb-4">
-                {filters.search || filters.status !== "all" 
-                  ? "Aucun devis trouvé" 
-                  : "Vous n'avez pas encore créé de devis"}
-              </p>
-              <Button onClick={() => setShowCreateModal(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Créer mon premier devis
-              </Button>
-            </CardContent>
-          </Card>
+          <PrestataireEmptyState
+            context="devis"
+            hasActiveFilters={Boolean(hasActiveFilters)}
+            onResetFilters={resetFilters}
+            extraActions={
+              hasActiveFilters
+                ? undefined
+                : [
+                    {
+                      label: "Créer un devis",
+                      onClick: () => setShowCreateModal(true),
+                      variant: "default",
+                    },
+                  ]
+            }
+          />
         ) : (
           <div className="space-y-4">
             {filteredDevis.map((devis) => (
-              <Card key={devis.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
-                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                    <div className="space-y-3 flex-1">
-                      <div className="flex items-start gap-3 flex-wrap">
-                        <div>
-                          <h3 className="font-semibold text-lg">{devis.titre || 'Sans titre'}</h3>
-                          <p className="text-sm text-muted-foreground">{devis.numero || 'N/A'}</p>
-                        </div>
-                        {getStatusBadge(devis.statut)}
-                      </div>
-                      {devis.description && (
-                        <p className="text-sm text-muted-foreground">{devis.description}</p>
-                      )}
-                      <div className="flex items-center gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Montant HT: </span>
-                          <span className="font-medium">{devis.montant_ht.toLocaleString()} {devis.devise || 'FC'}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">TVA ({devis.tva}%): </span>
-                          <span className="font-medium">{(devis.montant_ttc - devis.montant_ht).toLocaleString()} {devis.devise || 'FC'}</span>
-                        </div>
-                      </div>
-                      <div className="text-lg font-bold text-primary">
-                        Total TTC: {devis.montant_ttc.toLocaleString()} {devis.devise || 'FC'}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Créé le {new Date(devis.created_at).toLocaleDateString('fr-FR')}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button 
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedDevis(devis);
-                          setShowPreviewModal(true);
-                        }}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        Voir
-                      </Button>
-                      {devis.statut === 'brouillon' && (
-                        <>
-                          <Button 
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditDevis(devis)}
-                          >
-                            <Edit className="w-4 h-4 mr-1" />
-                            Modifier
-                          </Button>
-                          <Button 
-                            variant="default"
-                            size="sm"
-                            onClick={() => handleSendToClient(devis)}
-                          >
-                            <Send className="w-4 h-4 mr-1" />
-                            Envoyer
-                          </Button>
-                        </>
-                      )}
-                      <Button 
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleExportPDF(devis)}
-                      >
-                        <Download className="w-4 h-4 mr-1" />
-                        PDF
-                      </Button>
-                      <Button 
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDuplicateDevis(devis)}
-                      >
-                        <Copy className="w-4 h-4 mr-1" />
-                        Dupliquer
-                      </Button>
-                      {(devis.statut === 'brouillon' || devis.statut === 'refuse') && (
-                        <Button 
-                          variant="outline"
-                          size="sm"
-                          className="text-destructive"
-                          onClick={() => handleDeleteDevis(devis.id)}
-                        >
-                          <Trash2 className="w-4 h-4 mr-1" />
-                          Supprimer
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <PrestataireDevisCard
+                key={devis.id}
+                devis={toCardData(devis)}
+                onView={() => openDevisPreview(devis)}
+                actionsMenu={<DevisActionsMenu devis={devis} />}
+              />
             ))}
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-sm text-muted-foreground">
+                Page {page} sur {lastPage} ({totalDevis} devis)
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Précédent
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= lastPage}
+                  onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
+                >
+                  Suivant
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Create Modal */}
-        {showCreateModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Créer un Devis</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => { setShowCreateModal(false); resetForm(); }}>
-                  <X className="w-4 h-4" />
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-6">{/* ... rest of create modal content ... */}
+        <FormDrawer
+          open={showCreateModal}
+          onOpenChange={(open) => {
+            setShowCreateModal(open);
+            if (!open) resetForm();
+          }}
+          title="Créer un Devis"
+          className="lg:max-w-4xl"
+          footer={
+            <div className="flex flex-col sm:flex-row gap-2 justify-end">
+              <Button variant="outline" onClick={() => { setShowCreateModal(false); resetForm(); }}>
+                Annuler
+              </Button>
+              <Button variant="outline" onClick={() => handleCreateDevis("brouillon")}>
+                <Save className="w-4 h-4 mr-2" />
+                Enregistrer brouillon
+              </Button>
+              <Button onClick={() => handleCreateDevis("envoye")}>
+                <Send className="w-4 h-4 mr-2" />
+                Envoyer
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-6">
                 {/* Informations générales */}
                 <div className="space-y-4">
                   <div>
@@ -1223,36 +1140,37 @@ export default function DevisPage() {
                   />
                 </div>
 
-                {/* Actions */}
-                <div className="flex flex-col sm:flex-row gap-2 justify-end">
-                  <Button variant="outline" onClick={() => { setShowCreateModal(false); resetForm(); }}>
-                    Annuler
-                  </Button>
-                  <Button variant="outline" onClick={() => handleCreateDevis('brouillon')}>
-                    <Save className="w-4 h-4 mr-2" />
-                    Enregistrer brouillon
-                  </Button>
-                  <Button onClick={() => handleCreateDevis('envoye')}>
-                    <Send className="w-4 h-4 mr-2" />
-                    Envoyer
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
           </div>
-        )}
+        </FormDrawer>
 
-        {/* Edit Modal */}
-        {showEditModal && editingDevis && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Modifier le Devis - {editingDevis.numero}</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => { setShowEditModal(false); setEditingDevis(null); resetForm(); }}>
-                  <X className="w-4 h-4" />
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-6">
+        <FormDrawer
+          open={showEditModal && !!editingDevis}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowEditModal(false);
+              setEditingDevis(null);
+              resetForm();
+            }
+          }}
+          title={editingDevis ? `Modifier le Devis - ${editingDevis.numero}` : "Modifier le Devis"}
+          className="lg:max-w-4xl"
+          footer={
+            <div className="flex flex-col sm:flex-row gap-2 justify-end">
+              <Button variant="outline" onClick={() => { setShowEditModal(false); setEditingDevis(null); resetForm(); }}>
+                Annuler
+              </Button>
+              <Button variant="outline" onClick={() => handleUpdateDevis("brouillon")}>
+                <Save className="w-4 h-4 mr-2" />
+                Enregistrer
+              </Button>
+              <Button onClick={() => handleUpdateDevis("envoye")}>
+                <Send className="w-4 h-4 mr-2" />
+                Enregistrer et envoyer
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-6">
                 {/* Same content as create modal but with update buttons */}
                 {/* Informations générales */}
                 <div className="space-y-4">
@@ -1427,37 +1345,50 @@ export default function DevisPage() {
                   />
                 </div>
 
-                {/* Actions */}
-                <div className="flex flex-col sm:flex-row gap-2 justify-end">
-                  <Button variant="outline" onClick={() => { setShowEditModal(false); setEditingDevis(null); resetForm(); }}>
-                    Annuler
-                  </Button>
-                  <Button variant="outline" onClick={() => handleUpdateDevis('brouillon')}>
-                    <Save className="w-4 h-4 mr-2" />
-                    Enregistrer
-                  </Button>
-                  <Button onClick={() => handleUpdateDevis('envoye')}>
-                    <Send className="w-4 h-4 mr-2" />
-                    Enregistrer et envoyer
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
           </div>
-        )}
+        </FormDrawer>
 
-        {/* Preview Modal */}
-        {showPreviewModal && selectedDevis && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Prévisualisation du Devis</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => { setShowPreviewModal(false); setSelectedDevis(null); }}>
-                  <X className="w-4 h-4" />
+        <FormDrawer
+          open={showPreviewModal && !!selectedDevis}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowPreviewModal(false);
+              setSelectedDevis(null);
+            }
+          }}
+          title="Prévisualisation du Devis"
+          description={selectedDevis?.numero}
+          className="lg:max-w-4xl"
+          footer={
+            selectedDevis ? (
+              <div className="flex flex-col sm:flex-row gap-2 justify-end">
+                <Button variant="outline" onClick={() => handleExportPDF(selectedDevis)}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Télécharger PDF
                 </Button>
-              </CardHeader>
-              <CardContent>
-                {/* Devis Preview */}
+                {selectedDevis.statut === "brouillon" && (
+                  <Button
+                    onClick={() => {
+                      setShowPreviewModal(false);
+                      handleSendToClient(selectedDevis);
+                    }}
+                  >
+                    <Send className="w-4 h-4 mr-2" />
+                    Envoyer au client
+                  </Button>
+                )}
+              </div>
+            ) : null
+          }
+        >
+          {selectedDevis && (
+            <div>
+                {previewLoading ? (
+                  <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
+                    <Loader className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-sm">Chargement des lignes du devis…</p>
+                  </div>
+                ) : (
                 <div className="bg-white border rounded-lg p-8 space-y-6">
                   {/* Header */}
                   <div className="flex justify-between items-start border-b pb-4">
@@ -1468,7 +1399,9 @@ export default function DevisPage() {
                     <div className="text-right">
                       <div className="text-2xl font-bold">DEVIS</div>
                       <div className="text-sm text-muted-foreground">{selectedDevis.numero || 'N/A'}</div>
-                      {getStatusBadge(selectedDevis.statut)}
+                      <div className="mt-2 flex justify-end">
+                        <DevisStatusBadge statut={selectedDevis.statut} />
+                      </div>
                     </div>
                   </div>
 
@@ -1526,8 +1459,12 @@ export default function DevisPage() {
                               <td className="p-3 text-sm">{item.designation}</td>
                               <td className="p-3 text-sm text-center">{item.quantite}</td>
                               <td className="p-3 text-sm text-center">{item.unite || 'unité'}</td>
-                              <td className="p-3 text-sm text-right">{item.prix_unitaire.toLocaleString()} {selectedDevis.devise || 'FC'}</td>
-                              <td className="p-3 text-sm text-right font-medium">{item.montant.toLocaleString()} {selectedDevis.devise || 'FC'}</td>
+                              <td className="p-3 text-sm text-right tabular-nums">
+                                {formatMontant(item.prix_unitaire, selectedDevis.devise || 'CDF')}
+                              </td>
+                              <td className="p-3 text-sm text-right font-medium tabular-nums">
+                                {formatMontant(item.montant, selectedDevis.devise || 'CDF')}
+                              </td>
                             </tr>
                           ))
                         ) : (
@@ -1546,7 +1483,9 @@ export default function DevisPage() {
                     <div className="w-80 space-y-2">
                       <div className="flex justify-between text-sm">
                         <span>Montant HT:</span>
-                        <span className="font-medium">{selectedDevis.montant_ht.toLocaleString()} {selectedDevis.devise || 'FC'}</span>
+                        <span className="font-medium tabular-nums">
+                          {formatMontant(selectedDevis.montant_ht, selectedDevis.devise || 'CDF')}
+                        </span>
                       </div>
                       {selectedDevis.frais_deplacement > 0 && (
                         <div className="flex justify-between text-sm">
@@ -1556,11 +1495,18 @@ export default function DevisPage() {
                       )}
                       <div className="flex justify-between text-sm">
                         <span>TVA ({selectedDevis.tva}%):</span>
-                        <span className="font-medium">{(selectedDevis.montant_ttc - selectedDevis.montant_ht).toLocaleString()} {selectedDevis.devise || 'FC'}</span>
+                        <span className="font-medium tabular-nums">
+                          {formatMontant(
+                            selectedDevis.montant_ttc - selectedDevis.montant_ht,
+                            selectedDevis.devise || 'CDF',
+                          )}
+                        </span>
                       </div>
                       <div className="flex justify-between text-lg font-bold border-t pt-2">
                         <span>Total TTC:</span>
-                        <span className="text-primary">{selectedDevis.montant_ttc.toLocaleString()} {selectedDevis.devise || 'FC'}</span>
+                        <span className="text-primary tabular-nums">
+                          {formatMontant(selectedDevis.montant_ttc, selectedDevis.devise || 'CDF')}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1579,31 +1525,12 @@ export default function DevisPage() {
                     <p>Ce devis est valable pour la durée indiquée et engage les deux parties lors de son acceptation.</p>
                   </div>
                 </div>
+                )}
 
-                {/* Actions */}
-                <div className="flex flex-col sm:flex-row gap-2 justify-end mt-6">
-                  <Button variant="outline" onClick={() => { setShowPreviewModal(false); setSelectedDevis(null); }}>
-                    Fermer
-                  </Button>
-                  <Button variant="outline" onClick={() => handleExportPDF(selectedDevis)}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Télécharger PDF
-                  </Button>
-                  {selectedDevis.statut === 'brouillon' && (
-                    <Button onClick={() => {
-                      setShowPreviewModal(false);
-                      handleSendToClient(selectedDevis);
-                    }}>
-                      <Send className="w-4 h-4 mr-2" />
-                      Envoyer au client
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+            </div>
+          )}
+        </FormDrawer>
       </div>
-    </DashboardLayout>
+    </PrestatairePageShell>
   );
 }

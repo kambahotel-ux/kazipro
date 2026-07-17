@@ -22,7 +22,9 @@ import {
   MapPin,
   Mail
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { prestatairesApi, uploadApi, professionsApi } from "@/lib/api";
+import { unwrapPaginated } from "@/lib/api-utils";
+import { getProfil, prestataireIdFromUser } from "@/lib/kazipro-profile";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import type { TypePrestataire, FormeJuridique } from "@/types/prestataire";
@@ -88,12 +90,7 @@ const ProfileCompletionSteps = ({ onComplete }: ProfileCompletionStepsProps) => 
   const loadProfessions = async () => {
     try {
       setLoadingProfessions(true);
-      const { data, error } = await supabase
-        .from("professions")
-        .select("id, nom")
-        .order("nom", { ascending: true });
-
-      if (error) throw error;
+      const data = unwrapPaginated<{ id: string; nom: string }>(await professionsApi.getAll());
 
       if (data) {
         // Ajouter des icônes par défaut côté client
@@ -148,20 +145,14 @@ const ProfileCompletionSteps = ({ onComplete }: ProfileCompletionStepsProps) => 
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
-        .from("prestataires")
-        .select("*")
-        .eq("user_id", user.id)
-        .single();
-
-      if (error) throw error;
+      const data = getProfil(user);
 
       if (data) {
         setFormData({
           profession: data.profession || "",
-          city: data.city || "",
+          city: (data.ville ?? data.city) || "",
           experience: data.experience_years?.toString() || "",
-          phone: data.telephone || "",
+          phone: (data.telephone ?? data.phone) || "",
           bio: data.bio || "",
           email: data.email || user.email || "",
           nom: data.nom || "",
@@ -173,7 +164,7 @@ const ProfileCompletionSteps = ({ onComplete }: ProfileCompletionStepsProps) => 
           numeroRCCM: data.numero_rccm || "",
           numeroImpot: data.numero_impot || "",
           numeroIdNat: data.numero_id_nat || "",
-          representantNom: data.representant_nom || "",
+          representantNom: (data.representant_legal_nom ?? data.representant_nom) || "",
           representantPrenom: data.representant_prenom || "",
           representantFonction: data.representant_fonction || "",
           adresseSiege: data.adresse_siege || "",
@@ -257,38 +248,14 @@ const ProfileCompletionSteps = ({ onComplete }: ProfileCompletionStepsProps) => 
         const fileExt = idDocument.name.split('.').pop();
         const fileName = `${user.id}/id_document_${Date.now()}.${fileExt}`;
         
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('prestataire-documents')
-          .upload(fileName, idDocument);
-
-        if (uploadError) {
-          console.warn("Erreur upload document d'identité:", uploadError);
-          toast.error("Erreur lors de l'upload du document d'identité");
-        } else {
-          const { data: { publicUrl } } = supabase.storage
-            .from('prestataire-documents')
-            .getPublicUrl(fileName);
-          idDocumentUrl = publicUrl;
-        }
+        const up = await uploadApi.uploadDocument(idDocument, 'cni', String(user.id)); idDocumentUrl = up.url ?? up.path ?? null;
       }
 
       if (qualificationDoc) {
         const fileExt = qualificationDoc.name.split('.').pop();
         const fileName = `${user.id}/qualification_${Date.now()}.${fileExt}`;
         
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('prestataire-documents')
-          .upload(fileName, qualificationDoc);
-
-        if (uploadError) {
-          console.warn("Erreur upload document de qualification:", uploadError);
-          toast.error("Erreur lors de l'upload du document de qualification");
-        } else {
-          const { data: { publicUrl } } = supabase.storage
-            .from('prestataire-documents')
-            .getPublicUrl(fileName);
-          qualificationUrl = publicUrl;
-        }
+        const up = await uploadApi.uploadDocument(qualificationDoc, 'autre', String(user.id)); qualificationUrl = up.url ?? up.path ?? null;
       }
 
       setUploadingFiles(false);
@@ -309,10 +276,10 @@ const ProfileCompletionSteps = ({ onComplete }: ProfileCompletionStepsProps) => 
 
       // Ajouter les URLs des documents si uploadés
       if (idDocumentUrl) {
-        updateData.id_document_url = idDocumentUrl;
+        updateData.piece_identite = idDocumentUrl;
       }
       if (qualificationUrl) {
-        updateData.qualification_url = qualificationUrl;
+        updateData.document_rccm = qualificationUrl;
       }
 
       if (typePrestataire === 'physique') {
@@ -336,34 +303,15 @@ const ProfileCompletionSteps = ({ onComplete }: ProfileCompletionStepsProps) => 
         updateData.pays_siege = "RDC";
       }
 
-      const { data: prestataireData, error } = await supabase
-        .from("prestataires")
-        .update(updateData)
-        .eq("user_id", user.id)
-        .select("id")
-        .single();
-
-      if (error) throw error;
-
-      // 3. Créer les services dans prestataire_services
-      if (prestataireData && selectedServices.length > 0) {
-        const servicesData = selectedServices.map((serviceName, index) => ({
-          prestataire_id: prestataireData.id,
-          service: serviceName,
-          niveau_competence: "intermediaire",
-          annees_experience: formData.experience ? parseInt(formData.experience) : 0,
-          principal: index === 0, // Le premier service est le principal
-        }));
-
-        const { error: servicesError } = await supabase
-          .from("prestataire_services")
-          .insert(servicesData);
-
-        if (servicesError) {
-          console.warn("Erreur lors de la création des services:", servicesError);
-          // Ne pas bloquer si erreur sur les services
-        }
-      }
+      const pid = prestataireIdFromUser(user);
+      if (!pid) throw new Error("Profil prestataire introuvable");
+      await prestatairesApi.update(pid, {
+        ...updateData,
+        ville: formData.city,
+        bio: formData.bio || undefined,
+        telephone: formData.phone,
+        profession_id: selectedServices.length ? undefined : undefined,
+      });
 
       const message = (idDocument || qualificationDoc) 
         ? "Profil et documents soumis avec succès ! En attente de validation."

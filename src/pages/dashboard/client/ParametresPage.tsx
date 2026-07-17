@@ -7,25 +7,25 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Bell, 
-  Lock, 
-  User, 
-  Globe, 
-  Smartphone,
+import {
+  Bell,
+  Lock,
+  User,
+  Globe,
   Mail,
-  MessageSquare,
   Shield,
   Eye,
   EyeOff,
   Trash2,
   Save,
   AlertCircle,
-  Loader2
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { clientsApi } from "@/lib/api";
+import { getClientDisplayName, getClientId, getClientProfil } from "@/lib/client-helpers";
 import { toast } from "sonner";
+import { SettingsPageSkeleton } from "@/components/dashboard/AdminLoadingSkeleton";
 
 interface ClientProfile {
   id: string;
@@ -38,14 +38,14 @@ interface ClientProfile {
 
 export default function ParametresPage() {
   const { user } = useAuth();
-  const [clientName, setClientName] = useState("Client");
+  const clientName = getClientDisplayName(user);
   const [showPassword, setShowPassword] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [showSaveAlert, setShowSaveAlert] = useState(false);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ClientProfile>({
     id: "",
-    full_name: "",
+    full_name: clientName,
     email: user?.email || "",
     phone: "",
     city: "",
@@ -53,35 +53,37 @@ export default function ParametresPage() {
   });
 
   useEffect(() => {
-    if (user) {
-      fetchProfile();
-    }
+    if (user) fetchProfile();
   }, [user]);
 
   const fetchProfile = async () => {
     if (!user) return;
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("user_id", user.id)
-        .single();
+      const clientId = getClientId(user);
+      const profil = getClientProfil(user);
+      let data = profil;
 
-      if (error) throw error;
+      if (clientId) {
+        try {
+          data = await clientsApi.getById(clientId);
+        } catch {
+          // fallback to auth profil
+        }
+      }
 
       if (data) {
+        const fullName = `${data.prenom ?? ""} ${data.nom ?? ""}`.trim() || user.name || "";
         setProfile({
-          id: data.id,
-          full_name: data.full_name || "",
+          id: String(data.id ?? clientId ?? ""),
+          full_name: fullName,
           email: user.email || "",
-          phone: data.phone || "",
-          city: data.city || "",
-          address: data.address || "",
+          phone: data.telephone || "",
+          city: data.ville || "",
+          address: data.quartier || "",
         });
-        setClientName(data.full_name || "Client");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Erreur lors du chargement du profil");
       console.error(error);
     } finally {
@@ -90,36 +92,41 @@ export default function ParametresPage() {
   };
 
   const handleProfileChange = (field: keyof ClientProfile, value: string) => {
-    setProfile(prev => ({ ...prev, [field]: value }));
+    setProfile((prev) => ({ ...prev, [field]: value }));
     setHasChanges(true);
   };
 
   const handleSaveProfile = async () => {
     if (!user) return;
+    const clientId = getClientId(user);
+    if (!clientId) {
+      toast.error("Profil client introuvable");
+      return;
+    }
     try {
-      const { error } = await supabase
-        .from("clients")
-        .update({
-          full_name: profile.full_name,
-          phone: profile.phone,
-          city: profile.city,
-          address: profile.address,
-        })
-        .eq("user_id", user.id);
+      const parts = profile.full_name.trim().split(/\s+/);
+      const prenom = parts.slice(0, -1).join(" ") || parts[0] || "";
+      const nom = parts.length > 1 ? parts[parts.length - 1] : parts[0] || "";
 
-      if (error) throw error;
+      await clientsApi.update(clientId, {
+        prenom,
+        nom,
+        telephone: profile.phone,
+        ville: profile.city,
+        quartier: profile.address,
+      });
 
-      setClientName(profile.full_name);
       setHasChanges(false);
       setShowSaveAlert(false);
       toast.success("Profil mis à jour avec succès");
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors de la mise à jour");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Erreur lors de la mise à jour";
+      toast.error(message);
     }
   };
 
   return (
-    <DashboardLayout role="client" userName={clientName} userRole="Client">
+    <DashboardLayout role="client" userName={profile.full_name || clientName} userRole="Client">
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">Paramètres</h1>
@@ -127,9 +134,7 @@ export default function ParametresPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          </div>
+          <SettingsPageSkeleton />
         ) : (
           <Tabs defaultValue="notifications" className="space-y-4">
             <TabsList className="flex-wrap">
@@ -171,10 +176,7 @@ export default function ParametresPage() {
                         <p className="font-medium">{item.label}</p>
                         <p className="text-sm text-muted-foreground">{item.description}</p>
                       </div>
-                      <Switch 
-                        defaultChecked={item.enabled}
-                        onChange={() => setHasChanges(true)}
-                      />
+                      <Switch defaultChecked={item.enabled} onChange={() => setHasChanges(true)} />
                     </div>
                   ))}
                 </CardContent>
@@ -198,10 +200,7 @@ export default function ParametresPage() {
                         <p className="font-medium">{item.label}</p>
                         <p className="text-sm text-muted-foreground">{item.description}</p>
                       </div>
-                      <Switch 
-                        defaultChecked={item.enabled}
-                        onChange={() => setHasChanges(true)}
-                      />
+                      <Switch defaultChecked={item.enabled} onChange={() => setHasChanges(true)} />
                     </div>
                   ))}
                 </CardContent>
@@ -219,10 +218,7 @@ export default function ParametresPage() {
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label>Nom complet</Label>
-                    <Input 
-                      value={profile.full_name}
-                      onChange={(e) => handleProfileChange("full_name", e.target.value)}
-                    />
+                    <Input value={profile.full_name} onChange={(e) => handleProfileChange("full_name", e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label>Email</Label>
@@ -230,10 +226,7 @@ export default function ParametresPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>Téléphone</Label>
-                    <Input 
-                      value={profile.phone}
-                      onChange={(e) => handleProfileChange("phone", e.target.value)}
-                    />
+                    <Input value={profile.phone} onChange={(e) => handleProfileChange("phone", e.target.value)} />
                   </div>
                   <Button onClick={handleSaveProfile} disabled={!hasChanges}>
                     Mettre à jour
@@ -248,18 +241,12 @@ export default function ParametresPage() {
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label>Adresse</Label>
-                    <Input 
-                      value={profile.address}
-                      onChange={(e) => handleProfileChange("address", e.target.value)}
-                    />
+                    <Input value={profile.address} onChange={(e) => handleProfileChange("address", e.target.value)} />
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Commune</Label>
-                      <Input 
-                        value={profile.city}
-                        onChange={(e) => handleProfileChange("city", e.target.value)}
-                      />
+                      <Input value={profile.city} onChange={(e) => handleProfileChange("city", e.target.value)} />
                     </div>
                     <div className="space-y-2">
                       <Label>Ville</Label>
@@ -395,7 +382,6 @@ export default function ParametresPage() {
           </Tabs>
         )}
 
-        {/* Save Confirmation Modal */}
         {showSaveAlert && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <Card className="w-full max-w-md">
@@ -407,17 +393,10 @@ export default function ParametresPage() {
                   Êtes-vous sûr de vouloir enregistrer toutes vos modifications ?
                 </p>
                 <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    className="flex-1"
-                    onClick={() => setShowSaveAlert(false)}
-                  >
+                  <Button variant="outline" className="flex-1" onClick={() => setShowSaveAlert(false)}>
                     Annuler
                   </Button>
-                  <Button 
-                    className="flex-1"
-                    onClick={handleSaveProfile}
-                  >
+                  <Button className="flex-1" onClick={handleSaveProfile}>
                     <Save className="w-4 h-4 mr-2" />
                     Enregistrer
                   </Button>

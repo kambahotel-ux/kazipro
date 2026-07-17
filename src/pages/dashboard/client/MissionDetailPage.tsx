@@ -1,73 +1,48 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { supabase } from '@/lib/supabase';
+import { MissionProgressCard } from '@/components/mission/MissionProgressCard';
+import { missionsApi } from '@/lib/api';
+import { getClientDisplayName, mapMissionToUi } from '@/lib/client-helpers';
+import { getClientMissionLabel } from '@/lib/missions';
 import { toast } from 'sonner';
-import { 
+import { DetailPageSkeleton } from '@/components/dashboard/AdminLoadingSkeleton';
+import { SlideToConfirm } from '@/components/ui/SlideToConfirm';
+import {
   ArrowLeft,
   Calendar,
   DollarSign,
   User,
-  MessageSquare,
   CheckCircle2,
-  Clock,
   AlertCircle,
-  Image as ImageIcon,
-  Send
+  CreditCard,
 } from 'lucide-react';
 
 export default function MissionDetailPage() {
   const { missionId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  
+  const clientName = getClientDisplayName(user);
+
   const [loading, setLoading] = useState(true);
+  const [validating, setValidating] = useState(false);
   const [mission, setMission] = useState<any>(null);
-  const [messages, setMessages] = useState<any[]>([]);
-  const [photos, setPhotos] = useState<any[]>([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    fetchMission();
-    fetchMessages();
-    fetchPhotos();
+    if (missionId) void fetchMission();
   }, [missionId]);
 
   const fetchMission = async () => {
     try {
       setLoading(true);
-      
-      const { data, error } = await supabase
-        .from('missions')
-        .select(`
-          *,
-          prestataires (
-            full_name,
-            profession,
-            email
-          ),
-          devis_pro (
-            numero,
-            montant_ttc
-          ),
-          contrats (
-            numero
-          )
-        `)
-        .eq('id', missionId)
-        .single();
-
-      if (error) throw error;
-      setMission(data);
-    } catch (error: any) {
+      const data = await missionsApi.getById(String(missionId));
+      setMission(mapMissionToUi(data as Record<string, unknown>));
+    } catch (error: unknown) {
       console.error('Erreur:', error);
       toast.error('Erreur lors du chargement');
     } finally {
@@ -75,102 +50,42 @@ export default function MissionDetailPage() {
     }
   };
 
-  const fetchMessages = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('mission_id', missionId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setMessages(data || []);
-    } catch (error: any) {
-      console.error('Erreur messages:', error);
-    }
-  };
-
-  const fetchPhotos = async () => {
-    try {
-      // TODO: Créer la table photos_mission
-      // Pour l'instant, on simule
-      setPhotos([]);
-    } catch (error: any) {
-      console.error('Erreur photos:', error);
-    }
-  };
-
-  const handleSendMessage = async () => {
-    if (!newMessage.trim()) return;
-
-    try {
-      setSending(true);
-
-      const { error } = await supabase
-        .from('messages')
-        .insert({
-          mission_id: missionId,
-          sender_id: user?.id,
-          sender_type: 'client',
-          content: newMessage,
-          read: false
-        });
-
-      if (error) throw error;
-
-      setNewMessage('');
-      fetchMessages();
-      toast.success('Message envoyé');
-    } catch (error: any) {
-      console.error('Erreur:', error);
-      toast.error('Erreur lors de l\'envoi');
-    } finally {
-      setSending(false);
-    }
-  };
+  const rawStatus = String(mission?.status ?? mission?.statut ?? '');
+  const needsClientValidation = rawStatus === 'terminee_prestataire';
+  const contrat = mission?.contrats as Record<string, unknown> | undefined;
+  const soldeValide = contrat?.solde_valide === true;
+  const contratId = mission?.contrat_id || contrat?.id;
 
   const handleValidateMission = async () => {
-    if (!confirm('Êtes-vous sûr de vouloir valider les travaux ? Cela vous dirigera vers le paiement du solde.')) {
+    if (!soldeValide) {
+      toast.error('Payez le solde avant de valider la mission');
       return;
     }
-
     try {
-      const { error } = await supabase
-        .from('missions')
-        .update({
-          status: 'en_validation',
-          date_validation_demandee: new Date().toISOString()
-        })
-        .eq('id', missionId);
-
-      if (error) throw error;
-
-      toast.success('Travaux validés! Redirection vers le paiement du solde...');
-      
-      // Rediriger vers le paiement du solde
-      navigate(`/dashboard/client/paiement/${mission.contrat_id}/solde`);
-    } catch (error: any) {
-      console.error('Erreur:', error);
-      toast.error('Erreur lors de la validation');
+      setValidating(true);
+      await missionsApi.valider(String(missionId));
+      toast.success('Travaux validés — fonds libérés au prestataire');
+      await fetchMission();
+    } catch (error: unknown) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la validation');
+      throw error;
+    } finally {
+      setValidating(false);
     }
   };
 
   if (loading) {
     return (
-      <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Chargement...</p>
-          </div>
-        </div>
+      <DashboardLayout role="client" userName={clientName} userRole="Client">
+        <DetailPageSkeleton />
       </DashboardLayout>
     );
   }
 
   if (!mission) {
     return (
-      <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
+      <DashboardLayout role="client" userName={clientName} userRole="Client">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>Mission introuvable</AlertDescription>
@@ -179,216 +94,122 @@ export default function MissionDetailPage() {
     );
   }
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { label: string; variant: any }> = {
-      en_cours: { label: 'En cours', variant: 'default' },
-      en_validation: { label: 'En validation', variant: 'secondary' },
-      terminee: { label: 'Terminée', variant: 'default' },
-      archivee: { label: 'Archivée', variant: 'outline' }
-    };
-
-    const config = statusConfig[status] || { label: status, variant: 'outline' };
-    return <Badge variant={config.variant}>{config.label}</Badge>;
-  };
-
-  const progressPercentage = mission.progress || 0;
+  const montant =
+    mission.devis?.montant_ttc ??
+    mission.contrats?.montant_ttc ??
+    0;
+  const titre =
+    mission.demandes?.titre ||
+    mission.demandes?.title ||
+    'Mission';
 
   return (
-    <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
-      <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-6xl">
-        {/* Header */}
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/dashboard/client')}
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Retour
+    <DashboardLayout role="client" userName={clientName} userRole="Client">
+      <div className="mx-auto max-w-3xl space-y-6 pb-8">
+        <div>
+          <Button variant="ghost" size="sm" asChild className="-ml-2 mb-2">
+            <Link to="/dashboard/client/missions">
+              <ArrowLeft className="mr-1.5 h-4 w-4" />
+              Suivi missions
+            </Link>
           </Button>
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold">Mission en cours</h1>
-            <p className="text-muted-foreground mt-1">
-              Contrat N° {mission.contrats?.numero}
-            </p>
-          </div>
-          {getStatusBadge(mission.status)}
+          <h1 className="font-display text-2xl font-bold">{titre}</h1>
+          <p className="text-sm text-muted-foreground">
+            Contrat {mission.contrats?.numero ? `N° ${mission.contrats.numero}` : ''}
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Colonne principale */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Informations générales */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Informations</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-center gap-3">
-                    <User className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Prestataire</p>
-                      <p className="font-medium">{mission.prestataires?.full_name}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Calendar className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Date de début</p>
-                      <p className="font-medium">
-                        {new Date(mission.start_date).toLocaleDateString('fr-FR')}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <DollarSign className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Montant total</p>
-                      <p className="font-medium">{mission.montant_total?.toLocaleString()} FC</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Clock className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Statut</p>
-                      <p className="font-medium capitalize">{mission.status.replace('_', ' ')}</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+        <MissionProgressCard mission={mission} compact />
 
-            {/* Avancement */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Avancement des travaux</CardTitle>
-                <CardDescription>
-                  Progression mise à jour par le prestataire
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-sm font-medium">Progression</span>
-                    <span className="text-sm font-medium">{progressPercentage}%</span>
-                  </div>
-                  <Progress value={progressPercentage} className="h-3" />
-                </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Informations</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <div className="flex gap-3">
+              <User className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-xs text-muted-foreground">Prestataire</p>
+                <p className="font-medium">{mission.prestataires?.full_name}</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Calendar className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-xs text-muted-foreground">Début</p>
+                <p className="font-medium">
+                  {mission.start_date
+                    ? new Date(mission.start_date).toLocaleDateString('fr-FR')
+                    : '—'}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <DollarSign className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-xs text-muted-foreground">Montant devis</p>
+                <p className="font-medium">
+                  {Number(montant).toLocaleString('fr-FR')} FC
+                </p>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Statut mission</p>
+              <Badge variant="outline" className="mt-1">
+                {getClientMissionLabel(mission)}
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
 
-                {mission.status === 'en_cours' && progressPercentage === 100 && (
-                  <Alert>
-                    <CheckCircle2 className="h-4 w-4" />
-                    <AlertDescription>
-                      Le prestataire a terminé les travaux. Vous pouvez maintenant les valider et payer le solde.
-                    </AlertDescription>
-                  </Alert>
-                )}
+        {needsClientValidation && !soldeValide && contratId && (
+          <Card className="border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
+                <CreditCard className="h-5 w-5" />
+                Payer le solde
+              </CardTitle>
+              <CardDescription>
+                Le prestataire a terminé les travaux. Réglez le solde via KaziPro avant de valider la mission.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button className="w-full" onClick={() => navigate(`/dashboard/client/paiement/${contratId}/solde`)}>
+                Payer le solde
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
-                {mission.status === 'en_cours' && progressPercentage === 100 && (
-                  <Button onClick={handleValidateMission} className="w-full">
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
-                    Valider les travaux et payer le solde
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
+        {needsClientValidation && soldeValide && (
+          <Card className="border-success/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-success">
+                <CheckCircle2 className="h-5 w-5" />
+                Valider les travaux
+              </CardTitle>
+              <CardDescription>
+                Le solde est réglé. Vérifiez les travaux puis validez pour libérer les fonds au prestataire.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SlideToConfirm
+                label="Confirmez que les travaux sont conformes"
+                hint="Glisser pour valider les travaux"
+                variant="success"
+                loading={validating}
+                successMessage="Travaux validés"
+                onConfirm={handleValidateMission}
+              />
+            </CardContent>
+          </Card>
+        )}
 
-            {/* Photos */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ImageIcon className="w-5 h-5" />
-                  Photos de progression
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {photos.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-8">
-                    Aucune photo pour le moment
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {photos.map((photo) => (
-                      <div key={photo.id} className="aspect-square bg-muted rounded-lg overflow-hidden">
-                        <img
-                          src={photo.url}
-                          alt="Photo de progression"
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Colonne messages */}
-          <div className="space-y-6">
-            <Card className="h-[600px] flex flex-col">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5" />
-                  Messages
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 flex flex-col gap-4 overflow-hidden">
-                {/* Liste des messages */}
-                <div className="flex-1 overflow-y-auto space-y-3">
-                  {messages.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-8">
-                      Aucun message
-                    </p>
-                  ) : (
-                    messages.map((message) => (
-                      <div
-                        key={message.id}
-                        className={`p-3 rounded-lg ${
-                          message.sender_type === 'client'
-                            ? 'bg-primary text-primary-foreground ml-8'
-                            : 'bg-muted mr-8'
-                        }`}
-                      >
-                        <p className="text-sm">{message.content}</p>
-                        <p className="text-xs opacity-70 mt-1">
-                          {new Date(message.created_at).toLocaleTimeString('fr-FR', {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </p>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Formulaire d'envoi */}
-                <div className="flex gap-2">
-                  <Textarea
-                    placeholder="Écrivez votre message..."
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    className="resize-none"
-                    rows={2}
-                  />
-                  <Button
-                    onClick={handleSendMessage}
-                    disabled={sending || !newMessage.trim()}
-                    size="icon"
-                  >
-                    <Send className="w-4 h-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+        {mission.demande_id && (
+          <Button variant="outline" asChild className="w-full">
+            <Link to={`/dashboard/client/demandes/${mission.demande_id}`}>Retour à la demande</Link>
+          </Button>
+        )}
       </div>
     </DashboardLayout>
   );

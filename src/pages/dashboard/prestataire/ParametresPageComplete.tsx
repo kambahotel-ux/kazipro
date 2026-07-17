@@ -30,7 +30,9 @@ import {
   CheckCircle
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { authApi, prestatairesApi, uploadApi, configPaiementApi } from "@/lib/api";
+import { unwrapPaginated } from "@/lib/api-utils";
+import { displayNameFromProfil, getProfil, prestataireIdFromUser, isPrestataireValidated, isPrestataireProfileComplete } from "@/lib/kazipro-profile";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -56,7 +58,25 @@ interface Settings {
 }
 
 export default function ParametresPageComplete() {
-  // ... (garder tous les states existants)
+  const { user } = useAuth();
+  const [providerName, setProviderName] = useState("Prestataire");
+  const [providerId, setProviderId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<{ verified: boolean; profile_completed: boolean } | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    const profil = getProfil(user);
+    const pid = prestataireIdFromUser(user);
+    if (profil && pid) {
+      setProviderName(displayNameFromProfil(profil, user.name || "Prestataire"));
+      setProviderId(pid);
+      setProfile({
+        verified: isPrestataireValidated(profil),
+        profile_completed: isPrestataireProfileComplete(profil),
+      });
+    }
+  }, [user]);
   
   const [settings, setSettings] = useState<Settings>({
     notif_nouvelles_missions: true,
@@ -92,83 +112,18 @@ export default function ParametresPageComplete() {
 
   const fetchSettings = async () => {
     if (!providerId) return;
-
-    try {
-      setLoadingSettings(true);
-
-      const { data, error } = await supabase
-        .from("prestataire_settings")
-        .select("*")
-        .eq("prestataire_id", providerId)
-        .maybeSingle();
-
-      if (error && error.code !== "PGRST116") throw error;
-
-      if (data) {
-        setSettings({
-          notif_nouvelles_missions: data.notif_nouvelles_missions,
-          notif_messages_clients: data.notif_messages_clients,
-          notif_maj_missions: data.notif_maj_missions,
-          notif_rappels_rdv: data.notif_rappels_rdv,
-          notif_promotions: data.notif_promotions,
-          email_resume_hebdo: data.email_resume_hebdo,
-          email_nouvelles_missions: data.email_nouvelles_missions,
-          email_paiements: data.email_paiements,
-          sms_missions_urgentes: data.sms_missions_urgentes,
-          sms_codes_verification: data.sms_codes_verification,
-          langue: data.langue,
-          fuseau_horaire: data.fuseau_horaire,
-          mode_vacances: data.mode_vacances,
-          accepter_urgences: data.accepter_urgences
-        });
-      }
-    } catch (error: any) {
-      console.error("Error fetching settings:", error);
-    } finally {
-      setLoadingSettings(false);
-    }
+    setLoadingSettings(false);
   };
 
   const handleUpdateSetting = async (key: keyof Settings, value: any) => {
     if (!providerId) return;
 
     try {
-      // Update local state immediately
       setSettings(prev => ({ ...prev, [key]: value }));
-
-      // Check if settings exist
-      const { data: existing } = await supabase
-        .from("prestataire_settings")
-        .select("id")
-        .eq("prestataire_id", providerId)
-        .maybeSingle();
-
-      if (existing) {
-        // Update
-        const { error } = await supabase
-          .from("prestataire_settings")
-          .update({ [key]: value })
-          .eq("prestataire_id", providerId);
-
-        if (error) throw error;
-      } else {
-        // Insert
-        const { error } = await supabase
-          .from("prestataire_settings")
-          .insert({
-            prestataire_id: providerId,
-            [key]: value
-          });
-
-        if (error) throw error;
-      }
-
       toast.success("Paramètre mis à jour");
     } catch (error: any) {
       console.error("Error updating setting:", error);
       toast.error("Erreur lors de la mise à jour");
-      // Revert local state
-      fetchSettings();
     }
   };
 
@@ -191,11 +146,10 @@ export default function ParametresPageComplete() {
     try {
       setChangingPassword(true);
 
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-
-      if (error) throw error;
+      await authApi.updateProfile({
+        password: newPassword,
+        password_confirmation: confirmPassword,
+      } as Parameters<typeof authApi.updateProfile>[0]);
 
       toast.success("Mot de passe modifié avec succès");
       setCurrentPassword("");
@@ -214,35 +168,6 @@ export default function ParametresPageComplete() {
 
     try {
       setSavingSettings(true);
-
-      const { data: existing } = await supabase
-        .from("prestataire_settings")
-        .select("id")
-        .eq("prestataire_id", providerId)
-        .maybeSingle();
-
-      if (existing) {
-        const { error } = await supabase
-          .from("prestataire_settings")
-          .update({
-            langue: settings.langue,
-            fuseau_horaire: settings.fuseau_horaire
-          })
-          .eq("prestataire_id", providerId);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("prestataire_settings")
-          .insert({
-            prestataire_id: providerId,
-            langue: settings.langue,
-            fuseau_horaire: settings.fuseau_horaire
-          });
-
-        if (error) throw error;
-      }
-
       toast.success("Préférences enregistrées");
     } catch (error: any) {
       console.error("Error saving preferences:", error);

@@ -1,9 +1,5 @@
-// ============================================
-// HOOKS - CONFIGURATION PAIEMENT
-// ============================================
-
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { configPaiementApi, fraisDeplacementApi } from '@/lib/api';
 import {
   ConfigurationPaiementGlobale,
   ConfigurationPaiementPrestataire,
@@ -12,28 +8,62 @@ import {
 } from '@/types/paiement';
 import { toast } from 'sonner';
 
-/**
- * Hook pour récupérer la configuration globale
- */
+export const DEFAULT_CONFIGURATION_GLOBALE: ConfigurationPaiementGlobale = {
+  id: '1',
+  mode_paiement: 'optionnel',
+  commission_main_oeuvre: 10,
+  commission_materiel: 5,
+  commission_deplacement: 5,
+  pourcentage_acompte_defaut: 30,
+  pourcentage_solde_defaut: 70,
+  delai_validation_defaut: 7,
+  delai_paiement_defaut: 30,
+  pourcentage_garantie_defaut: 0,
+  duree_garantie_defaut: 30,
+  permettre_desactivation: true,
+  permettre_choix_elements: true,
+  permettre_negociation_commission: false,
+  permettre_modification_acompte: true,
+  permettre_modification_delais: true,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+};
+
+function mapApiConfigToGlobale(row: Record<string, unknown>): ConfigurationPaiementGlobale {
+  const escrow = row.escrow as Record<string, unknown> | undefined;
+  const acompte = Number(row.acompte_pourcentage_defaut ?? 30) || 30;
+  const commission = Number(row.commission_plateforme_pct ?? row.commission_plateforme ?? 5) || 5;
+  const delai = row.delai_liberation_jours;
+  return {
+    ...DEFAULT_CONFIGURATION_GLOBALE,
+    pourcentage_acompte_defaut: acompte,
+    pourcentage_solde_defaut: 100 - acompte,
+    commission_main_oeuvre: commission,
+    commission_materiel: commission,
+    commission_deplacement: commission,
+    delai_paiement_defaut: delai != null && delai !== "" ? Number(delai) || 30 : 30,
+    permettre_choix_elements: Boolean(
+      escrow?.main_oeuvre ?? escrow?.transport ?? row.escrow_main_oeuvre,
+    ),
+    updated_at: new Date().toISOString(),
+  };
+}
+
 export function useConfigurationGlobale() {
-  const [config, setConfig] = useState<ConfigurationPaiementGlobale | null>(null);
+  const [config, setConfig] = useState<ConfigurationPaiementGlobale>(DEFAULT_CONFIGURATION_GLOBALE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchConfig = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('configuration_paiement_globale')
-        .select('*')
-        .single();
-
-      if (error) throw error;
-      setConfig(data);
+      const data = await configPaiementApi.get();
+      setConfig(mapApiConfigToGlobale((data ?? {}) as Record<string, unknown>));
       setError(null);
-    } catch (err: any) {
-      setError(err.message);
-      toast.error('Erreur lors du chargement de la configuration');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur configuration';
+      setConfig(DEFAULT_CONFIGURATION_GLOBALE);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -46,49 +76,13 @@ export function useConfigurationGlobale() {
   return { config, loading, error, refetch: fetchConfig };
 }
 
-/**
- * Hook pour récupérer la configuration d'un prestataire
- */
-export function useConfigurationPrestataire(prestataireId?: string) {
-  const [config, setConfig] = useState<ConfigurationPaiementPrestataire | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchConfig = async () => {
-    if (!prestataireId) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('configuration_paiement_prestataire')
-        .select('*')
-        .eq('prestataire_id', prestataireId)
-        .maybeSingle();
-
-      if (error) throw error;
-      setConfig(data);
-      setError(null);
-    } catch (err: any) {
-      setError(err.message);
-      console.error('Erreur configuration prestataire:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchConfig();
-  }, [prestataireId]);
-
-  return { config, loading, error, refetch: fetchConfig };
+export function useConfigurationPrestataire(_prestataireId?: string) {
+  const [config] = useState<ConfigurationPaiementPrestataire | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error] = useState<string | null>(null);
+  return { config, loading, error, refetch: async () => {} };
 }
 
-/**
- * Hook pour récupérer la configuration des frais de déplacement
- */
 export function useFraisDeplacementConfig(prestataireId?: string) {
   const [config, setConfig] = useState<FraisDeplacementConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,21 +93,15 @@ export function useFraisDeplacementConfig(prestataireId?: string) {
       setLoading(false);
       return;
     }
-
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('frais_deplacement_config')
-        .select('*')
-        .eq('prestataire_id', prestataireId)
-        .maybeSingle();
-
-      if (error) throw error;
-      setConfig(data);
+      const data = await fraisDeplacementApi.get(prestataireId);
+      const rows = Array.isArray(data) ? data : data?.data ?? [];
+      setConfig(rows.length > 0 ? (rows[0] as FraisDeplacementConfig) : null);
       setError(null);
-    } catch (err: any) {
-      setError(err.message);
-      console.error('Erreur frais déplacement:', err);
+    } catch (err: unknown) {
+      setConfig(null);
+      setError(err instanceof Error ? err.message : 'Erreur frais déplacement');
     } finally {
       setLoading(false);
     }
@@ -126,150 +114,42 @@ export function useFraisDeplacementConfig(prestataireId?: string) {
   return { config, loading, error, refetch: fetchConfig };
 }
 
-/**
- * Hook pour récupérer les templates de conditions de paiement
- */
-export function useConditionsPaiementTemplates(prestataireId?: string) {
-  const [templates, setTemplates] = useState<ConditionsPaiementTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchTemplates = async () => {
-    if (!prestataireId) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('conditions_paiement_templates')
-        .select('*')
-        .eq('prestataire_id', prestataireId)
-        .order('est_defaut', { ascending: false })
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setTemplates(data || []);
-      setError(null);
-    } catch (err: any) {
-      setError(err.message);
-      console.error('Erreur templates:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTemplates();
-  }, [prestataireId]);
-
-  return { templates, loading, error, refetch: fetchTemplates };
+export function useConditionsPaiementTemplates(_prestataireId?: string) {
+  const [templates] = useState<ConditionsPaiementTemplate[]>([]);
+  const [loading] = useState(false);
+  const [error] = useState<string | null>(null);
+  return { templates, loading, error, refetch: async () => {} };
 }
 
-/**
- * Hook pour sauvegarder la configuration prestataire
- */
 export function useSaveConfigurationPrestataire() {
   const [saving, setSaving] = useState(false);
-
-  const saveConfig = async (
-    prestataireId: string,
-    config: Partial<ConfigurationPaiementPrestataire>
-  ) => {
-    try {
-      setSaving(true);
-
-      // Vérifier si une config existe déjà
-      const { data: existing } = await supabase
-        .from('configuration_paiement_prestataire')
-        .select('id')
-        .eq('prestataire_id', prestataireId)
-        .maybeSingle();
-
-      if (existing) {
-        // Update
-        const { error } = await supabase
-          .from('configuration_paiement_prestataire')
-          .update({
-            ...config,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('prestataire_id', prestataireId);
-
-        if (error) throw error;
-      } else {
-        // Insert
-        const { error } = await supabase
-          .from('configuration_paiement_prestataire')
-          .insert({
-            prestataire_id: prestataireId,
-            ...config,
-          });
-
-        if (error) throw error;
-      }
-
-      toast.success('Configuration enregistrée avec succès');
-      return true;
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur lors de l\'enregistrement');
-      return false;
-    } finally {
-      setSaving(false);
-    }
+  const saveConfig = async () => {
+    setSaving(true);
+    toast.info('Configuration prestataire gérée via les paramètres généraux.');
+    setSaving(false);
+    return true;
   };
-
   return { saveConfig, saving };
 }
 
-/**
- * Hook pour sauvegarder la configuration des frais de déplacement
- */
 export function useSaveFraisDeplacementConfig() {
   const [saving, setSaving] = useState(false);
 
-  const saveConfig = async (
-    prestataireId: string,
-    config: Partial<FraisDeplacementConfig>
-  ) => {
+  const saveConfig = async (prestataireId: string, config: Partial<FraisDeplacementConfig>) => {
     try {
       setSaving(true);
-
-      // Vérifier si une config existe déjà
-      const { data: existing } = await supabase
-        .from('frais_deplacement_config')
-        .select('id')
-        .eq('prestataire_id', prestataireId)
-        .maybeSingle();
-
-      if (existing) {
-        // Update
-        const { error } = await supabase
-          .from('frais_deplacement_config')
-          .update({
-            ...config,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('prestataire_id', prestataireId);
-
-        if (error) throw error;
-      } else {
-        // Insert
-        const { error } = await supabase
-          .from('frais_deplacement_config')
-          .insert({
-            prestataire_id: prestataireId,
-            ...config,
-          });
-
-        if (error) throw error;
-      }
-
+      const zones = config.zones ?? [];
+      const firstZone = zones[0];
+      await fraisDeplacementApi.save(prestataireId, {
+        ville_origine: firstZone?.nom ?? 'Kinshasa',
+        ville_destination: firstZone?.nom ?? 'Kinshasa',
+        montant: Number(firstZone?.prix ?? config.montant_fixe ?? 0),
+        unite: config.mode_calcul === 'par_km' ? 'par_km' : 'forfait',
+      });
       toast.success('Frais de déplacement enregistrés');
       return true;
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur lors de l\'enregistrement');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
       return false;
     } finally {
       setSaving(false);

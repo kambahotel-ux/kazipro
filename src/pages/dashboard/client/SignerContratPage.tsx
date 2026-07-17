@@ -1,440 +1,212 @@
-import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { supabase } from '@/lib/supabase';
-import { toast } from 'sonner';
-import SignatureCanvas from 'react-signature-canvas';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
-import { 
-  FileSignature, 
-  CheckCircle2, 
-  AlertCircle,
+import { useState, useEffect, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { Button } from "@/components/ui/button";
+import { devisApi, contratsApi, clientsApi, prestatairesApi } from "@/lib/api";
+import {
+  getClientDisplayName,
+  getClientId,
+  mapDevisToUi,
+  mapPrestataireToUi,
+  unwrapPaginated,
+} from "@/lib/client-helpers";
+import { toast } from "sonner";
+import { SlideToConfirm } from "@/components/ui/SlideToConfirm";
+import SignatureCanvas from "react-signature-canvas";
+import { downloadContratPdf } from "@/lib/contrat-pdf";
+import type { ContractData } from "@/lib/pdf-generator";
+import { ContractDocument } from "@/components/contrat/ContractDocument";
+import {
+  CheckCircle2,
   ArrowLeft,
   Download,
-  Pen
-} from 'lucide-react';
+  Pen,
+  Loader,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { DetailPageSkeleton } from "@/components/dashboard/AdminLoadingSkeleton";
+
+function buildConditionsPaiement(contrat: Record<string, unknown>) {
+  const montantTtc = Number(contrat.montant_ttc ?? 0);
+  const acompteMontant = Number(contrat.acompte_montant ?? 0);
+  const soldeMontant = Number(contrat.solde_montant ?? 0);
+  const acomptePct =
+    montantTtc > 0 ? Math.round((acompteMontant / montantTtc) * 100) : 30;
+  return {
+    acompte: acomptePct,
+    solde: 100 - acomptePct,
+    acompte_montant: acompteMontant,
+    solde_montant: soldeMontant,
+  };
+}
+
+function mapClientForUi(raw: Record<string, unknown> | null, displayName: string) {
+  if (!raw) return { full_name: displayName };
+  return {
+    ...raw,
+    full_name:
+      displayName ||
+      `${raw.prenom ?? ""} ${raw.nom ?? ""}`.trim() ||
+      "Client",
+  };
+}
 
 export default function SignerContratPage() {
   const { devisId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const signatureRef = useRef<any>(null);
-  const contratRef = useRef<HTMLDivElement>(null);
-  
+  const clientName = getClientDisplayName(user);
+  const signatureRef = useRef<SignatureCanvas | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [signing, setSigning] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [contrat, setContrat] = useState<any>(null);
-  const [devis, setDevis] = useState<any>(null);
+  const [contrat, setContrat] = useState<Record<string, unknown> | null>(null);
+  const [devis, setDevis] = useState<Record<string, unknown> | null>(null);
+  const [clientInfo, setClientInfo] = useState<Record<string, unknown> | null>(null);
+  const [prestataireInfo, setPrestataireInfo] = useState<Record<string, unknown> | null>(null);
   const [hasSignature, setHasSignature] = useState(false);
+  const [dejaSigne, setDejaSigne] = useState(false);
+  const [signaturePreviewUrl, setSignaturePreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchContrat();
   }, [devisId]);
 
+  const isContratSigneParClient = (c: Record<string, unknown>) =>
+    Boolean(
+      c.signe_client_at ||
+        ["signe_client", "actif"].includes(String(c.statut ?? "")),
+    );
+
   const fetchContrat = async () => {
     try {
       setLoading(true);
-      
-      // Essayer d'abord dans devis_pro (nouvelle table)
-      let { data: devisData, error: devisError } = await supabase
-        .from('devis_pro')
-        .select('*')
-        .eq('id', devisId)
-        .maybeSingle();
 
-      // Si pas trouvé dans devis_pro, essayer dans devis (ancienne table)
-      if (!devisData) {
-        const { data: oldDevisData, error: oldDevisError } = await supabase
-          .from('devis')
-          .select('*')
-          .eq('id', devisId)
-          .maybeSingle();
-
-        if (oldDevisError) throw oldDevisError;
-        devisData = oldDevisData;
-      }
-
-      if (devisError && devisError.code !== 'PGRST116') throw devisError;
-      
-      if (!devisData) {
-        toast.error('Devis introuvable');
-        navigate('/dashboard/client/demandes');
+      const rawDevis = await devisApi.getById(String(devisId));
+      if (!rawDevis) {
+        toast.error("Devis introuvable");
+        navigate("/dashboard/client/demandes");
         return;
       }
-      
-      setDevis(devisData);
 
-      // Récupérer le contrat
-      const { data: contratData, error: contratError } = await supabase
-        .from('contrats')
-        .select('*')
-        .eq('devis_id', devisId)
-        .maybeSingle();
+      const mappedDevis = mapDevisToUi(rawDevis as Record<string, unknown>);
+      setDevis(mappedDevis as Record<string, unknown>);
 
-      if (contratData) {
-        setContrat(contratData);
-      } else {
-        // Le contrat n'existe pas, le créer automatiquement
-        console.log('Contrat inexistant, création automatique...');
-        await createContrat(devisData);
+      let contratData =
+        (rawDevis as { contrat?: Record<string, unknown> }).contrat ?? null;
+      if (!contratData) {
+        const all = unwrapPaginated(await contratsApi.getAll({ per_page: 100 }));
+        contratData =
+          (all.find(
+            (c) => String((c as { devis_id?: unknown }).devis_id) === String(devisId),
+          ) as Record<string, unknown> | undefined) ?? null;
       }
 
-    } catch (error: any) {
-      console.error('Erreur:', error);
-      toast.error('Erreur lors du chargement du contrat');
+      if (!contratData) {
+        toast.error("Contrat introuvable — acceptez d'abord le devis");
+        navigate(`/dashboard/client/devis/${devisId}/accepter`);
+        return;
+      }
+
+      setContrat(contratData);
+
+      const clientId =
+        getClientId(user) ||
+        (contratData.client_id != null ? String(contratData.client_id) : null);
+      const prestataireId =
+        mappedDevis.prestataire_id ??
+        contratData.prestataire_id ??
+        (mappedDevis.prestataire as { id?: unknown } | undefined)?.id;
+
+      const [clientData, prestataireData] = await Promise.all([
+        clientId
+          ? clientsApi.getById(String(clientId)).catch(() => null)
+          : Promise.resolve(null),
+        prestataireId
+          ? prestatairesApi
+              .getById(String(prestataireId))
+              .catch(() => mappedDevis.prestataire ?? null)
+          : Promise.resolve(mappedDevis.prestataire ?? null),
+      ]);
+
+      setClientInfo(mapClientForUi(clientData as Record<string, unknown> | null, clientName));
+      if (prestataireData) {
+        setPrestataireInfo(
+          mapPrestataireToUi(prestataireData as Record<string, unknown>) as Record<
+            string,
+            unknown
+          >,
+        );
+      }
+
+      const signed = isContratSigneParClient(contratData);
+      setDejaSigne(signed);
+      if (signed && typeof contratData.signature_client_url === "string") {
+        setSignaturePreviewUrl(contratData.signature_client_url);
+      }
+    } catch (error: unknown) {
+      console.error("Erreur:", error);
+      toast.error("Erreur lors du chargement du contrat");
     } finally {
       setLoading(false);
     }
   };
 
-  const createContrat = async (devisData: any) => {
-    try {
-      const numero = `CTR-${Date.now()}`;
-      const montantAcompte = Math.round(devisData.montant_ttc * 0.30);
-      const montantSolde = Math.round(devisData.montant_ttc * 0.70);
-      
-      // Récupérer le client_id depuis le profil de l'utilisateur connecté
-      let clientId = devisData.client_id;
-      
-      if (!clientId) {
-        const { data: clientData } = await supabase
-          .from('clients')
-          .select('id, full_name, email, city')
-          .eq('user_id', user?.id)
-          .maybeSingle();
-        
-        clientId = clientData?.id;
-      }
-      
-      // Récupérer les informations complètes du client et du prestataire
-      const { data: clientInfo } = await supabase
-        .from('clients')
-        .select('full_name, email, city, phone')
-        .eq('id', clientId)
-        .maybeSingle();
-
-      const { data: prestataireInfo } = await supabase
-        .from('prestataires')
-        .select('full_name, email, phone, profession, city')
-        .eq('id', devisData.prestataire_id)
-        .maybeSingle();
-      
-      // Si toujours pas de client_id, on ne peut pas créer le contrat
-      if (!clientId) {
-        throw new Error('Impossible de déterminer le client_id');
-      }
-      
-      const contenuHtml = `
-        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; background: white; color: #333;">
-          <!-- En-tête -->
-          <div style="text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px;">
-            <h1 style="color: #2563eb; font-size: 32px; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 2px;">
-              Contrat de Prestation de Services
-            </h1>
-            <p style="color: #64748b; font-size: 14px; margin: 5px 0;">
-              Contrat N° <strong>${numero}</strong>
-            </p>
-            <p style="color: #64748b; font-size: 14px; margin: 5px 0;">
-              Date d'établissement: <strong>${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
-            </p>
-          </div>
-
-          <!-- Parties contractantes -->
-          <div style="margin: 30px 0;">
-            <h2 style="color: #1e40af; font-size: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
-              Entre les soussignés
-            </h2>
-            
-            <div style="background: #f8fafc; padding: 20px; border-left: 4px solid #2563eb; margin-bottom: 20px; border-radius: 4px;">
-              <h3 style="color: #2563eb; font-size: 16px; margin: 0 0 15px 0;">Le Prestataire</h3>
-              <p style="margin: 5px 0; line-height: 1.6;">
-                <strong>Nom:</strong> ${prestataireInfo?.full_name || 'N/A'}<br/>
-                <strong>Profession:</strong> ${prestataireInfo?.profession || 'N/A'}<br/>
-                <strong>Email:</strong> ${prestataireInfo?.email || 'N/A'}<br/>
-                ${prestataireInfo?.phone ? `<strong>Téléphone:</strong> ${prestataireInfo.phone}<br/>` : ''}
-                ${prestataireInfo?.city ? `<strong>Ville:</strong> ${prestataireInfo.city}` : ''}
-              </p>
-              <p style="margin-top: 10px; font-style: italic; color: #64748b; font-size: 14px;">
-                Ci-après dénommé "le Prestataire"
-              </p>
-            </div>
-
-            <div style="background: #f8fafc; padding: 20px; border-left: 4px solid #10b981; margin-bottom: 20px; border-radius: 4px;">
-              <h3 style="color: #10b981; font-size: 16px; margin: 0 0 15px 0;">Le Client</h3>
-              <p style="margin: 5px 0; line-height: 1.6;">
-                <strong>Nom:</strong> ${clientInfo?.full_name || 'N/A'}<br/>
-                <strong>Email:</strong> ${clientInfo?.email || 'N/A'}<br/>
-                ${clientInfo?.phone ? `<strong>Téléphone:</strong> ${clientInfo.phone}<br/>` : ''}
-                ${clientInfo?.city ? `<strong>Ville:</strong> ${clientInfo.city}` : ''}
-              </p>
-              <p style="margin-top: 10px; font-style: italic; color: #64748b; font-size: 14px;">
-                Ci-après dénommé "le Client"
-              </p>
-            </div>
-          </div>
-
-          <!-- Objet du contrat -->
-          <div style="margin: 30px 0;">
-            <h2 style="color: #1e40af; font-size: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
-              Article 1 - Objet du contrat
-            </h2>
-            <p style="line-height: 1.8; text-align: justify;">
-              Le présent contrat a pour objet la réalisation des prestations de services décrites dans le devis 
-              N° <strong>${devisData.numero || 'N/A'}</strong> accepté par le Client le 
-              <strong>${devisData.date_acceptation ? new Date(devisData.date_acceptation).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR')}</strong>.
-            </p>
-            ${devisData.description ? `
-              <div style="background: #fef3c7; padding: 15px; border-radius: 4px; margin-top: 15px; border-left: 4px solid #f59e0b;">
-                <p style="margin: 0; line-height: 1.6;"><strong>Description des travaux:</strong></p>
-                <p style="margin: 10px 0 0 0; line-height: 1.6;">${devisData.description}</p>
-              </div>
-            ` : ''}
-          </div>
-
-          <!-- Montant et modalités de paiement -->
-          <div style="margin: 30px 0;">
-            <h2 style="color: #1e40af; font-size: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
-              Article 2 - Montant et modalités de paiement
-            </h2>
-            
-            <div style="background: #dbeafe; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <p style="font-size: 18px; margin: 0 0 15px 0; color: #1e40af;">
-                <strong>Montant total des prestations:</strong>
-              </p>
-              <p style="font-size: 32px; font-weight: bold; color: #2563eb; margin: 0;">
-                ${devisData.montant_ttc.toLocaleString()} ${devisData.devise || 'FC'}
-              </p>
-            </div>
-
-            <p style="line-height: 1.8; margin: 20px 0;">
-              Le paiement s'effectuera selon les modalités suivantes:
-            </p>
-
-            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-              <thead>
-                <tr style="background: #f1f5f9;">
-                  <th style="padding: 12px; text-align: left; border: 1px solid #e2e8f0;">Échéance</th>
-                  <th style="padding: 12px; text-align: right; border: 1px solid #e2e8f0;">Montant</th>
-                  <th style="padding: 12px; text-align: center; border: 1px solid #e2e8f0;">Pourcentage</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td style="padding: 12px; border: 1px solid #e2e8f0;">
-                    <strong>Acompte</strong><br/>
-                    <span style="font-size: 14px; color: #64748b;">Payable avant le début des travaux</span>
-                  </td>
-                  <td style="padding: 12px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold; color: #2563eb;">
-                    ${montantAcompte.toLocaleString()} ${devisData.devise || 'FC'}
-                  </td>
-                  <td style="padding: 12px; text-align: center; border: 1px solid #e2e8f0; font-weight: bold;">
-                    30%
-                  </td>
-                </tr>
-                <tr style="background: #f8fafc;">
-                  <td style="padding: 12px; border: 1px solid #e2e8f0;">
-                    <strong>Solde</strong><br/>
-                    <span style="font-size: 14px; color: #64748b;">Payable après validation des travaux</span>
-                  </td>
-                  <td style="padding: 12px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold; color: #10b981;">
-                    ${montantSolde.toLocaleString()} ${devisData.devise || 'FC'}
-                  </td>
-                  <td style="padding: 12px; text-align: center; border: 1px solid #e2e8f0; font-weight: bold;">
-                    70%
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Délais et garanties -->
-          <div style="margin: 30px 0;">
-            <h2 style="color: #1e40af; font-size: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
-              Article 3 - Délais d'exécution et garanties
-            </h2>
-            <ul style="line-height: 2; padding-left: 20px;">
-              ${devisData.delai_intervention ? `<li><strong>Délai d'intervention:</strong> ${devisData.delai_intervention}</li>` : ''}
-              ${devisData.delai_execution ? `<li><strong>Durée des travaux:</strong> ${devisData.delai_execution}</li>` : ''}
-              ${devisData.garantie ? `<li><strong>Garantie:</strong> ${devisData.garantie}</li>` : ''}
-              <li><strong>Délai de validation:</strong> 7 jours après achèvement des travaux</li>
-            </ul>
-          </div>
-
-          <!-- Obligations des parties -->
-          <div style="margin: 30px 0;">
-            <h2 style="color: #1e40af; font-size: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
-              Article 4 - Obligations des parties
-            </h2>
-            
-            <h3 style="color: #2563eb; font-size: 16px; margin: 20px 0 10px 0;">4.1 - Obligations du Prestataire</h3>
-            <ul style="line-height: 2; padding-left: 20px;">
-              <li>Réaliser les prestations conformément au devis accepté</li>
-              <li>Respecter les délais convenus</li>
-              <li>Informer le Client de l'avancement des travaux</li>
-              <li>Garantir la qualité des travaux réalisés</li>
-            </ul>
-
-            <h3 style="color: #10b981; font-size: 16px; margin: 20px 0 10px 0;">4.2 - Obligations du Client</h3>
-            <ul style="line-height: 2; padding-left: 20px;">
-              <li>Payer l'acompte avant le début des travaux</li>
-              <li>Faciliter l'accès au lieu d'intervention</li>
-              <li>Valider ou signaler les réserves dans les 7 jours suivant l'achèvement</li>
-              <li>Payer le solde après validation des travaux</li>
-            </ul>
-          </div>
-
-          <!-- Résiliation et litiges -->
-          <div style="margin: 30px 0;">
-            <h2 style="color: #1e40af; font-size: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
-              Article 5 - Résiliation et litiges
-            </h2>
-            <p style="line-height: 1.8; text-align: justify;">
-              En cas de litige, les parties s'engagent à rechercher une solution amiable via la plateforme KaziPro. 
-              À défaut d'accord, le litige sera soumis aux tribunaux compétents de Kinshasa.
-            </p>
-          </div>
-
-          <!-- Signatures -->
-          <div style="margin: 50px 0 30px 0; page-break-inside: avoid;">
-            <h2 style="color: #1e40af; font-size: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 30px;">
-              Signatures
-            </h2>
-            
-            <div style="display: table; width: 100%; margin-top: 40px;">
-              <div style="display: table-cell; width: 48%; vertical-align: top; padding-right: 2%;">
-                <div style="border: 2px dashed #cbd5e1; padding: 20px; min-height: 150px; border-radius: 8px; background: #f8fafc;">
-                  <p style="margin: 0 0 10px 0; font-weight: bold; color: #2563eb;">Le Prestataire</p>
-                  <p style="margin: 0; font-size: 14px; color: #64748b;">
-                    ${prestataireInfo?.full_name || 'N/A'}
-                  </p>
-                  <p style="margin: 40px 0 0 0; font-size: 12px; color: #94a3b8; font-style: italic;">
-                    Signature électronique à apposer
-                  </p>
-                </div>
-              </div>
-              
-              <div style="display: table-cell; width: 48%; vertical-align: top; padding-left: 2%;">
-                <div style="border: 2px dashed #cbd5e1; padding: 20px; min-height: 150px; border-radius: 8px; background: #f8fafc;">
-                  <p style="margin: 0 0 10px 0; font-weight: bold; color: #10b981;">Le Client</p>
-                  <p style="margin: 0; font-size: 14px; color: #64748b;">
-                    ${clientInfo?.full_name || 'N/A'}
-                  </p>
-                  <p style="margin: 40px 0 0 0; font-size: 12px; color: #94a3b8; font-style: italic;">
-                    Signature électronique à apposer
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Pied de page -->
-          <div style="margin-top: 50px; padding-top: 20px; border-top: 2px solid #e5e7eb; text-align: center; color: #94a3b8; font-size: 12px;">
-            <p style="margin: 5px 0;">
-              <strong>KaziPro</strong> - Plateforme de mise en relation professionnelle
-            </p>
-            <p style="margin: 5px 0;">
-              Kinshasa, République Démocratique du Congo
-            </p>
-            <p style="margin: 5px 0;">
-              Document généré électroniquement le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}
-            </p>
-          </div>
-        </div>
-      `;
-
-      const { data: newContrat, error: createError } = await supabase
-        .from('contrats')
-        .insert({
-          numero,
-          devis_id: devisId,
-          client_id: clientId,
-          prestataire_id: devisData.prestataire_id,
-          contenu_html: contenuHtml,
-          statut: 'genere',
-          conditions_paiement: {
-            type: 'acompte_solde',
-            acompte: 30,
-            solde: 70,
-            delai_validation: 7
-          }
-        })
-        .select()
-        .single();
-
-      if (createError) throw createError;
-      
-      setContrat(newContrat);
-      toast.success('Contrat généré avec succès!');
-    } catch (error: any) {
-      console.error('Erreur création contrat:', error);
-      toast.error('Erreur lors de la génération du contrat');
-    }
-  };
-
   const clearSignature = () => {
-    if (signatureRef.current) {
-      signatureRef.current.clear();
-      setHasSignature(false);
-    }
+    signatureRef.current?.clear();
+    setHasSignature(false);
   };
 
   const handleDownloadPDF = async () => {
-    if (!contratRef.current) {
-      toast.error('Contrat non disponible');
-      return;
-    }
+    if (!contrat || !devis) return;
+
+    const conditions = buildConditionsPaiement(contrat);
 
     try {
       setDownloading(true);
-      toast.info('Génération du PDF en cours...');
-
-      // Capturer le contenu HTML en canvas
-      const canvas = await html2canvas(contratRef.current, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff'
-      });
-
-      // Calculer les dimensions pour le PDF
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-
-      // Créer le PDF
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      let position = 0;
-
-      // Convertir le canvas en image
-      const imgData = canvas.toDataURL('image/png');
-
-      // Ajouter la première page
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      // Ajouter des pages supplémentaires si nécessaire
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      // Télécharger le PDF
-      const fileName = `Contrat_${contrat.numero}_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`;
-      pdf.save(fileName);
-
-      toast.success('PDF téléchargé avec succès!');
-    } catch (error: any) {
-      console.error('Erreur génération PDF:', error);
-      toast.error('Erreur lors de la génération du PDF');
+      const fallback: ContractData = {
+        numero: String(contrat.numero ?? ""),
+        date: new Date(contrat.created_at as string | number || Date.now()).toLocaleDateString(
+          "fr-FR",
+          { day: "2-digit", month: "long", year: "numeric" },
+        ),
+        devisNumero: String(devis.numero ?? ""),
+        titre: String(devis.titre ?? devis.title ?? "Prestation de services"),
+        description: devis.description as string | undefined,
+        montantTotal: Number(devis.montant_ttc ?? 0),
+        devise: String(devis.devise ?? "FC"),
+        acomptePercent: conditions.acompte,
+        soldePercent: conditions.solde,
+        delaiExecution: devis.delai_execution as string | undefined,
+        garantie: devis.garantie as string | undefined,
+        client: {
+          nom: String(clientInfo?.full_name ?? clientName),
+          email: user?.email,
+          telephone: (clientInfo?.telephone ?? clientInfo?.phone) as string | undefined,
+          ville: (clientInfo?.ville ?? clientInfo?.city) as string | undefined,
+          signature_url: contrat.signature_client_url as string | undefined,
+          date_signature: contrat.signe_client_at
+            ? new Date(String(contrat.signe_client_at)).toLocaleDateString("fr-FR")
+            : undefined,
+        },
+        prestataire: {
+          nom: String(prestataireInfo?.full_name ?? ""),
+          telephone: (prestataireInfo?.telephone ?? prestataireInfo?.phone) as string | undefined,
+          ville: (prestataireInfo?.ville ?? prestataireInfo?.city) as string | undefined,
+          profession: prestataireInfo?.profession as string | undefined,
+          signature_url: contrat.signature_prestataire_url as string | undefined,
+          date_signature: contrat.signe_prestataire_at
+            ? new Date(String(contrat.signe_prestataire_at)).toLocaleDateString("fr-FR")
+            : undefined,
+        },
+      };
+      const via = await downloadContratPdf(String(contrat.id), fallback, `contrat-${contrat.numero}.pdf`);
+      toast.success(via === "api" ? "PDF téléchargé (serveur)" : "PDF téléchargé");
+    } catch (error: unknown) {
+      console.error("Erreur génération PDF:", error);
+      toast.error("Erreur lors de la génération du PDF");
     } finally {
       setDownloading(false);
     }
@@ -442,214 +214,196 @@ export default function SignerContratPage() {
 
   const handleSign = async () => {
     if (!signatureRef.current || signatureRef.current.isEmpty()) {
-      toast.error('Veuillez signer le contrat');
+      toast.error("Veuillez signer le contrat");
       return;
     }
+
+    if (!contrat?.id) return;
 
     try {
       setSigning(true);
 
-      // Convertir la signature en base64
       const signatureDataUrl = signatureRef.current.toDataURL();
-      
-      // Convertir en blob pour upload
-      const response = await fetch(signatureDataUrl);
-      const blob = await response.blob();
-      
-      // Upload de la signature
-      const fileName = `signature-client-${contrat.id}-${Date.now()}.png`;
-      const { error: uploadError } = await supabase.storage
-        .from('signatures')
-        .upload(fileName, blob, {
-          contentType: 'image/png',
-          upsert: false
-        });
+      await contratsApi.signer(String(contrat.id), {
+        signature: signatureDataUrl,
+      });
 
-      if (uploadError) throw uploadError;
-
-      // Obtenir l'URL publique
-      const { data: { publicUrl } } = supabase.storage
-        .from('signatures')
-        .getPublicUrl(fileName);
-
-      // Mettre à jour le contrat
-      const { error: updateError } = await supabase
-        .from('contrats')
-        .update({
-          signature_client_url: publicUrl,
-          date_signature_client: new Date().toISOString(),
-          statut: 'signe_client',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', contrat.id);
-
-      if (updateError) throw updateError;
-
-      toast.success('Contrat signé avec succès!');
-      
-      // Rediriger vers la page de paiement de l'acompte
+      toast.success("Contrat signé avec succès");
       navigate(`/dashboard/client/paiement/${contrat.id}/acompte`);
-
-    } catch (error: any) {
-      console.error('Erreur:', error);
-      toast.error('Erreur lors de la signature');
+    } catch (error: unknown) {
+      console.error("Erreur:", error);
+      toast.error("Erreur lors de la signature");
+      throw error;
     } finally {
       setSigning(false);
     }
   };
 
+  const contratForDoc = contrat
+    ? {
+        ...contrat,
+        conditions_paiement: buildConditionsPaiement(contrat),
+        date_signature_client: contrat.signe_client_at,
+        date_signature_prestataire: contrat.signe_prestataire_at,
+      }
+    : null;
+
+  const acomptePct = contratForDoc?.conditions_paiement?.acompte ?? 30;
+
   if (loading) {
     return (
-      <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
-        <div className="flex items-center justify-center h-64 md:h-96 px-4">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-b-2 border-primary mx-auto mb-3 md:mb-4"></div>
-            <p className="text-sm md:text-base text-muted-foreground">Génération du contrat...</p>
-          </div>
-        </div>
+      <DashboardLayout role="client" userName={clientName} userRole="Client">
+        <DetailPageSkeleton />
       </DashboardLayout>
     );
   }
 
-  if (!contrat) {
+  if (!contrat || !devis || !contratForDoc) {
     return (
-      <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
-        <div className="p-3 md:p-6">
-          <Alert variant="destructive">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <AlertDescription className="text-sm">
-              Le contrat est en cours de génération. Veuillez patienter...
-            </AlertDescription>
-          </Alert>
+      <DashboardLayout role="client" userName={clientName} userRole="Client">
+        <div className="p-6 text-center text-muted-foreground">
+          Contrat en cours de génération…
         </div>
       </DashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
-      <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6 max-w-5xl">
-        {/* Header - Mobile Optimized */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate(-1)}
-            className="w-fit"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Retour
-          </Button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl md:text-3xl font-bold truncate">Signature du contrat</h1>
-            <p className="text-sm md:text-base text-muted-foreground mt-1 truncate">
-              Contrat N° {contrat.numero}
+    <DashboardLayout role="client" userName={clientName} userRole="Client">
+      <div className="mx-auto max-w-2xl space-y-4 pb-28 sm:pb-8 sm:space-y-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(-1)}
+              className="-ml-2 mb-1 h-8 px-2"
+            >
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Retour
+            </Button>
+            <h1 className="font-display text-xl font-bold sm:text-2xl">
+              {dejaSigne ? "Votre contrat" : "Signature du contrat"}
+            </h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {dejaSigne
+                ? "Contrat signé — vous pouvez consulter le document et poursuivre le paiement."
+                : `Lisez le contrat, signez, puis payez l'acompte (${acomptePct} %).`}
             </p>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadPDF}
+            disabled={downloading}
+            className="shrink-0"
+          >
+            {downloading ? (
+              <Loader className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <Download className="mr-1.5 h-4 w-4" />
+                PDF
+              </>
+            )}
+          </Button>
         </div>
 
-        {/* Alert info - Mobile Optimized */}
-        <Alert>
-          <FileSignature className="w-4 h-4 shrink-0" />
-          <AlertDescription className="text-sm">
-            Veuillez lire attentivement le contrat avant de le signer. 
-            Votre signature engage votre responsabilité.
-          </AlertDescription>
-        </Alert>
+        <ContractDocument
+          contrat={contratForDoc as Parameters<typeof ContractDocument>[0]["contrat"]}
+          devis={devis as Parameters<typeof ContractDocument>[0]["devis"]}
+          client={clientInfo as Parameters<typeof ContractDocument>[0]["client"]}
+          prestataire={prestataireInfo as Parameters<typeof ContractDocument>[0]["prestataire"]}
+          clientEmailFallback={user?.email}
+          hideSignatures={!dejaSigne}
+        />
 
-        {/* Contrat - Mobile Optimized */}
-        <Card>
-          <CardHeader className="pb-3 md:pb-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <CardTitle className="text-base md:text-lg">Contrat de prestation</CardTitle>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={handleDownloadPDF}
-                disabled={downloading}
-                className="w-full sm:w-auto"
-              >
-                {downloading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-3 w-3 md:h-4 md:w-4 border-b-2 border-primary mr-2"></div>
-                    <span className="text-xs md:text-sm">Génération...</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-3 h-3 md:w-4 md:h-4 mr-2" />
-                    <span className="text-xs md:text-sm">Télécharger PDF</span>
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div 
-              ref={contratRef}
-              className="prose prose-sm md:prose max-w-none p-3 md:p-6 bg-white border rounded-lg text-xs md:text-sm"
-              dangerouslySetInnerHTML={{ __html: contrat.contenu_html }}
-            />
-          </CardContent>
-        </Card>
+        <div
+          className={cn(
+            "rounded-xl border bg-card shadow-sm",
+            !dejaSigne &&
+              "fixed inset-x-0 bottom-0 z-40 border-x-0 border-b-0 rounded-b-none p-4 sm:static sm:rounded-xl sm:border sm:p-5",
+            dejaSigne && "p-5",
+          )}
+        >
+          <div className="mx-auto max-w-2xl space-y-3">
+            {dejaSigne ? (
+              <>
+                <div className="flex items-center gap-2 text-success">
+                  <CheckCircle2 className="h-5 w-5" />
+                  <p className="text-sm font-semibold">
+                    Contrat signé le{" "}
+                    {contrat.signe_client_at
+                      ? new Date(String(contrat.signe_client_at)).toLocaleDateString("fr-FR")
+                      : "—"}
+                  </p>
+                </div>
 
-        {/* Zone de signature - Mobile Optimized */}
-        <Card className="border-primary">
-          <CardHeader className="pb-3 md:pb-6">
-            <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-              <Pen className="w-4 h-4 md:w-5 md:h-5" />
-              Votre signature
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 md:space-y-4">
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-2 md:p-4 bg-white">
-              <SignatureCanvas
-                ref={signatureRef}
-                canvasProps={{
-                  className: 'w-full h-32 md:h-48 cursor-crosshair',
-                  style: { touchAction: 'none' }
-                }}
-                onEnd={() => setHasSignature(true)}
-              />
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
-              <Button
-                variant="outline"
-                onClick={clearSignature}
-                disabled={!hasSignature}
-                size="sm"
-                className="w-full sm:w-auto"
-              >
-                Effacer
-              </Button>
-              <Button
-                onClick={handleSign}
-                disabled={!hasSignature || signing}
-                className="flex-1"
-                size="sm"
-              >
-                {signing ? (
-                  <>
-                    <div className="animate-spin rounded-full h-3 w-3 md:h-4 md:w-4 border-b-2 border-white mr-2"></div>
-                    <span className="text-xs md:text-sm truncate">Signature en cours...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-3 h-3 md:w-4 md:h-4 mr-2 shrink-0" />
-                    <span className="text-xs md:text-sm truncate">Signer et continuer vers le paiement</span>
-                  </>
-                )}
-              </Button>
-            </div>
+                {signaturePreviewUrl ? (
+                  <div className="rounded-lg border bg-white p-3">
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">
+                      Votre signature enregistrée
+                    </p>
+                    <img
+                      src={signaturePreviewUrl}
+                      alt="Signature client"
+                      className="mx-auto h-20 max-w-full object-contain"
+                    />
+                  </div>
+                ) : null}
 
-            <Alert className="bg-blue-50 border-blue-200">
-              <AlertDescription className="text-blue-900 text-xs md:text-sm">
-                <strong>Prochaine étape:</strong> Après la signature, vous serez redirigé 
-                vers la page de paiement de l'acompte ({contrat.conditions_paiement?.acompte || 30}%).
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
+                <Button
+                  className="w-full"
+                  size="sm"
+                  onClick={() =>
+                    navigate(`/dashboard/client/paiement/${contrat.id}/acompte`)
+                  }
+                >
+                  Continuer vers le paiement de l&apos;acompte
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <Pen className="h-4 w-4 text-primary" />
+                  <p className="text-sm font-semibold">Votre signature</p>
+                </div>
+
+                <div className="overflow-hidden rounded-lg border-2 border-dashed bg-white">
+                  <SignatureCanvas
+                    ref={signatureRef}
+                    canvasProps={{
+                      className: "h-28 w-full cursor-crosshair sm:h-36",
+                      style: { touchAction: "none" },
+                    }}
+                    onEnd={() => setHasSignature(true)}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={clearSignature}
+                    disabled={!hasSignature}
+                    className="shrink-0"
+                  >
+                    Effacer
+                  </Button>
+                  <SlideToConfirm
+                    label="Signer le contrat et procéder au paiement de l'acompte"
+                    hint="Glisser pour signer"
+                    variant="success"
+                    disabled={!hasSignature}
+                    loading={signing}
+                    successMessage="Contrat signé"
+                    onConfirm={handleSign}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   );

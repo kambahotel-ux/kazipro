@@ -6,15 +6,13 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Wrench, Mail, Lock, ArrowRight, Eye, EyeOff, User, Briefcase, MapPin, Building2, FileText } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { authApi } from "@/lib/api";
 import { toast } from "sonner";
 import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
 import type { TypePrestataire, FormeJuridique } from "@/types/prestataire";
 
 const RegisterProvider = () => {
   const navigate = useNavigate();
-  const { signUp } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -110,79 +108,23 @@ const RegisterProvider = () => {
     try {
       setLoading(true);
       
-      // Créer le compte Supabase
-      const fullName = typePrestataire === 'physique' 
-        ? `${formData.prenom} ${formData.nom}`
-        : formData.raisonSociale;
-        
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      await authApi.register({
         email: formData.email,
         password: formData.password,
-        options: {
-          emailRedirectTo: undefined,
-          data: {
-            role: "prestataire",
-            full_name: fullName,
-          }
-        }
+        password_confirmation: formData.confirmPassword,
+        role: 'prestataire',
+        type_personne: typePrestataire === 'physique' ? 'physique' : 'morale',
+        nom: typePrestataire === 'physique' ? formData.nom : formData.representantNom,
+        prenom: typePrestataire === 'physique' ? formData.prenom : (formData.representantPrenom || '—'),
+        raison_sociale: typePrestataire === 'morale' ? formData.raisonSociale : undefined,
+        telephone: formData.phone,
+        ville: formData.city,
+        numero_rccm: formData.numeroRCCM || undefined,
       });
-
-      if (authError) throw authError;
-      if (!authData.user) throw new Error("Erreur lors de la création du compte");
-
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Préparer les données selon le type
-      const prestataireData: any = {
-        user_id: authData.user.id,
-        type_prestataire: typePrestataire,
-        profession: formData.profession,
-        bio: formData.bio || `Prestataire ${formData.profession} avec ${formData.experience || 0} ans d'expérience à ${formData.city}`,
-        phone: formData.phone,
-        email: formData.email,
-        rating: 0,
-        verified: false,
-        documents_verified: false,
-        full_name: fullName,
-      };
-
-      // Ajouter les champs spécifiques
-      if (typePrestataire === 'physique') {
-        prestataireData.nom = formData.nom;
-        prestataireData.prenom = formData.prenom;
-        prestataireData.date_naissance = formData.dateNaissance || null;
-        prestataireData.numero_cni = formData.numeroCNI || null;
-      } else {
-        prestataireData.raison_sociale = formData.raisonSociale;
-        prestataireData.forme_juridique = formData.formeJuridique || null;
-        prestataireData.numero_rccm = formData.numeroRCCM || null;
-        prestataireData.numero_impot = formData.numeroImpot || null;
-        prestataireData.numero_id_nat = formData.numeroIdNat || null;
-        prestataireData.representant_legal_nom = formData.representantNom;
-        prestataireData.representant_legal_prenom = formData.representantPrenom || null;
-        prestataireData.representant_legal_fonction = formData.representantFonction || null;
-        prestataireData.adresse_siege = formData.adresseSiege || null;
-        prestataireData.ville_siege = formData.villeSiege || null;
-        prestataireData.pays_siege = 'RDC';
-      }
-
-      // Créer le profil prestataire
-      const { error: profileError } = await supabase
-        .from("prestataires")
-        .insert(prestataireData);
-
-      if (profileError) {
-        console.error("Erreur création profil:", profileError);
-        toast.error("Compte créé mais erreur lors de la création du profil. Contactez l'administrateur.");
-        setTimeout(() => {
-          navigate("/prestataire/en-attente");
-        }, 2000);
-        return;
-      }
 
       toast.success("Compte créé avec succès ! Redirection...");
       setTimeout(() => {
-        navigate("/prestataire/en-attente");
+        navigate("/dashboard/prestataire");
       }, 1500);
       
     } catch (error: any) {

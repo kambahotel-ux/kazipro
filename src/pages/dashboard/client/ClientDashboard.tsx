@@ -1,242 +1,203 @@
 import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { StatsCard } from "@/components/dashboard/StatsCard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { FileText, Clock, CheckCircle, Plus, ArrowRight, Loader2, Search } from "lucide-react";
+import {
+  FileText,
+  Clock,
+  CheckCircle,
+  Plus,
+  ArrowRight,
+  Search,
+  RefreshCw,
+  AlertCircle,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { contratsApi, devisApi, demandesApi, paiementsApi } from "@/lib/api";
+import {
+  getClientDisplayName,
+  mapDevisToUi,
+  mapRecentDemandeForDashboard,
+  type ClientRecentDemande,
+  unwrapPaginated,
+} from "@/lib/client-helpers";
+import { ClientRecentDemandeCard } from "@/components/client/ClientRecentDemandeCard";
+import { displayNameFromProfil } from "@/lib/kazipro-profile";
 import { toast } from "sonner";
+import { DashboardHomeSkeleton } from "@/components/dashboard/AdminLoadingSkeleton";
 
-interface Request {
+interface PendingAction {
+  type: string;
   id: string;
   title: string;
-  status: string;
-  created_at: string;
-  prestataire?: string;
+  description: string;
+  action: string;
+  link: string;
+  date: string;
 }
 
-const statusLabels: Record<string, { label: string; variant: "default" | "secondary" | "outline" }> = {
-  active: { label: "En attente", variant: "secondary" },
-  in_progress: { label: "En cours", variant: "default" },
-  completed: { label: "Terminée", variant: "outline" },
-  cancelled: { label: "Annulée", variant: "default" },
-};
+const LIST_PAGE_SIZE = 20;
+
+function prestataireLabel(devis: Record<string, unknown>): string {
+  const prest =
+    (devis.prestataire as Record<string, unknown> | undefined) ??
+    (devis.prestataires as Record<string, unknown> | undefined);
+  return displayNameFromProfil(prest ?? null, "Prestataire");
+}
 
 export default function ClientDashboard() {
   const { user } = useAuth();
   const [clientName, setClientName] = useState("Client");
-  const [recentRequests, setRecentRequests] = useState<Request[]>([]);
-  const [pendingActions, setPendingActions] = useState<any[]>([]);
-  const [stats, setStats] = useState({ active: 0, pending: 0, inProgress: 0, completed: 0 });
+  const [recentRequests, setRecentRequests] = useState<ClientRecentDemande[]>([]);
+  const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [pendingError, setPendingError] = useState(false);
 
   useEffect(() => {
     if (user) {
-      fetchData();
+      setClientName(getClientDisplayName(user));
+      void loadDashboard();
     }
   }, [user]);
 
-  const fetchPendingActions = async (clientId: string) => {
-    try {
-      const actions: any[] = [];
+  const loadDemandes = async () => {
+    const demandesRes = await demandesApi.getAll({ per_page: LIST_PAGE_SIZE });
+    const demandesData = unwrapPaginated(demandesRes);
 
-      // 1. Devis en attente d'acceptation - vérifier dans les deux tables
-      
-      // Essayer d'abord devis_pro
-      const { data: devisProData } = await supabase
-        .from('devis_pro')
-        .select(`
-          id,
-          numero,
-          montant_ttc,
-          statut,
-          created_at,
-          prestataires (full_name)
-        `)
-        .eq('client_id', clientId)
-        .eq('statut', 'en_attente');
+    const requests = demandesData.map((d) =>
+      mapRecentDemandeForDashboard(d as Record<string, unknown>),
+    );
 
-      // Puis devis (ancienne table)
-      const { data: devisData } = await supabase
-        .from('devis')
-        .select(`
-          id,
-          numero,
-          montant_ttc,
-          statut,
-          created_at,
-          prestataire:prestataires (full_name)
-        `)
-        .eq('client_id', clientId)
-        .in('statut', ['en_attente', 'envoye']);
+    setRecentRequests(
+      [...requests]
+        .sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        )
+        .slice(0, 2),
+    );
 
-      // Combiner les résultats
-      const allDevis = [
-        ...(devisProData || []),
-        ...(devisData || []).map(d => ({
-          ...d,
-          prestataires: Array.isArray(d.prestataire) ? d.prestataire[0] : d.prestataire
-        }))
-      ];
-
-      if (allDevis.length > 0) {
-        allDevis.forEach((devis: any) => {
-          const prestataireFullName = devis.prestataires?.full_name || 'N/A';
-          actions.push({
-            type: 'devis',
-            id: devis.id,
-            title: `Devis N° ${devis.numero || 'N/A'}`,
-            description: `${devis.montant_ttc.toLocaleString()} FC - ${prestataireFullName}`,
-            action: 'Accepter le devis',
-            link: `/dashboard/client/devis/${devis.id}/accepter`,
-            date: devis.created_at
-          });
-        });
-      }
-
-      // 2. Contrats à signer
-      const { data: contratsData } = await supabase
-        .from('contrats')
-        .select(`
-          id,
-          numero,
-          statut,
-          created_at,
-          devis_id
-        `)
-        .eq('client_id', clientId)
-        .eq('statut', 'genere');
-
-      if (contratsData) {
-        contratsData.forEach((contrat) => {
-          actions.push({
-            type: 'contrat',
-            id: contrat.id,
-            title: `Contrat N° ${contrat.numero}`,
-            description: 'Signature électronique requise',
-            action: 'Signer le contrat',
-            link: `/dashboard/client/contrat/${contrat.devis_id}`,
-            date: contrat.created_at
-          });
-        });
-      }
-
-      // 3. Paiements en attente (contrats signés mais pas encore payés)
-      const { data: contratsSignesData } = await supabase
-        .from('contrats')
-        .select(`
-          id,
-          numero,
-          statut,
-          statut_paiement,
-          created_at
-        `)
-        .eq('client_id', clientId)
-        .eq('statut', 'signe_client');
-
-      if (contratsSignesData) {
-        for (const contrat of contratsSignesData) {
-          // Vérifier si le paiement d'acompte existe mais pas le solde
-          if (contrat.statut_paiement === 'non_paye') {
-            // Acompte pas encore payé
-            actions.push({
-              type: 'paiement',
-              id: contrat.id,
-              title: `Paiement acompte - Contrat N° ${contrat.numero}`,
-              description: 'Paiement de l\'acompte requis',
-              action: 'Payer l\'acompte',
-              link: `/dashboard/client/paiement/${contrat.id}/acompte`,
-              date: contrat.created_at
-            });
-          } else if (contrat.statut_paiement === 'acompte_paye') {
-            // Acompte payé mais solde pas encore payé
-            actions.push({
-              type: 'paiement_solde',
-              id: contrat.id,
-              title: `Paiement solde - Contrat N° ${contrat.numero}`,
-              description: 'Paiement du solde requis (travaux terminés)',
-              action: 'Payer le solde',
-              link: `/dashboard/client/paiement/${contrat.id}/solde`,
-              date: contrat.created_at
-            });
-          }
-        }
-      }
-
-      // Trier par date (plus récent en premier)
-      actions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setPendingActions(actions.slice(0, 5)); // Limiter à 5 actions
-    } catch (error: any) {
-      console.error('Erreur pending actions:', error);
-    }
   };
 
-  const fetchData = async () => {
+  const loadPendingActions = async () => {
+    setPendingError(false);
+    const [devisRes, contratsRes, paiementsRes] = await Promise.all([
+      devisApi.getAll({ per_page: LIST_PAGE_SIZE }),
+      contratsApi.getAll({ per_page: LIST_PAGE_SIZE }),
+      paiementsApi.getAll({ per_page: LIST_PAGE_SIZE }),
+    ]);
+
+    const actions: PendingAction[] = [];
+    const allDevis = unwrapPaginated(devisRes).map((d) =>
+      mapDevisToUi(d as Record<string, unknown>),
+    );
+
+    allDevis
+      .filter((d) => ["envoye", "en_attente"].includes(String(d.statut)))
+      .forEach((devis) => {
+        actions.push({
+          type: "devis",
+          id: String(devis.id),
+          title: `Devis N° ${devis.numero || "N/A"}`,
+          description: `${Number(devis.montant_ttc).toLocaleString("fr-FR")} FC — ${prestataireLabel(devis as Record<string, unknown>)}`,
+          action: "Accepter le devis",
+          link: `/dashboard/client/devis/${devis.id}/accepter`,
+          date: String(devis.created_at ?? ""),
+        });
+      });
+
+    const contrats = unwrapPaginated(contratsRes);
+
+    contrats
+      .filter((c) => ["en_attente", "signe_prestataire"].includes(String((c as { statut?: string }).statut)))
+      .forEach((contrat) => {
+        const c = contrat as Record<string, unknown>;
+        actions.push({
+          type: "contrat",
+          id: String(c.id),
+          title: `Contrat N° ${c.numero}`,
+          description: "Signature électronique requise",
+          action: "Signer le contrat",
+          link: `/dashboard/client/contrat/${c.devis_id}`,
+          date: String(c.created_at ?? ""),
+        });
+      });
+
+    const paiements = unwrapPaginated(paiementsRes);
+
+    for (const contrat of contrats.filter((c) =>
+      ["actif", "signe_client"].includes(String((c as { statut?: string }).statut)),
+    )) {
+      const c = contrat as Record<string, unknown>;
+      const mission = c.mission as { statut?: string } | undefined;
+      const contratPaiements = paiements.filter(
+        (p) => String((p as { contrat_id?: unknown }).contrat_id) === String(c.id),
+      );
+      const acompteValide = contratPaiements.some(
+        (p) => (p as { type?: string }).type === "acompte" && (p as { statut?: string }).statut === "valide",
+      );
+      const soldeValide = contratPaiements.some(
+        (p) => (p as { type?: string }).type === "solde" && (p as { statut?: string }).statut === "valide",
+      );
+
+      if (!acompteValide) {
+        actions.push({
+          type: "paiement",
+          id: String(c.id),
+          title: `Paiement acompte — Contrat N° ${c.numero}`,
+          description: "Paiement de l'acompte requis",
+          action: "Payer l'acompte",
+          link: `/dashboard/client/paiement/${c.id}/acompte`,
+          date: String(c.created_at ?? ""),
+        });
+      } else if (!soldeValide && mission?.statut === "terminee_prestataire") {
+        actions.push({
+          type: "paiement_solde",
+          id: String(c.id),
+          title: `Paiement solde — Contrat N° ${c.numero}`,
+          description: "Paiement du solde requis (travaux terminés)",
+          action: "Payer le solde",
+          link: `/dashboard/client/paiement/${c.id}/solde`,
+          date: String(c.created_at ?? ""),
+        });
+      }
+    }
+
+    actions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    setPendingActions(actions.slice(0, 5));
+  };
+
+  const loadDashboard = async () => {
     if (!user) return;
     try {
       setLoading(true);
-
-      // Fetch client profile
-      const { data: clientData } = await supabase
-        .from("clients")
-        .select("id, full_name")
-        .eq("user_id", user.id)
-        .single();
-
-      if (clientData) {
-        setClientName(clientData.full_name);
-
-        // Fetch user's demandes using client_id
-        const { data: demandesData, error: demandesError } = await supabase
-          .from("demandes")
-          .select("*")
-          .eq("client_id", clientData.id)
-          .order("created_at", { ascending: false });
-
-        if (demandesError) throw demandesError;
-
-        // Map demandes to requests - use 'status' column (English values in DB)
-        const requests = (demandesData || []).map((d: any) => ({
-          id: d.id,
-          title: d.title || "Sans titre",
-          status: d.status || "active",
-          created_at: d.created_at,
-          prestataire: "Prestataire",
-        }));
-
-        setRecentRequests(requests.slice(0, 3));
-
-        // Calculate stats based on database status values
-        const activeCount = requests.filter((r) => r.status === "active").length;
-        const inProgressCount = requests.filter((r) => r.status === "in_progress").length;
-        const completedCount = requests.filter((r) => r.status === "completed").length;
-        const totalActive = activeCount + inProgressCount; // Total active = active + in_progress
-
-        setStats({
-          active: totalActive,
-          pending: activeCount,
-          inProgress: inProgressCount,
-          completed: completedCount,
-        });
-
-        // Fetch pending actions (devis to accept, contracts to sign, payments to make)
-        await fetchPendingActions(clientData.id);
-      }
-    } catch (error: any) {
-      toast.error("Erreur lors du chargement des données");
+      await loadDemandes();
+    } catch (error: unknown) {
+      toast.error("Erreur lors du chargement des demandes");
       console.error(error);
     } finally {
       setLoading(false);
+    }
+
+    try {
+      setPendingLoading(true);
+      await loadPendingActions();
+    } catch (error: unknown) {
+      setPendingError(true);
+      console.error("Erreur actions en attente:", error);
+    } finally {
+      setPendingLoading(false);
     }
   };
 
   return (
     <DashboardLayout role="client" userName={clientName} userRole="Client">
+      {loading ? (
+        <DashboardHomeSkeleton withStats={false} />
+      ) : (
       <div className="space-y-4 md:space-y-6">
-        {/* Header - Mobile Optimized */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div>
             <h1 className="text-xl md:text-2xl font-bold">Bonjour, {clientName} 👋</h1>
@@ -259,48 +220,70 @@ export default function ClientDashboard() {
           </div>
         </div>
 
-        {/* Stats Cards - Mobile First Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-          <StatsCard
-            title="Demandes actives"
-            value={stats.active}
-            icon={<FileText className="w-4 h-4 md:w-5 md:h-5" />}
-          />
-          <StatsCard
-            title="En attente de devis"
-            value={stats.pending}
-            icon={<Clock className="w-4 h-4 md:w-5 md:h-5" />}
-          />
-          <StatsCard
-            title="En cours"
-            value={stats.inProgress}
-            icon={<Clock className="w-4 h-4 md:w-5 md:h-5" />}
-          />
-          <StatsCard
-            title="Terminées"
-            value={stats.completed}
-            subtitle="Ce mois"
-            icon={<CheckCircle className="w-4 h-4 md:w-5 md:h-5" />}
-          />
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-          {/* Actions en attente - Mobile Optimized */}
-          {pendingActions.length > 0 && (
-            <Card className="lg:col-span-2 border-orange-200 bg-orange-50/50">
-              <CardHeader className="pb-3 md:pb-6">
-                <CardTitle className="text-base md:text-lg flex items-center gap-2">
-                  <Clock className="w-4 h-4 md:w-5 md:h-5 text-orange-600" />
-                  Actions en attente
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+          <Card className="lg:col-span-2 border-orange-200/80 bg-orange-50/40">
+            <CardHeader className="pb-3 md:pb-4">
+              <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                <Clock className="w-4 h-4 md:w-5 md:h-5 text-orange-600 shrink-0" />
+                Actions en attente
+              </CardTitle>
+              <CardDescription className="text-sm">
+                Ce que vous devez faire maintenant : accepter un devis, signer un contrat ou
+                effectuer un paiement (acompte ou solde).
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {pendingLoading ? (
+                <p className="mb-3 text-sm text-muted-foreground">Chargement de vos actions…</p>
+              ) : null}
+              {pendingLoading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 2 }).map((_, i) => (
+                    <div key={i} className="flex gap-3 rounded-lg border border-orange-200/80 bg-white p-3">
+                      <div className="h-10 flex-1 animate-pulse rounded-md bg-muted/80" />
+                      <div className="h-9 w-28 shrink-0 animate-pulse rounded-md bg-muted/80" />
+                    </div>
+                  ))}
+                </div>
+              ) : pendingError ? (
+                <div className="rounded-lg border border-destructive/25 bg-white p-4 text-center">
+                  <AlertCircle className="mx-auto mb-2 h-8 w-8 text-destructive" />
+                  <p className="text-sm text-muted-foreground">
+                    Impossible de charger vos actions (devis, contrats, paiements).
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 gap-2"
+                    onClick={() => void loadPendingActions()}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Réessayer
+                  </Button>
+                </div>
+              ) : pendingActions.length === 0 ? (
+                <div className="flex items-start gap-3 rounded-lg border border-emerald-200/80 bg-white p-4">
+                  <CheckCircle className="h-5 w-5 shrink-0 text-emerald-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-sm">Tout est à jour</p>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                      Aucun devis à accepter, aucun contrat à signer et aucun paiement en attente.
+                      Vos demandes récentes sont listées ci-dessous.
+                    </p>
+                  </div>
+                </div>
+              ) : (
                 <div className="space-y-2 md:space-y-3">
-                  {pendingActions.map((action, index) => (
-                    <div key={index} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 md:p-4 rounded-lg bg-white border border-orange-200">
+                  {pendingActions.map((action) => (
+                    <div
+                      key={`${action.type}-${action.id}`}
+                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 md:p-4 rounded-lg bg-white border border-orange-200"
+                    >
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{action.title}</p>
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{action.description}</p>
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          {action.description}
+                        </p>
                       </div>
                       <Button asChild size="sm" className="w-full sm:w-auto shrink-0">
                         <Link to={action.link}>
@@ -311,15 +294,19 @@ export default function ClientDashboard() {
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
 
-          {/* Demandes récentes - Mobile Optimized */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-3 md:pb-6">
-              <CardTitle className="text-base md:text-lg">Demandes récentes</CardTitle>
-              <Button variant="ghost" size="sm" asChild>
+          <Card className="lg:col-span-2">
+            <CardHeader className="flex flex-row items-start justify-between gap-2 pb-3 md:pb-4">
+              <div>
+                <CardTitle className="text-base md:text-lg">Demandes récentes</CardTitle>
+                <CardDescription className="mt-1 text-xs sm:text-sm">
+                  Vos 2 dernières demandes — statut, budget, devis reçus et type.
+                </CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" className="shrink-0" asChild>
                 <Link to="/dashboard/client/demandes">
                   <span className="hidden sm:inline">Voir tout</span>
                   <span className="sm:hidden">Tout</span>
@@ -328,36 +315,30 @@ export default function ClientDashboard() {
               </Button>
             </CardHeader>
             <CardContent>
-              {loading ? (
-                <div className="flex items-center justify-center py-6 md:py-8">
-                  <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : recentRequests.length === 0 ? (
-                <div className="text-center py-6 md:py-8 text-muted-foreground text-sm">
-                  Aucune demande pour le moment
+              {recentRequests.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border/80 bg-muted/20 px-4 py-8 text-center">
+                  <FileText className="mx-auto mb-3 h-10 w-10 text-muted-foreground/60" />
+                  <p className="font-medium text-sm">Aucune demande pour le moment</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Publiez une demande pour recevoir des devis de prestataires.
+                  </p>
+                  <Button size="sm" className="mt-4 gap-2" asChild>
+                    <Link to="/dashboard/client/demandes/nouvelle">
+                      <Plus className="h-4 w-4" />
+                      Créer une demande
+                    </Link>
+                  </Button>
                 </div>
               ) : (
-                <div className="space-y-3 md:space-y-4">
+                <div className="grid gap-3 sm:grid-cols-1">
                   {recentRequests.map((request) => (
-                    <div key={request.id} className="flex items-start justify-between gap-3 p-3 rounded-lg bg-muted/50">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{request.title}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          <span className="hidden sm:inline">{request.prestataire || "En recherche de prestataire"} • </span>
-                          {new Date(request.created_at).toLocaleDateString("fr-FR")}
-                        </p>
-                      </div>
-                      <Badge variant={statusLabels[request.status]?.variant || "outline"} className="shrink-0 text-xs">
-                        {statusLabels[request.status]?.label || request.status}
-                      </Badge>
-                    </div>
+                    <ClientRecentDemandeCard key={request.id} demande={request} />
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Actions rapides - Mobile Optimized */}
           <Card>
             <CardHeader className="pb-3 md:pb-6">
               <CardTitle className="text-base md:text-lg">Actions rapides</CardTitle>
@@ -397,6 +378,7 @@ export default function ClientDashboard() {
           </Card>
         </div>
       </div>
+      )}
     </DashboardLayout>
   );
 }

@@ -35,7 +35,7 @@ const ProfileIncompleteAlert = () => {
           </li>
         </ul>
         <Button
-          onClick={() => navigate("/dashboard/prestataire/profil")}
+          onClick={() => navigate("/dashboard/prestataire/compte/profil")}
           className="bg-amber-600 hover:bg-amber-700 text-white"
         >
           Compléter mon profil maintenant

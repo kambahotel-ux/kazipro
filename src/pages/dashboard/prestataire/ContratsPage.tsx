@@ -1,12 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
+import { PrestatairePageShell } from '@/components/prestataire/PrestatairePageShell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { StatsCard } from '@/components/dashboard/StatsCard';
+import { AdminListSkeleton, PageHeaderSkeleton } from '@/components/dashboard/AdminLoadingSkeleton';
+import { PrestataireEmptyState } from '@/components/prestataire/PrestataireEmptyState';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { 
   Search, 
   Eye, 
@@ -17,10 +24,16 @@ import {
   User,
   DollarSign,
   Calendar,
-  Loader
+  MoreHorizontal,
+  X,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { useAbortableFetch } from '@/hooks/useAbortableFetch';
+import { contratsApi } from '@/lib/api';
+import { parsePaginatedMeta, unwrapPaginated } from '@/lib/api-utils';
+import { displayNameFromProfil, getProfil, prestataireIdFromUser } from '@/lib/kazipro-profile';
 import { toast } from 'sonner';
 
 interface Contrat {
@@ -44,125 +57,69 @@ interface Contrat {
   };
 }
 
-export default function ContratsPage() {
+export default function ContratsPage({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [providerName, setProviderName] = useState('Prestataire');
   const [contrats, setContrats] = useState<Contrat[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [totalContrats, setTotalContrats] = useState(0);
+  const PAGE_SIZE = 20;
 
-  useEffect(() => {
-    if (user) {
-      fetchProviderData();
-    }
-  }, [user]);
+  const providerDisplayName = user ? displayNameFromProfil(getProfil(user) ?? {}, user.name || 'Prestataire') : 'Prestataire';
 
-  const fetchProviderData = async () => {
+  useAbortableFetch(Boolean(user), [user, page, searchTerm, filterStatus], async (signal) => {
+    if (!user || signal.aborted) return;
+    await fetchProviderData(page, signal);
+  });
+
+  const fetchProviderData = async (targetPage = 1, signal?: AbortSignal) => {
     if (!user) return;
-
     try {
       setLoading(true);
-
-      // Récupérer l'ID du prestataire
-      const { data: providerData, error: providerError } = await supabase
-        .from('prestataires')
-        .select('id, full_name')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (providerError) throw providerError;
-      
-      if (!providerData) {
+      const profil = getProfil(user);
+      const pid = prestataireIdFromUser(user);
+      if (!profil || !pid) {
         toast.error('Profil prestataire non trouvé');
         return;
       }
-
-      setProviderName(providerData.full_name);
-
-      // Récupérer les contrats du prestataire
-      const { data: contratsData, error: contratsError } = await supabase
-        .from('contrats')
-        .select(`
-          *,
-          clients (
-            full_name
-          )
-        `)
-        .eq('prestataire_id', providerData.id)
-        .order('created_at', { ascending: false });
-
-      if (contratsError) throw contratsError;
-
-      // Enrichir avec les données des devis (depuis les deux tables)
-      if (contratsData) {
-        const enrichedContrats = await Promise.all(
-          contratsData.map(async (contrat) => {
-            // Essayer d'abord dans devis_pro
-            let { data: devisData } = await supabase
-              .from('devis_pro')
-              .select('montant_ttc, titre, description')
-              .eq('id', contrat.devis_id)
-              .maybeSingle();
-
-            // Si pas trouvé, essayer dans devis (ancienne table)
-            if (!devisData) {
-              const { data: oldDevisData } = await supabase
-                .from('devis')
-                .select('montant_ttc, titre, description')
-                .eq('id', contrat.devis_id)
-                .maybeSingle();
-              
-              devisData = oldDevisData;
-            }
-
-            return {
-              ...contrat,
-              devis: devisData
-            };
-          })
-        );
-
-        setContrats(enrichedContrats);
-      } else {
-        setContrats([]);
-      }
-    } catch (error: any) {
-      console.error('Erreur:', error);
-      toast.error('Erreur lors du chargement des contrats');
+      if (signal?.aborted) return;
+      const res = await contratsApi.getAll({
+        page: targetPage,
+        per_page: PAGE_SIZE,
+        search: searchTerm || undefined,
+        statut: filterStatus !== 'all' ? filterStatus : undefined,
+      });
+      const meta = parsePaginatedMeta(res);
+      const contratsData = unwrapPaginated<Record<string, unknown>>(res);
+      const mappedContrats = contratsData.map((contrat) => {
+        const client = contrat.client as Record<string, unknown> | undefined;
+        const devis = contrat.devis as Record<string, unknown> | undefined;
+        const demande = contrat.demande as Record<string, unknown> | undefined;
+        return {
+          ...contrat,
+          clients: client ? { full_name: displayNameFromProfil(client) } : contrat.clients,
+          devis: devis || demande ? {
+            montant_ttc: Number(devis?.montant_ttc ?? 0),
+            titre: String(demande?.titre ?? devis?.numero ?? 'Contrat de prestation'),
+            description: String(devis?.description ?? ''),
+          } : undefined,
+        };
+      });
+      setContrats(mappedContrats as Contrat[]);
+      setPage(meta.current_page || targetPage);
+      setLastPage(Math.max(1, meta.last_page || 1));
+      setTotalContrats(meta.total ?? contratsData.length);
+    } catch (error: unknown) {
+      if (signal?.aborted) return;
+      toast.error(error instanceof Error ? error.message : 'Erreur lors du chargement');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
-  };
-
-  const getStats = () => {
-    const signes = contrats.filter(c => c.statut === 'signe').length;
-    const enAttente = contrats.filter(c => c.statut === 'en_attente').length;
-    const totalMontant = contrats
-      .filter(c => c.statut === 'signe')
-      .reduce((sum, c) => sum + (c.devis?.montant_ttc || 0), 0);
-
-    return [
-      { 
-        title: 'Contrats signés', 
-        value: signes.toString(), 
-        subtitle: 'Actifs', 
-        icon: <CheckCircle className="w-5 h-5" /> 
-      },
-      { 
-        title: 'En attente', 
-        value: enAttente.toString(), 
-        subtitle: 'Signature client', 
-        icon: <Clock className="w-5 h-5" /> 
-      },
-      { 
-        title: 'Valeur totale', 
-        value: `${totalMontant.toLocaleString()} FC`, 
-        subtitle: 'Contrats signés', 
-        icon: <DollarSign className="w-5 h-5" /> 
-      },
-    ];
   };
 
   const getStatusBadge = (statut: string) => {
@@ -201,104 +158,101 @@ export default function ContratsPage() {
     }
   };
 
-  const filteredContrats = contrats.filter(c => {
-    const matchesSearch = 
-      c.numero.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.clients?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.devis?.titre?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || c.statut === filterStatus;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredContrats = contrats;
 
   if (loading) {
     return (
-      <DashboardLayout role="prestataire" userName={providerName} userRole="Prestataire">
-        <div className="flex items-center justify-center h-64">
-          <Loader className="w-8 h-8 animate-spin text-primary" />
+      <PrestatairePageShell embedded={embedded} userName={providerDisplayName} userRole="Prestataire">
+        <div className="space-y-6">
+          <PageHeaderSkeleton withActions />
+          <AdminListSkeleton items={4} />
         </div>
-      </DashboardLayout>
+      </PrestatairePageShell>
     );
   }
 
+  const hasActiveFilters = searchTerm.trim().length > 0 || filterStatus !== 'all';
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setFilterStatus('all');
+    setPage(1);
+  };
+
   return (
-    <DashboardLayout role="prestataire" userName={providerName} userRole="Prestataire">
+    <PrestatairePageShell embedded={embedded} userName={providerDisplayName} userRole="Prestataire">
       <div className="space-y-6">
-        {/* Header */}
+        {!embedded && (
         <div>
           <h1 className="text-xl sm:text-2xl font-bold">Mes Contrats</h1>
           <p className="text-sm sm:text-base text-muted-foreground">Gérez vos contrats et suivez leur statut</p>
         </div>
+        )}
 
-        {/* Stats - Mobile: Single card with horizontal layout, Desktop: Separate cards */}
-        <div className="block sm:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <Button
+            variant={showFilters ? 'default' : 'outline'}
+            onClick={() => setShowFilters((v) => !v)}
+            className="gap-2"
+          >
+            <Search className="w-4 h-4" />
+            {showFilters ? 'Masquer les filtres' : 'Afficher les filtres'}
+          </Button>
+          {hasActiveFilters && !showFilters ? (
+            <Badge variant="secondary">{totalContrats} résultat(s)</Badge>
+          ) : null}
+        </div>
+        {showFilters ? (
           <Card>
-            <CardContent className="p-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="text-center">
-                  <p className="text-lg font-bold">{getStats()[0].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[0].title}</p>
+            <CardContent className="space-y-3 p-4">
+              <div className="grid gap-3 sm:grid-cols-[1fr_220px]">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                  <Input
+                    placeholder="Rechercher un contrat..."
+                    className="pl-10 text-sm"
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setPage(1);
+                    }}
+                  />
                 </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold">{getStats()[1].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[1].title}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold">{getStats()[2].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[2].title}</p>
-                </div>
+                <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v); setPage(1); }}>
+                  <SelectTrigger className="w-full text-sm">
+                    <SelectValue placeholder="Statut" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les statuts</SelectItem>
+                    <SelectItem value="en_attente">En attente</SelectItem>
+                    <SelectItem value="signe">Signés</SelectItem>
+                    <SelectItem value="annule">Annulés</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+              {hasActiveFilters ? (
+                <Button variant="ghost" size="sm" onClick={resetFilters}>
+                  <X className="w-4 h-4 mr-2" />
+                  Réinitialiser les filtres
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
-        </div>
-        
-        <div className="hidden sm:grid sm:grid-cols-1 md:grid-cols-3 gap-4">
-          {getStats().map((stat) => (
-            <StatsCard key={stat.title} {...stat} />
-          ))}
-        </div>
-
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input 
-              placeholder="Rechercher un contrat..." 
-              className="pl-10 text-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-full sm:w-[180px] text-sm">
-              <SelectValue placeholder="Statut" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les statuts</SelectItem>
-              <SelectItem value="en_attente">En attente</SelectItem>
-              <SelectItem value="signe">Signés</SelectItem>
-              <SelectItem value="annule">Annulés</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        ) : null}
 
         {/* Contrats List */}
         {filteredContrats.length === 0 ? (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p className="text-muted-foreground">
-                {searchTerm || filterStatus !== 'all' 
-                  ? 'Aucun contrat trouvé avec ces critères' 
-                  : 'Aucun contrat pour le moment'}
-              </p>
-            </CardContent>
-          </Card>
+          <PrestataireEmptyState
+            context="contrats"
+            hasActiveFilters={hasActiveFilters}
+            onResetFilters={resetFilters}
+          />
         ) : (
           <div className="space-y-4">
             {filteredContrats.map((contrat) => (
               <Card key={contrat.id}>
                 <CardContent className="p-6">
-                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                     <div className="space-y-3 flex-1">
                       {/* Header */}
                       <div className="flex items-start gap-3 flex-wrap">
@@ -358,7 +312,7 @@ export default function ContratsPage() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+                    <div className="flex items-center gap-2 sm:justify-end">
                       <Button
                         variant="outline"
                         onClick={() => handleDownloadContrat(contrat)}
@@ -367,22 +321,56 @@ export default function ContratsPage() {
                         <Eye className="w-4 h-4 mr-2" />
                         Voir
                       </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleDownloadContrat(contrat)}
-                        className="w-full sm:w-auto"
-                      >
-                        <Download className="w-4 h-4 mr-2" />
-                        PDF
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="icon" className="h-9 w-9">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleDownloadContrat(contrat)} className="gap-2">
+                            <Eye className="w-4 h-4" />
+                            Voir le contrat
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDownloadContrat(contrat)} className="gap-2">
+                            <Download className="w-4 h-4" />
+                            Télécharger PDF
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             ))}
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-sm text-muted-foreground">
+                Page {page} sur {lastPage} ({totalContrats} contrat(s))
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Précédent
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= lastPage}
+                  onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
+                >
+                  Suivant
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>
-    </DashboardLayout>
+    </PrestatairePageShell>
   );
 }

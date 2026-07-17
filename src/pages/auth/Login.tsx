@@ -5,13 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Wrench, Phone, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { cacheUserRole, defaultDashboardForRole, resolveUserRoleSafe } from "@/lib/user-role";
 import { toast } from "sonner";
 import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { signIn } = useAuth();
+  const { signIn, signOut } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,42 +21,20 @@ const Login = () => {
     e.preventDefault();
     try {
       setLoading(true);
-      await signIn(email, password);
-      
-      // Check if user is admin
-      if (email === "admin@kazipro.com") {
-        toast.success("Connexion réussie !");
-        navigate("/dashboard/admin");
-        return;
-      }
-
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        toast.error("Erreur lors de la récupération de l'utilisateur");
-        return;
-      }
-
-      // Check if user is a provider
-      const { data: providerData } = await supabase
-        .from("prestataires")
-        .select("id, verified")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (providerData) {
-        // Rediriger vers le dashboard, l'alerte s'affichera si nécessaire
-        toast.success("Connexion réussie !");
-        navigate("/dashboard/prestataire");
-        return;
-      }
-
-      // Otherwise, redirect to client dashboard
+      const appUser = await signIn(email, password);
+      const role = await resolveUserRoleSafe(appUser);
       toast.success("Connexion réussie !");
-      navigate("/dashboard/client");
-    } catch (error: any) {
-      toast.error(error.message || "Erreur de connexion");
+      if (!role) {
+        await signOut();
+        toast.error("Profil introuvable pour ce compte. Veuillez contacter le support.");
+        return;
+      }
+      cacheUserRole(String(appUser.id), role);
+      navigate(defaultDashboardForRole(role));
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Erreur de connexion";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

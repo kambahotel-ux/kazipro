@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Download, TrendingUp, Users, Briefcase, DollarSign, AlertCircle, Loader2 } from "lucide-react";
+import { Download, Users, Briefcase, DollarSign, AlertCircle, Coins } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { adminApi } from "@/lib/api";
 import { toast } from "sonner";
 
 interface Stats {
@@ -13,10 +14,69 @@ interface Stats {
   totalProviders: number;
   totalRequests: number;
   totalRevenue: number;
+  platformEarnings: number;
+  platformEarningsMissions: number;
+  platformEarningsLocation: number;
   activeMissions: number;
   disputes: number;
   userGrowth: number;
   revenueGrowth: number;
+  completedMissions?: number;
+}
+
+function ReportsPageSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Card key={i}>
+            <CardContent className="pt-6">
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-9 w-24" />
+                <Skeleton className="h-3 w-28" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <Card key={i}>
+            <CardHeader>
+              <Skeleton className="h-5 w-32" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {Array.from({ length: 3 }).map((__, j) => (
+                <div key={j} className="flex items-center justify-between">
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <CardHeader className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-9 w-32" />
+            <Skeleton className="h-9 w-28" />
+            <Skeleton className="h-9 w-24" />
+            <Skeleton className="h-9 w-20" />
+          </div>
+          <Skeleton className="h-5 w-48" />
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 export default function ReportsPage() {
@@ -36,42 +96,20 @@ export default function ReportsPage() {
       setLoading(true);
 
       // Fetch clients count
-      const { count: clientsCount } = await supabase
-        .from("clients")
-        .select("*", { count: "exact", head: true });
-
-      // Fetch prestataires count
-      const { count: prestatairesCount } = await supabase
-        .from("prestataires")
-        .select("*", { count: "exact", head: true });
-
-      // Fetch demandes count
-      const { count: demandesCount } = await supabase
-        .from("demandes")
-        .select("*", { count: "exact", head: true });
-
-      // Fetch missions count
-      const { count: missionsCount } = await supabase
-        .from("missions")
-        .select("*", { count: "exact", head: true });
-
-      // Fetch paiements sum
-      const { data: paiementsData } = await supabase
-        .from("paiements")
-        .select("montant")
-        .eq("statut", "completed");
-
-      const totalRevenue = (paiementsData || []).reduce((sum, p) => sum + (p.montant || 0), 0);
-
+      const s = await adminApi.getStats();
       setStats({
-        totalUsers: (clientsCount || 0) + (prestatairesCount || 0),
-        totalProviders: prestatairesCount || 0,
-        totalRequests: demandesCount || 0,
-        totalRevenue,
-        activeMissions: missionsCount || 0,
-        disputes: 0,
-        userGrowth: 12,
-        revenueGrowth: 8,
+        totalUsers: s.users ?? 0,
+        totalProviders: s.prestataires ?? 0,
+        totalRequests: s.demandes ?? 0,
+        totalRevenue: s.ca_total ?? 0,
+        platformEarnings: s.commissions_prelevees ?? 0,
+        platformEarningsMissions: s.commissions_missions ?? 0,
+        platformEarningsLocation: s.commissions_location ?? 0,
+        activeMissions: s.contrats_actifs ?? 0,
+        completedMissions: s.paiements_valides ?? 0,
+        disputes: s.litiges_ouverts ?? 0,
+        userGrowth: 0,
+        revenueGrowth: 0,
       });
     } catch (error: any) {
       toast.error("Erreur lors du chargement des statistiques");
@@ -106,41 +144,50 @@ export default function ReportsPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          </div>
+          <ReportsPageSkeleton />
         ) : stats ? (
           <>
             {/* Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <Card>
                 <CardContent className="pt-6">
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Utilisateurs Totaux</p>
                       <p className="text-3xl font-bold mt-2">{stats.totalUsers}</p>
-                      <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
-                        <TrendingUp className="w-3 h-3" />
-                        +{stats.userGrowth}% ce mois
-                      </p>
                     </div>
                     <Users className="w-8 h-8 text-blue-500 opacity-20" />
                   </div>
                 </CardContent>
               </Card>
 
+              <Card className="border-emerald-500/30 bg-emerald-500/5">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Gains plateforme (total)</p>
+                      <p className="text-3xl font-bold mt-2 text-emerald-700 dark:text-emerald-400">
+                        {stats.platformEarnings.toLocaleString("fr-FR")} FC
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Missions {stats.platformEarningsMissions.toLocaleString("fr-FR")} · Location{" "}
+                        {stats.platformEarningsLocation.toLocaleString("fr-FR")} FC
+                      </p>
+                    </div>
+                    <Coins className="w-8 h-8 text-emerald-600 opacity-30" />
+                  </div>
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardContent className="pt-6">
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">Revenus Totaux</p>
+                      <p className="text-sm text-muted-foreground">Volume des paiements</p>
                       <p className="text-3xl font-bold mt-2">
-                        {(stats.totalRevenue / 1000000).toFixed(1)}M
+                        {(stats.totalRevenue / 1000000).toFixed(1)}M FC
                       </p>
-                      <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
-                        <TrendingUp className="w-3 h-3" />
-                        +{stats.revenueGrowth}% ce mois
-                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">Montants clients (brut)</p>
                     </div>
                     <DollarSign className="w-8 h-8 text-green-500 opacity-20" />
                   </div>
@@ -149,13 +196,11 @@ export default function ReportsPage() {
 
               <Card>
                 <CardContent className="pt-6">
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Missions Actives</p>
                       <p className="text-3xl font-bold mt-2">{stats.activeMissions}</p>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        En cours de réalisation
-                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">En cours de réalisation</p>
                     </div>
                     <Briefcase className="w-8 h-8 text-purple-500 opacity-20" />
                   </div>

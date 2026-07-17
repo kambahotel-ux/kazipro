@@ -21,7 +21,7 @@ export default function PrestataireInfoCard({
   return (
     <Card>
       <CardHeader className="pb-3 md:pb-6">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex-1 min-w-0">
             <CardTitle className="text-lg md:text-2xl truncate">{displayName}</CardTitle>
             <CardDescription className="mt-1 md:mt-2 text-sm">

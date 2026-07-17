@@ -1,50 +1,28 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { isSuperAdminEmail } from '@/lib/user-role'
 
 interface AdminRouteProps {
   children: React.ReactNode
 }
 
 export function AdminRoute({ children }: AdminRouteProps) {
-  const { session, loading, user } = useAuth()
+  const { user, loading } = useAuth()
   const [isAdmin, setIsAdmin] = useState(false)
   const [checkingAdmin, setCheckingAdmin] = useState(true)
 
   useEffect(() => {
-    const checkAdminStatus = async () => {
-      if (!user) {
-        setCheckingAdmin(false)
-        return
-      }
-
-      try {
-        // Check if user is admin by email
-        const adminEmails = ['admin@kazipro.com']
-        
-        if (adminEmails.includes(user.email || '')) {
-          setIsAdmin(true)
-        } else {
-          // Optionally check in database for admin role
-          const { data: clientData } = await supabase
-            .from('clients')
-            .select('role')
-            .eq('email', user.email)
-            .single()
-
-          if (clientData?.role === 'admin') {
-            setIsAdmin(true)
-          }
-        }
-      } catch (error) {
-        console.error('Error checking admin status:', error)
-      } finally {
-        setCheckingAdmin(false)
-      }
+    if (!user) {
+      setIsAdmin(false)
+      setCheckingAdmin(false)
+      return
     }
 
-    checkAdminStatus()
+    const admin =
+      user.role === 'admin' || isSuperAdminEmail(user.email)
+    setIsAdmin(admin)
+    setCheckingAdmin(false)
   }, [user])
 
   if (loading || checkingAdmin) {
@@ -58,7 +36,7 @@ export function AdminRoute({ children }: AdminRouteProps) {
     )
   }
 
-  if (!session) {
+  if (!user) {
     return <Navigate to="/connexion" replace />
   }
 

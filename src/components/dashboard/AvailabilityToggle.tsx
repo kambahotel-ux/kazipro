@@ -2,44 +2,51 @@ import { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { supabase } from '@/lib/supabase';
+import { prestatairesApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 interface AvailabilityToggleProps {
   providerId: string | null;
+  /** Évite un GET /prestataires/:id au montage si déjà connu via /me */
+  initialDisponible?: boolean;
 }
 
-export const AvailabilityToggle = ({ providerId }: AvailabilityToggleProps) => {
-  const [isAvailable, setIsAvailable] = useState(false);
-  const [loading, setLoading] = useState(true);
+export const AvailabilityToggle = ({
+  providerId,
+  initialDisponible,
+}: AvailabilityToggleProps) => {
+  const [isAvailable, setIsAvailable] = useState(initialDisponible ?? false);
+  const [loading, setLoading] = useState(initialDisponible === undefined);
   const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
-    if (providerId) {
-      fetchAvailability();
-    }
-  }, [providerId]);
-
-  const fetchAvailability = async () => {
-    if (!providerId) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('prestataires')
-        .select('is_online')
-        .eq('id', providerId)
-        .single();
-
-      if (error) throw error;
-
-      setIsAvailable(data?.is_online || false);
-    } catch (error) {
-      console.error('Erreur lors du chargement de la disponibilité:', error);
-    } finally {
+    if (initialDisponible !== undefined) {
+      setIsAvailable(!!initialDisponible);
       setLoading(false);
+      return;
     }
-  };
+    if (!providerId) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await prestatairesApi.getById(providerId);
+        if (!cancelled) setIsAvailable(!!data?.disponible);
+      } catch (error) {
+        console.error('Erreur lors du chargement de la disponibilité:', error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [providerId, initialDisponible]);
 
   const handleToggle = async (checked: boolean) => {
     if (!providerId || updating) return;
@@ -47,29 +54,19 @@ export const AvailabilityToggle = ({ providerId }: AvailabilityToggleProps) => {
     setUpdating(true);
 
     try {
-      const { error } = await supabase
-        .from('prestataires')
-        .update({
-          is_online: checked,
-          last_seen: new Date().toISOString()
-        })
-        .eq('id', providerId);
-
-      if (error) throw error;
-
+      await prestatairesApi.update(providerId, { disponible: checked });
       setIsAvailable(checked);
-      
+
       if (checked) {
         toast.success('Vous êtes maintenant disponible', {
-          description: 'Les clients peuvent voir que vous êtes en ligne'
+          description: 'Les clients peuvent voir que vous êtes en ligne',
         });
       } else {
         toast.info('Vous êtes maintenant indisponible', {
-          description: 'Les clients ne verront pas votre statut en ligne'
+          description: 'Les clients ne verront pas votre statut en ligne',
         });
       }
-    } catch (error: any) {
-      console.error('Erreur lors de la mise à jour:', error);
+    } catch {
       toast.error('Erreur lors de la mise à jour de votre disponibilité');
     } finally {
       setUpdating(false);
@@ -97,9 +94,11 @@ export const AvailabilityToggle = ({ providerId }: AvailabilityToggleProps) => {
       <CardContent className="p-3 md:p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
-            <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shrink-0 ${
-              isAvailable ? 'bg-green-100' : 'bg-gray-100'
-            }`}>
+            <div
+              className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shrink-0 ${
+                isAvailable ? 'bg-green-100' : 'bg-gray-100'
+              }`}
+            >
               {updating ? (
                 <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin text-gray-600" />
               ) : isAvailable ? (
@@ -109,8 +108,8 @@ export const AvailabilityToggle = ({ providerId }: AvailabilityToggleProps) => {
               )}
             </div>
             <div className="space-y-0.5 flex-1 min-w-0">
-              <Label 
-                htmlFor="availability-toggle" 
+              <Label
+                htmlFor="availability-toggle"
                 className={`text-xs md:text-sm font-medium cursor-pointer block truncate ${
                   isAvailable ? 'text-green-700' : 'text-foreground'
                 }`}
@@ -118,10 +117,9 @@ export const AvailabilityToggle = ({ providerId }: AvailabilityToggleProps) => {
                 {isAvailable ? 'Vous êtes disponible' : 'Vous êtes indisponible'}
               </Label>
               <p className="text-xs text-muted-foreground line-clamp-2">
-                {isAvailable 
+                {isAvailable
                   ? 'Les clients peuvent voir que vous êtes en ligne'
-                  : 'Les clients ne verront pas votre statut en ligne'
-                }
+                  : 'Les clients ne verront pas votre statut en ligne'}
               </p>
             </div>
           </div>
@@ -133,7 +131,7 @@ export const AvailabilityToggle = ({ providerId }: AvailabilityToggleProps) => {
             className="data-[state=checked]:bg-green-600 shrink-0"
           />
         </div>
-        
+
         {isAvailable && (
           <div className="mt-2 md:mt-3 pt-2 md:pt-3 border-t border-green-200">
             <div className="flex items-center gap-2 text-xs text-green-700">

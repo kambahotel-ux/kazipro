@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Camera, Calendar, Loader2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { prestatairesApi } from "@/lib/api";
+import { unwrapPortfolio } from "@/lib/api-utils";
 
 interface PortfolioItem {
   id: string;
@@ -31,14 +32,12 @@ export default function PrestatairePortfolio({ prestataireId }: PrestatairePortf
   const fetchPortfolio = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("portfolio_items")
-        .select("*")
-        .eq("prestataire_id", prestataireId)
-        .order("date_realisation", { ascending: false });
-
-      if (error) throw error;
-      setPortfolio(data || []);
+      const res = await prestatairesApi.getPortfolio(prestataireId);
+      const items = unwrapPortfolio<PortfolioItem>(res).map((p) => ({
+        ...p,
+        images: (p as PortfolioItem & { photos?: string[] }).photos ?? p.images ?? [],
+      }));
+      setPortfolio(items);
     } catch (error) {
       console.error("Error fetching portfolio:", error);
     } finally {

@@ -1,15 +1,22 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { useAbortableFetch } from "@/hooks/useAbortableFetch";
+import { AdminListSkeleton } from "@/components/dashboard/AdminLoadingSkeleton";
+import { PrestataireEmptyState } from "@/components/prestataire/PrestataireEmptyState";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Search, Send, Paperclip, MoreVertical, Phone, Video, Trash2, Archive, Pin, Loader2 } from "lucide-react";
+import { Search, Send, Paperclip, MoreVertical, Phone, Video, Trash2, Archive, Pin, Loader2, ArrowLeft } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { messagesApi } from "@/lib/api";
+import { unwrapPaginated } from "@/lib/api-utils";
+import { displayNameFromProfil, getProfil } from "@/lib/kazipro-profile";
 import { toast } from "sonner";
+import { readMessagingSearchParams } from "@/lib/messaging";
 
 interface Conversation {
   id: string;
@@ -32,101 +39,107 @@ interface Message {
 
 export default function MessagesPage() {
   const { user } = useAuth();
-  const [providerName, setProviderName] = useState("Prestataire");
+  const [searchParams] = useSearchParams();
+  const { partnerId, demandeId, name: partnerName, mission: missionTitle } =
+    readMessagingSearchParams(searchParams);
+  const pendingDemandeId = useRef<string | null>(demandeId);
+  if (demandeId) pendingDemandeId.current = demandeId;
+  const providerDisplayName = user
+    ? displayNameFromProfil(getProfil(user) ?? {}, user.name || "Prestataire")
+    : "Prestataire";
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [newMessage, setNewMessage] = useState("");
   const [showOptions, setShowOptions] = useState(false);
+  const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sendingMessage, setSendingMessage] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      fetchProviderName();
-      fetchConversations();
-    }
-  }, [user]);
-
-  const fetchProviderName = async () => {
-    if (!user) return;
-    try {
-      const { data } = await supabase
-        .from("prestataires")
-        .select("full_name")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (data?.full_name) {
-        setProviderName(data.full_name);
-      }
-    } catch (error) {
-      console.error("Error fetching provider name:", error);
-    }
-  };
+  useAbortableFetch(Boolean(user), [user], async (signal) => {
+    if (!user || signal.aborted) return;
+    await fetchConversations(signal);
+  });
 
   useEffect(() => {
     if (selectedConversation) {
-      fetchMessages(selectedConversation.id);
+      void fetchMessages(selectedConversation.id);
     }
-  }, [selectedConversation]);
+  }, [selectedConversation?.id]);
 
-  const fetchConversations = async () => {
+  useEffect(() => {
+    if (!partnerId || loading) return;
+    setConversations((prev) => {
+      const existing = prev.find((c) => c.id === partnerId);
+      if (existing) {
+        setSelectedConversation(existing);
+        setMobileThreadOpen(true);
+        return prev;
+      }
+      const draft: Conversation = {
+        id: partnerId,
+        client_id: partnerId,
+        prestataire_id: String(user?.id ?? ""),
+        client_name: partnerName ?? "Client",
+        last_message: "",
+        last_message_time: "",
+        unread_count: 0,
+        mission_title: missionTitle ?? "",
+      };
+      setSelectedConversation(draft);
+      setMessages([]);
+      setMobileThreadOpen(true);
+      return [draft, ...prev];
+    });
+  }, [partnerId, partnerName, missionTitle, loading, user?.id]);
+
+  const fetchConversations = async (signal?: AbortSignal) => {
     if (!user) return;
     try {
       setLoading(true);
-      // Fetch conversations where user is the prestataire
-      const { data, error } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("prestataire_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      // Group messages by conversation
-      const convMap = new Map<string, Conversation>();
-      data?.forEach((msg: any) => {
-        const key = msg.client_id;
-        if (!convMap.has(key)) {
-          convMap.set(key, {
-            id: key,
-            client_id: msg.client_id,
-            prestataire_id: msg.prestataire_id,
-            client_name: msg.client_name || "Client",
-            last_message: msg.content,
-            last_message_time: msg.created_at,
-            unread_count: 0,
-            mission_title: msg.mission_title || "Mission",
-          });
-        }
+      const res = await messagesApi.getConversations();
+      const rows = Array.isArray(res) ? res : [];
+      const convs: Conversation[] = rows.map((item: Record<string, unknown>) => {
+        const partner = item.partenaire as Record<string, unknown> | undefined;
+        const last = item.dernier_message as Record<string, unknown> | undefined;
+        const partnerId = String(partner?.id ?? '');
+        return {
+          id: partnerId,
+          client_id: partnerId,
+          prestataire_id: String(user.id),
+          client_name: displayNameFromProfil(partner?.client as Record<string, unknown> ?? partner ?? {}, partner?.name as string ?? 'Client'),
+          last_message: String(last?.contenu ?? last?.content ?? ''),
+          last_message_time: String(last?.created_at ?? new Date().toISOString()),
+          unread_count: Number(item.non_lus ?? 0),
+          mission_title: String((last?.demande as { titre?: string })?.titre ?? 'Mission'),
+        };
       });
-
-      setConversations(Array.from(convMap.values()));
-      if (convMap.size > 0) {
-        setSelectedConversation(Array.from(convMap.values())[0]);
+      if (signal?.aborted) return;
+      setConversations(convs);
+      if (convs.length > 0) setSelectedConversation((prev) => prev ?? convs[0]);
+    } catch (error: unknown) {
+      if (!signal?.aborted) {
+        toast.error("Erreur lors du chargement des conversations");
+        console.error(error);
       }
-    } catch (error: any) {
-      toast.error("Erreur lors du chargement des conversations");
-      console.error(error);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
   const fetchMessages = async (conversationId: string) => {
     if (!user) return;
     try {
-      const { data, error } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("client_id", conversationId)
-        .eq("prestataire_id", user.id)
-        .order("created_at", { ascending: true });
-
-      if (error) throw error;
-      setMessages(data || []);
-    } catch (error: any) {
+      const res = await messagesApi.getMessages(conversationId);
+      const rows = unwrapPaginated<Record<string, unknown>>(res);
+      setMessages(rows.map((m) => ({
+        id: String(m.id),
+        sender_id: String(m.expediteur_id ?? m.sender_id ?? ''),
+        content: String(m.contenu ?? m.content ?? ''),
+        created_at: String(m.created_at ?? ''),
+        sender_type: String(m.expediteur_id) === String(user.id) ? 'prestataire' as const : 'client' as const,
+      })));
+    } catch (error: unknown) {
       toast.error("Erreur lors du chargement des messages");
       console.error(error);
     }
@@ -137,22 +150,17 @@ export default function MessagesPage() {
 
     try {
       setSendingMessage(true);
-      const { error } = await supabase.from("messages").insert([
-        {
-          client_id: selectedConversation.client_id,
-          prestataire_id: user.id,
-          content: newMessage,
-          sender_id: user.id,
-          sender_type: "prestataire",
-          created_at: new Date().toISOString(),
-        },
-      ]);
-
-      if (error) throw error;
+      await messagesApi.send(selectedConversation.client_id, {
+        contenu: newMessage.trim(),
+        ...(pendingDemandeId.current
+          ? { demande_id: pendingDemandeId.current }
+          : {}),
+      });
       setNewMessage("");
       await fetchMessages(selectedConversation.id);
+      await fetchConversations();
       toast.success("Message envoyé");
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Erreur lors de l'envoi du message");
       console.error(error);
     } finally {
@@ -161,12 +169,12 @@ export default function MessagesPage() {
   };
 
   return (
-    <DashboardLayout role="prestataire" userName={providerName} userRole="Prestataire">
+    <DashboardLayout role="prestataire" userName={providerDisplayName} userRole="Prestataire">
       <div className="h-[calc(100vh-180px)]">
         <Card className="h-full">
           <div className="flex h-full">
             {/* Conversations list */}
-            <div className="w-full md:w-80 border-r border-border flex flex-col">
+            <div className={`${mobileThreadOpen ? "hidden md:flex" : "flex"} w-full md:w-80 border-r border-border flex-col`}>
               <div className="p-4 border-b border-border">
                 <h2 className="font-semibold mb-3">Messages</h2>
                 <div className="relative">
@@ -176,19 +184,22 @@ export default function MessagesPage() {
               </div>
               <ScrollArea className="flex-1">
                 {loading ? (
-                  <div className="flex items-center justify-center h-32">
-                    <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                  <div className="p-3">
+                    <AdminListSkeleton items={3} />
                   </div>
                 ) : conversations.length === 0 ? (
-                  <div className="p-4 text-center text-muted-foreground">
-                    Aucune conversation
+                  <div className="p-3">
+                    <PrestataireEmptyState context="messages" hasActiveFilters={false} />
                   </div>
                 ) : (
                   <div className="divide-y divide-border">
                     {conversations.map((conv) => (
                       <button
                         key={conv.id}
-                        onClick={() => setSelectedConversation(conv)}
+                        onClick={() => {
+                          setSelectedConversation(conv);
+                          setMobileThreadOpen(true);
+                        }}
                         className={`w-full p-4 text-left hover:bg-muted/50 transition-colors ${
                           selectedConversation?.id === conv.id ? "bg-muted" : ""
                         }`}
@@ -219,9 +230,15 @@ export default function MessagesPage() {
             </div>
 
             {/* Chat area */}
-            <div className="hidden md:flex flex-col flex-1">
+            <div className={`${mobileThreadOpen ? "flex" : "hidden md:flex"} flex-col flex-1`}>
               {selectedConversation ? (
                 <>
+                  <div className="md:hidden px-4 pt-3">
+                    <Button variant="ghost" size="sm" onClick={() => setMobileThreadOpen(false)}>
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      Retour aux conversations
+                    </Button>
+                  </div>
                   {/* Chat header */}
                   <div className="p-4 border-b border-border flex items-center justify-between">
                     <div className="flex items-center gap-3 flex-1">
@@ -332,8 +349,15 @@ export default function MessagesPage() {
                   </div>
                 </>
               ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  Sélectionnez une conversation
+                <div className="flex flex-col items-center justify-center h-full gap-2 px-6 text-center text-muted-foreground">
+                  <p>Choisissez un contact dans la liste</p>
+                  <p className="text-xs">
+                    Ou ouvrez une demande depuis{" "}
+                    <Link to="/dashboard/prestataire/marche/opportunites" className="text-primary underline">
+                      Opportunités
+                    </Link>{" "}
+                    puis « Contacter ».
+                  </p>
                 </div>
               )}
             </div>

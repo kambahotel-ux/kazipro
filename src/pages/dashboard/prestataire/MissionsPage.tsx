@@ -1,16 +1,72 @@
-import { useState, useEffect } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { PrestatairePageShell } from "@/components/prestataire/PrestatairePageShell";
+import { MissionListCard } from "@/components/prestataire/MissionListCard";
+import { PrestataireEmptyState } from "@/components/prestataire/PrestataireEmptyState";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Eye, CheckCircle, Clock, AlertCircle, MapPin, DollarSign, Loader, User, Calendar, FileText, Image as ImageIcon } from "lucide-react";
-import { StatsCard } from "@/components/dashboard/StatsCard";
+import { FormDrawer } from "@/components/ui/FormDrawer";
+import { SlideToConfirm } from "@/components/ui/SlideToConfirm";
+import {
+  Search,
+  MapPin,
+  Loader,
+  User,
+  FileText,
+  Image as ImageIcon,
+  Filter,
+  Sparkles,
+  X,
+} from "lucide-react";
+import { AdminListSkeleton } from "@/components/dashboard/AdminLoadingSkeleton";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { missionsApi } from "@/lib/api";
+import { unwrapPaginated } from "@/lib/api-utils";
+import { displayNameFromProfil, getProfil, prestataireIdFromUser } from "@/lib/kazipro-profile";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import {
+  dedupeMissionsByContrat,
+  getMissionStatus,
+  MISSION_STATUS_LABELS,
+  prestataireCompleteMissionStatus,
+  syncDemandeWithMissionStatus,
+} from "@/lib/missions";
+
+type MissionStatusFilter = "all" | "pending" | "in_progress" | "completed" | "cancelled";
+
+const MISSION_STATUS_STYLES: Record<
+  string,
+  { label: string; badge: string; accent: string }
+> = {
+  pending: {
+    label: "En attente",
+    badge: "bg-warning/15 text-warning border-warning/30",
+    accent: "border-l-warning",
+  },
+  in_progress: {
+    label: "En cours",
+    badge: "bg-info/15 text-info border-info/30",
+    accent: "border-l-info",
+  },
+  completed: {
+    label: "Complétée",
+    badge: "bg-success/15 text-success border-success/30",
+    accent: "border-l-success",
+  },
+  cancelled: {
+    label: "Annulée",
+    badge: "bg-destructive/15 text-destructive border-destructive/30",
+    accent: "border-l-destructive",
+  },
+};
+
+function missionTitle(m: Mission): string {
+  return m.demandes?.titre || m.demandes?.title || "Mission";
+}
+
 
 interface Mission {
   id: string;
@@ -19,6 +75,7 @@ interface Mission {
   client_id: string;
   prestataire_id: string;
   status: string;
+  statut?: string;
   start_date: string;
   end_date: string;
   created_at: string;
@@ -50,7 +107,7 @@ interface Mission {
   };
 }
 
-export default function MissionsPage() {
+export default function MissionsPage({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
   const [providerName, setProviderName] = useState("Prestataire");
   const [missions, setMissions] = useState<Mission[]>([]);
@@ -58,7 +115,8 @@ export default function MissionsPage() {
   const [selectedMission, setSelectedMission] = useState<Mission | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<MissionStatusFilter>("all");
+  const [showFilters, setShowFilters] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [newStatus, setNewStatus] = useState("");
 
@@ -71,96 +129,35 @@ export default function MissionsPage() {
 
   const fetchProviderName = async () => {
     if (!user) return;
-    try {
-      const { data } = await supabase
-        .from("prestataires")
-        .select("full_name")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (data?.full_name) {
-        setProviderName(data.full_name);
-      }
-    } catch (error) {
-      console.error("Error fetching provider name:", error);
-    }
+    const profil = getProfil(user);
+    if (profil) setProviderName(displayNameFromProfil(profil, user.name || "Prestataire"));
   };
 
   const fetchMissions = async () => {
     if (!user) return;
-
     try {
       setLoading(true);
-
-      // Get prestataire ID
-      const { data: prestataireData } = await supabase
-        .from("prestataires")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!prestataireData) {
+      if (!prestataireIdFromUser(user)) {
         setMissions([]);
         return;
       }
-
-      // Fetch missions for this prestataire
-      const { data, error } = await supabase
-        .from("missions")
-        .select(`
-          *,
-          devis (
-            montant_ttc,
-            amount,
-            titre,
-            description,
-            delai_execution,
-            conditions_paiement,
-            devise
-          ),
-          demandes (
-            titre,
-            title,
-            description,
-            localisation,
-            location,
-            budget,
-            budget_min,
-            budget_max,
-            urgence,
-            urgency,
-            images,
-            client_id,
-            clients (
-              full_name
-            )
-          )
-        `)
-        .eq("prestataire_id", prestataireData.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setMissions(data || []);
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors du chargement des missions");
+      const res = await missionsApi.getAll({ per_page: 100 });
+      const data = unwrapPaginated<Mission>(res);
+      setMissions(dedupeMissionsByContrat(data));
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Erreur lors du chargement des missions");
     } finally {
       setLoading(false);
     }
   };
 
-  const getStats = () => {
-    const inProgress = missions.filter(m => m.status === "in_progress").length;
-    const completed = missions.filter(m => m.status === "completed").length;
-    const totalEarnings = missions
-      .filter(m => m.status === "completed")
-      .reduce((sum, m) => sum + (m.devis?.montant_ttc || m.devis?.amount || 0), 0);
-
-    return [
-      { title: "Missions en cours", value: inProgress.toString(), subtitle: "Actives", icon: <Clock className="w-5 h-5" /> },
-      { title: "Missions complétées", value: completed.toString(), subtitle: "Total", icon: <CheckCircle className="w-5 h-5" /> },
-      { title: "Revenus générés", value: `${totalEarnings.toLocaleString()} FC`, subtitle: "Total", icon: <DollarSign className="w-5 h-5" /> },
-    ];
-  };
+  const statusChips: { key: MissionStatusFilter; label: string }[] = [
+    { key: "all", label: "Toutes" },
+    { key: "pending", label: "En attente" },
+    { key: "in_progress", label: "En cours" },
+    { key: "completed", label: "Complétées" },
+    { key: "cancelled", label: "Annulées" },
+  ];
 
   const getUrgencyBadge = (urgency?: string) => {
     if (urgency === "urgent") {
@@ -178,21 +175,32 @@ export default function MissionsPage() {
     try {
       setUpdatingStatus(true);
 
-      const { error } = await supabase
-        .from("missions")
-        .update({ 
-          status: newStatus,
-          end_date: newStatus === "completed" ? new Date().toISOString() : null
-        })
-        .eq("id", selectedMission.id);
+      const statusToSave =
+        newStatus === "completed"
+          ? prestataireCompleteMissionStatus()
+          : newStatus;
 
-      if (error) throw error;
+      if (newStatus === "completed") {
+        await missionsApi.terminer(selectedMission.id, "Travaux terminés par le prestataire");
+      }
 
-      toast.success("Statut mis à jour avec succès");
+      if (selectedMission.demande_id) {
+        await syncDemandeWithMissionStatus(
+          selectedMission.demande_id,
+          statusToSave,
+        );
+      }
+
+      toast.success(
+        newStatus === "completed"
+          ? "Mission terminée — le client peut valider les travaux"
+          : "Statut mis à jour avec succès",
+      );
       setShowDetailsModal(false);
       fetchMissions(); // Reload missions
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors de la mise à jour");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Erreur lors de la mise à jour");
+      throw error;
     } finally {
       setUpdatingStatus(false);
     }
@@ -200,412 +208,277 @@ export default function MissionsPage() {
 
   const openMissionDetails = (mission: Mission) => {
     setSelectedMission(mission);
-    setNewStatus(mission.status);
+    setNewStatus(getMissionStatus(mission));
     setShowDetailsModal(true);
   };
 
-  const filteredMissions = missions.filter(m => {
-    const matchesSearch = (m.demandes?.titre || m.demandes?.title || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === "all" || m.status === filterStatus;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredMissions = useMemo(() => {
+    return missions.filter((m) => {
+      const title = missionTitle(m).toLowerCase();
+      if (searchTerm && !title.includes(searchTerm.toLowerCase())) return false;
+      if (statusFilter !== "all" && getMissionStatus(m) !== statusFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [missions, searchTerm, statusFilter]);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "pending":
-        return <Badge variant="secondary">En attente</Badge>;
-      case "in_progress":
-        return <Badge variant="default">En cours</Badge>;
-      case "completed":
-        return <Badge>Complétée</Badge>;
-      case "cancelled":
-        return <Badge variant="destructive">Annulée</Badge>;
-      default:
-        return <Badge>{status}</Badge>;
+  const hasActiveFilters = Boolean(searchTerm.trim()) || statusFilter !== "all";
+
+  const resetFilters = useCallback(() => {
+    setSearchTerm("");
+    setStatusFilter("all");
+  }, []);
+
+  const getStatusBadge = (rawStatus: string) => {
+    const status = getMissionStatus({ status: rawStatus });
+    const cfg = MISSION_STATUS_STYLES[status];
+    if (!cfg) {
+      return (
+        <Badge variant="outline" className="text-xs font-medium">
+          {MISSION_STATUS_LABELS[status] ?? rawStatus}
+        </Badge>
+      );
     }
+    return (
+      <Badge variant="outline" className={cn("text-xs font-medium border", cfg.badge)}>
+        {cfg.label}
+      </Badge>
+    );
   };
 
   return (
-    <DashboardLayout role="prestataire" userName={providerName} userRole="Prestataire">
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">Mes Missions</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">Gérez vos missions et suivez votre progression</p>
+    <PrestatairePageShell embedded={embedded} userName={providerName} userRole="Prestataire">
+      <div className="space-y-4 pb-6 sm:space-y-6 sm:pb-8">
+        {!embedded && (
+        <div className="relative overflow-hidden rounded-xl border bg-gradient-to-br from-primary/8 via-card to-card p-4 sm:rounded-2xl sm:p-6">
+          <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-primary/10 blur-2xl" />
+          <div className="relative space-y-0.5">
+            <div className="hidden items-center gap-2 text-primary sm:flex">
+              <Sparkles className="h-4 w-4" />
+              <span className="text-xs font-semibold uppercase tracking-wider">
+                Espace prestataire
+              </span>
+            </div>
+            <h1 className="font-display text-xl font-bold sm:text-2xl">Mes Missions</h1>
+            <p className="hidden text-sm text-muted-foreground sm:block">
+              Gérez vos missions et suivez votre progression
+            </p>
           </div>
         </div>
+        )}
 
-        {/* Stats - Mobile: Single card with horizontal layout, Desktop: Separate cards */}
-        <div className="block sm:hidden">
-          <Card>
-            <CardContent className="p-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="text-center">
-                  <p className="text-lg font-bold">{getStats()[0].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[0].title}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold">{getStats()[1].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[1].title}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold">{getStats()[2].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[2].title}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-        
-        <div className="hidden sm:grid sm:grid-cols-1 md:grid-cols-3 gap-4">
-          {getStats().map((stat) => (
-            <StatsCard key={stat.title} {...stat} />
-          ))}
-        </div>
-
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input 
-              placeholder="Rechercher une mission..." 
-              className="pl-10 text-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant={showFilters ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setShowFilters((v) => !v)}
+            >
+              <Filter className="h-4 w-4" />
+              {showFilters ? "Masquer les filtres" : "Afficher les filtres"}
+            </Button>
+            {hasActiveFilters ? (
+              <Badge variant="secondary" className="text-xs">
+                Filtres actifs
+              </Badge>
+            ) : null}
           </div>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-full sm:w-[150px] text-sm">
-              <SelectValue placeholder="Statut" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous</SelectItem>
-              <SelectItem value="pending">En attente</SelectItem>
-              <SelectItem value="in_progress">En cours</SelectItem>
-              <SelectItem value="completed">Complétées</SelectItem>
-              <SelectItem value="cancelled">Annulées</SelectItem>
-            </SelectContent>
-          </Select>
+
+          {showFilters ? (
+            <Card className="border-border/80 shadow-sm">
+              <CardContent className="space-y-4 p-4 sm:p-5">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Rechercher une mission…"
+                    className="h-10 pl-9 text-sm"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {statusChips.map((chip) => (
+                    <button
+                      key={chip.key}
+                      type="button"
+                      onClick={() => setStatusFilter(chip.key)}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                        statusFilter === chip.key
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-background text-muted-foreground hover:border-primary/30",
+                      )}
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+                {hasActiveFilters ? (
+                  <Button variant="ghost" size="sm" className="gap-1.5" onClick={resetFilters}>
+                    <X className="h-4 w-4" />
+                    Réinitialiser les filtres
+                  </Button>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader className="w-6 h-6 animate-spin text-primary" />
-          </div>
-        ) : missions.length === 0 ? (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <p className="text-muted-foreground">Aucune mission trouvée</p>
-            </CardContent>
-          </Card>
+          <AdminListSkeleton items={4} />
+        ) : filteredMissions.length === 0 ? (
+          <PrestataireEmptyState
+            context="missions"
+            hasActiveFilters={hasActiveFilters}
+            onResetFilters={resetFilters}
+          />
         ) : (
-          <Tabs defaultValue="all" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="all">Toutes ({missions.length})</TabsTrigger>
-              <TabsTrigger value="pending">En attente ({missions.filter(m => m.status === "pending").length})</TabsTrigger>
-              <TabsTrigger value="in_progress">En cours ({missions.filter(m => m.status === "in_progress").length})</TabsTrigger>
-              <TabsTrigger value="completed">Complétées ({missions.filter(m => m.status === "completed").length})</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="all" className="space-y-4">
-              {filteredMissions.map((mission) => (
-                <Card key={mission.id}>
-                  <CardContent className="p-6">
-                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                      <div className="space-y-3 flex-1">
-                        <div className="flex items-start gap-2 flex-wrap">
-                          <h3 className="font-semibold text-lg">{mission.demandes?.titre || mission.demandes?.title || "Mission"}</h3>
-                          {getStatusBadge(mission.status)}
-                          {getUrgencyBadge(mission.demandes?.urgence || mission.demandes?.urgency)}
-                        </div>
-                        
-                        {mission.demandes?.description && (
-                          <p className="text-sm text-muted-foreground line-clamp-2">{mission.demandes.description}</p>
-                        )}
-
-                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <User className="w-4 h-4" />
-                            {mission.demandes?.clients?.full_name || "Client"}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MapPin className="w-4 h-4" />
-                            {mission.demandes?.localisation || mission.demandes?.location || "Localisation"}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <DollarSign className="w-4 h-4" />
-                            {mission.demandes?.budget_min && mission.demandes?.budget_max 
-                              ? `${mission.demandes.budget_min.toLocaleString()} - ${mission.demandes.budget_max.toLocaleString()} FC`
-                              : `${(mission.devis?.montant_ttc || mission.devis?.amount || 0).toLocaleString()} FC`
-                            }
-                          </span>
-                          {mission.demandes?.images && mission.demandes.images.length > 0 && (
-                            <span className="flex items-center gap-1">
-                              <ImageIcon className="w-4 h-4" />
-                              {mission.demandes.images.length} photo{mission.demandes.images.length > 1 ? 's' : ''}
-                            </span>
-                          )}
-                        </div>
-                        
-                        {mission.start_date && (
-                          <div className="text-sm text-muted-foreground">
-                            Début: {new Date(mission.start_date).toLocaleDateString()}
-                            {mission.end_date && ` - Fin: ${new Date(mission.end_date).toLocaleDateString()}`}
-                          </div>
-                        )}
-                      </div>
-                      <Button 
-                        variant="outline"
-                        onClick={() => openMissionDetails(mission)}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        Détails
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </TabsContent>
-
-            <TabsContent value="pending" className="space-y-4">
-              {filteredMissions.filter(m => m.status === "pending").map((mission) => (
-                <Card key={mission.id}>
-                  <CardContent className="p-6">
-                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                      <div className="space-y-3 flex-1">
-                        <div className="flex items-start gap-2 flex-wrap">
-                          <h3 className="font-semibold text-lg">{mission.demandes?.titre || mission.demandes?.title || "Mission"}</h3>
-                          {getUrgencyBadge(mission.demandes?.urgence || mission.demandes?.urgency)}
-                        </div>
-                        
-                        {mission.demandes?.description && (
-                          <p className="text-sm text-muted-foreground line-clamp-2">{mission.demandes.description}</p>
-                        )}
-
-                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <User className="w-4 h-4" />
-                            {mission.demandes?.clients?.full_name || "Client"}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MapPin className="w-4 h-4" />
-                            {mission.demandes?.localisation || mission.demandes?.location}
-                          </span>
-                        </div>
-                        
-                        <p className="text-lg font-bold text-primary">{(mission.devis?.montant_ttc || mission.devis?.amount || 0).toLocaleString()} FC</p>
-                      </div>
-                      <Button 
-                        variant="outline"
-                        onClick={() => openMissionDetails(mission)}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        Détails
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </TabsContent>
-
-            <TabsContent value="in_progress" className="space-y-4">
-              {filteredMissions.filter(m => m.status === "in_progress").map((mission) => (
-                <Card key={mission.id}>
-                  <CardContent className="p-6">
-                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                      <div className="space-y-3 flex-1">
-                        <div className="flex items-start gap-2 flex-wrap">
-                          <h3 className="font-semibold text-lg">{mission.demandes?.titre || mission.demandes?.title || "Mission"}</h3>
-                          {getUrgencyBadge(mission.demandes?.urgence || mission.demandes?.urgency)}
-                        </div>
-                        
-                        {mission.demandes?.description && (
-                          <p className="text-sm text-muted-foreground line-clamp-2">{mission.demandes.description}</p>
-                        )}
-
-                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <User className="w-4 h-4" />
-                            {mission.demandes?.clients?.full_name || "Client"}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MapPin className="w-4 h-4" />
-                            {mission.demandes?.localisation || mission.demandes?.location}
-                          </span>
-                        </div>
-                        
-                        <p className="text-lg font-bold text-primary">{(mission.devis?.montant_ttc || mission.devis?.amount || 0).toLocaleString()} FC</p>
-                      </div>
-                      <Button 
-                        variant="outline"
-                        onClick={() => openMissionDetails(mission)}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        Détails
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </TabsContent>
-
-            <TabsContent value="completed" className="space-y-4">
-              {filteredMissions.filter(m => m.status === "completed").map((mission) => (
-                <Card key={mission.id}>
-                  <CardContent className="p-6">
-                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                      <div className="space-y-3 flex-1">
-                        <div className="flex items-start gap-2 flex-wrap">
-                          <h3 className="font-semibold text-lg">{mission.demandes?.titre || mission.demandes?.title || "Mission"}</h3>
-                          {getUrgencyBadge(mission.demandes?.urgence || mission.demandes?.urgency)}
-                        </div>
-                        
-                        {mission.demandes?.description && (
-                          <p className="text-sm text-muted-foreground line-clamp-2">{mission.demandes.description}</p>
-                        )}
-
-                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <User className="w-4 h-4" />
-                            {mission.demandes?.clients?.full_name || "Client"}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MapPin className="w-4 h-4" />
-                            {mission.demandes?.localisation || mission.demandes?.location}
-                          </span>
-                        </div>
-                        
-                        <p className="text-lg font-bold text-primary">{(mission.devis?.montant_ttc || mission.devis?.amount || 0).toLocaleString()} FC</p>
-                      </div>
-                      <Button 
-                        variant="outline"
-                        onClick={() => openMissionDetails(mission)}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        Détails
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </TabsContent>
-          </Tabs>
+          <div className="space-y-3 sm:space-y-4">
+            {filteredMissions.map((mission) => (
+              <MissionListCard
+                key={mission.id}
+                mission={mission}
+                onView={() => openMissionDetails(mission)}
+              />
+            ))}
+          </div>
         )}
 
-        {/* Details Modal */}
-        {showDetailsModal && selectedMission && (
-          <div 
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-            onClick={() => setShowDetailsModal(false)}
-          >
-            <div 
-              className="bg-white dark:bg-gray-900 rounded-lg w-full max-w-3xl max-h-[85vh] overflow-hidden shadow-xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700 flex items-start justify-between bg-white dark:bg-gray-900">
-                <div className="flex-1 pr-4">
-                  <div className="flex items-center gap-2 flex-wrap mb-2">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                      {selectedMission.demandes?.titre || selectedMission.demandes?.title || "Mission"}
-                    </h2>
-                    {getStatusBadge(selectedMission.status)}
-                    {getUrgencyBadge(selectedMission.demandes?.urgence || selectedMission.demandes?.urgency)}
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowDetailsModal(false)}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none"
-                >
-                  ✕
-                </button>
+        <FormDrawer
+          open={showDetailsModal && !!selectedMission}
+          onOpenChange={(open) => {
+            if (!open) setShowDetailsModal(false);
+          }}
+          title={selectedMission ? missionTitle(selectedMission) : "Mission"}
+        >
+          {selectedMission && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {getStatusBadge(getMissionStatus(selectedMission))}
+                {getUrgencyBadge(
+                  selectedMission.demandes?.urgence ||
+                    selectedMission.demandes?.urgency,
+                )}
               </div>
-
-              {/* Content */}
-              <div className="overflow-y-auto max-h-[calc(85vh-140px)] p-6 space-y-6 bg-white dark:bg-gray-900">
-                {/* Description */}
                 {selectedMission.demandes?.description && (
-                  <div>
-                    <h4 className="font-semibold mb-2 flex items-center gap-2 text-gray-900 dark:text-white">
-                      <FileText className="w-4 h-4" />
+                  <div className="mb-4">
+                    <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                      <FileText className="h-4 w-4" />
                       Description
                     </h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
                       {selectedMission.demandes.description}
                     </p>
                   </div>
                 )}
 
-                {/* Client Info */}
                 {selectedMission.demandes?.clients && (
-                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                    <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-900 dark:text-white">
-                      <User className="w-4 h-4" />
+                  <div className="mb-4 rounded-xl border border-border/80 bg-muted/30 p-3">
+                    <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                      <User className="h-4 w-4" />
                       Client
                     </h4>
-                    <div className="grid sm:grid-cols-2 gap-3 text-sm">
-                      <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                        <User className="w-4 h-4 text-gray-400" />
-                        <span className="font-medium">{selectedMission.demandes.clients.full_name || "Non spécifié"}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                        <MapPin className="w-4 h-4 text-gray-400" />
-                        <span>{selectedMission.demandes.localisation || selectedMission.demandes.location}</span>
-                      </div>
+                    <div className="grid gap-2 text-sm sm:grid-cols-2">
+                      <span className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        {selectedMission.demandes.clients.full_name ||
+                          "Non spécifié"}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        {selectedMission.demandes.localisation ||
+                          selectedMission.demandes.location ||
+                          "—"}
+                      </span>
                     </div>
                   </div>
                 )}
 
-                {/* Budget */}
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                  <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-900 dark:text-white">
-                    <DollarSign className="w-4 h-4" />
-                    Budget
-                  </h4>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    {selectedMission.demandes?.budget_min && selectedMission.demandes?.budget_max && (
-                      <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Budget client</p>
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          {selectedMission.demandes.budget_min.toLocaleString()} - {selectedMission.demandes.budget_max.toLocaleString()} FC
+                <div className="mb-4 grid grid-cols-2 gap-2 text-xs sm:text-sm">
+                  {selectedMission.demandes?.budget_min != null &&
+                    selectedMission.demandes?.budget_max != null && (
+                      <div className="rounded-lg border bg-background p-2.5">
+                        <p className="text-[10px] font-semibold uppercase text-muted-foreground">
+                          Budget client
+                        </p>
+                        <p className="font-medium tabular-nums">
+                          {selectedMission.demandes.budget_min.toLocaleString(
+                            "fr-FR",
+                          )}{" "}
+                          -{" "}
+                          {selectedMission.demandes.budget_max.toLocaleString(
+                            "fr-FR",
+                          )}{" "}
+                          FC
                         </p>
                       </div>
                     )}
-                    <div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Devis accepté</p>
-                      <p className="font-medium text-lg text-primary">
-                        {(selectedMission.devis?.montant_ttc || selectedMission.devis?.amount || 0).toLocaleString()} {selectedMission.devis?.devise || 'FC'}
+                  <div className="rounded-lg border bg-background p-2.5">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">
+                      Devis accepté
+                    </p>
+                    <p className="font-display font-bold tabular-nums text-primary">
+                      {(
+                        selectedMission.devis?.montant_ttc ||
+                        selectedMission.devis?.amount ||
+                        0
+                      ).toLocaleString("fr-FR")}{" "}
+                      {selectedMission.devis?.devise || "FC"}
+                    </p>
+                  </div>
+                  {selectedMission.start_date && (
+                    <div className="col-span-2 rounded-lg border bg-background p-2.5">
+                      <p className="text-[10px] font-semibold uppercase text-muted-foreground">
+                        Période
+                      </p>
+                      <p className="font-medium">
+                        Début :{" "}
+                        {new Date(
+                          selectedMission.start_date,
+                        ).toLocaleDateString("fr-FR")}
+                        {selectedMission.end_date &&
+                          ` · Fin : ${new Date(selectedMission.end_date).toLocaleDateString("fr-FR")}`}
                       </p>
                     </div>
-                  </div>
+                  )}
                 </div>
 
-                {/* Images */}
-                {selectedMission.demandes?.images && selectedMission.demandes.images.length > 0 && (
-                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                    <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-900 dark:text-white">
-                      <ImageIcon className="w-4 h-4" />
-                      Photos ({selectedMission.demandes.images.length})
-                    </h4>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {selectedMission.demandes.images.map((imageUrl, index) => (
-                        <div key={index} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                          <img 
-                            src={imageUrl} 
-                            alt={`Image ${index + 1}`}
-                            className="w-full h-full object-cover hover:scale-105 transition-transform cursor-pointer"
-                            onClick={() => window.open(imageUrl, '_blank')}
-                          />
-                        </div>
-                      ))}
+                {selectedMission.demandes?.images &&
+                  selectedMission.demandes.images.length > 0 && (
+                    <div className="mb-4">
+                      <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                        <ImageIcon className="h-4 w-4" />
+                        Photos ({selectedMission.demandes.images.length})
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {selectedMission.demandes.images.map(
+                          (imageUrl, index) => (
+                            <button
+                              key={index}
+                              type="button"
+                              className="relative aspect-square overflow-hidden rounded-lg border"
+                              onClick={() => window.open(imageUrl, "_blank")}
+                            >
+                              <img
+                                src={imageUrl}
+                                alt={`Photo ${index + 1}`}
+                                className="h-full w-full object-cover transition-transform hover:scale-105"
+                              />
+                            </button>
+                          ),
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Status Update */}
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                  <h4 className="font-semibold mb-3 text-gray-900 dark:text-white">Changer le statut</h4>
-                  <div className="flex gap-3">
+                <div className="rounded-xl border p-4">
+                  <h4 className="mb-3 text-sm font-semibold">
+                    Changer le statut
+                  </h4>
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <Select value={newStatus} onValueChange={setNewStatus}>
                       <SelectTrigger className="flex-1">
                         <SelectValue placeholder="Sélectionner" />
@@ -613,23 +486,31 @@ export default function MissionsPage() {
                       <SelectContent>
                         <SelectItem value="pending">En attente</SelectItem>
                         <SelectItem value="in_progress">En cours</SelectItem>
-                        <SelectItem value="completed">Complétée</SelectItem>
+                        <SelectItem value="completed">
+                          Terminer (attente validation client)
+                        </SelectItem>
                         <SelectItem value="cancelled">Annulée</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button 
-                      onClick={handleUpdateStatus}
-                      disabled={updatingStatus || !newStatus}
-                    >
-                      {updatingStatus ? <Loader className="w-4 h-4 animate-spin" /> : "Mettre à jour"}
-                    </Button>
+                    <SlideToConfirm
+                      label={
+                        newStatus === "completed"
+                          ? "Marquer la mission comme terminée — le client devra valider"
+                          : "Mettre à jour le statut de la mission"
+                      }
+                      hint="Glisser pour confirmer"
+                      variant={newStatus === "completed" ? "success" : "default"}
+                      disabled={!newStatus}
+                      loading={updatingStatus}
+                      successMessage="Statut mis à jour"
+                      onConfirm={handleUpdateStatus}
+                    />
                   </div>
                 </div>
-              </div>
             </div>
-          </div>
-        )}
+          )}
+        </FormDrawer>
       </div>
-    </DashboardLayout>
+    </PrestatairePageShell>
   );
 }

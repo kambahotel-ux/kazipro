@@ -1,16 +1,22 @@
 import { useState, useEffect } from 'react';
+import { useAbortableFetch } from '@/hooks/useAbortableFetch';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
+import { demandesApi } from '@/lib/api';
+import { parsePaginatedMeta, unwrapPaginated } from '@/lib/api-utils';
+import { getProfil, professionLabelFromProfil } from '@/lib/kazipro-profile';
 import { useAuth } from '@/contexts/AuthContext';
-import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PrestatairePageShell } from '@/components/prestataire/PrestatairePageShell';
+import { Card, CardContent } from '@/components/ui/card';
+import { OpportuniteCard } from '@/components/prestataire/OpportuniteCard';
+import { PrestataireEmptyState } from '@/components/prestataire/PrestataireEmptyState';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Briefcase, MapPin, DollarSign, Clock, Search, Filter, Target, Users } from 'lucide-react';
+import { Briefcase, Search, Filter, Target, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import ProfileRequiredGuard from '@/components/dashboard/ProfileRequiredGuard';
+import { AdminListSkeleton } from '@/components/dashboard/AdminLoadingSkeleton';
+import { mapDemandeToUi } from '@/lib/client-helpers';
 
 interface Demande {
   id: string;
@@ -31,6 +37,7 @@ interface Demande {
   client_city: string;
   nombre_devis: number;
   type?: string;
+  statut?: string;
 }
 
 interface Invitation {
@@ -43,7 +50,9 @@ interface Invitation {
   demande: Demande;
 }
 
-export default function OpportunitesPage() {
+type OpportunitesPageProps = { embedded?: boolean };
+
+export default function OpportunitesPage({ embedded = false }: OpportunitesPageProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [demandes, setDemandes] = useState<Demande[]>([]);
@@ -51,340 +60,169 @@ export default function OpportunitesPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [urgenceFilter, setUrgenceFilter] = useState<string>('all');
-  const [prestataire, setPrestataire] = useState<any>(null);
+  const [prestataire, setPrestataire] = useState<Record<string, unknown> | null>(null);
   const [activeTab, setActiveTab] = useState<string>('all');
+  const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [totalDemandes, setTotalDemandes] = useState(0);
+  const PAGE_SIZE = 20;
+
+  const hasActiveFilters = Boolean(searchTerm.trim()) || urgenceFilter !== 'all';
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setUrgenceFilter('all');
+    setPage(1);
+  };
 
   useEffect(() => {
     loadPrestataire();
   }, [user]);
 
-  useEffect(() => {
-    if (prestataire) {
-      loadDemandes();
-      loadInvitations();
-    }
-  }, [prestataire, urgenceFilter]);
+  useAbortableFetch(Boolean(prestataire), [prestataire, urgenceFilter, page, searchTerm], async (signal) => {
+    if (!prestataire || signal.aborted) return;
+    await loadDemandes(page, signal);
+  });
 
   const loadPrestataire = async () => {
     if (!user) return;
-
-    const { data } = await supabase
-      .from('prestataires')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    setPrestataire(data);
+    setPrestataire(getProfil(user));
   };
 
-  const loadDemandes = async () => {
+  const loadDemandes = async (targetPage = 1, signal?: AbortSignal) => {
     try {
       setLoading(true);
+      const res = await demandesApi.getAll({
+        page: targetPage,
+        per_page: PAGE_SIZE,
+        urgence: urgenceFilter !== 'all' ? urgenceFilter : undefined,
+        search: searchTerm.trim() || undefined,
+      });
+      const meta = parsePaginatedMeta(res);
+      const rows = unwrapPaginated<Record<string, unknown>>(res);
 
-      // Load public requests only (type = 'publique' or null for backward compatibility)
-      // Query directly from demandes table instead of view
-      let query = supabase
-        .from('demandes')
-        .select('*')
-        .in('statut', ['en_attente', 'active'])
-        .order('created_at', { ascending: false });
+      // L'API filtre déjà par profession / ville / statut pour le prestataire connecté
+      const transformedData = rows.map((d) => {
+        const mapped = mapDemandeToUi(d);
+        const client = d.client as Record<string, unknown> | undefined;
+        const clientName = client
+          ? [client.prenom, client.nom].filter(Boolean).join(' ').trim()
+          : '';
 
-      // Only show public requests (not direct invitations)
-      // If type column doesn't exist yet, this will show all requests (backward compatible)
-      query = query.or('type.eq.publique,type.is.null');
-
-      // Filtrer par profession du prestataire
-      if (prestataire?.profession) {
-        query = query.or(`profession.eq.${prestataire.profession},service.eq.${prestataire.profession}`);
-      }
-
-      // Filtrer par urgence
-      if (urgenceFilter !== 'all') {
-        query = query.eq('urgence', urgenceFilter);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('Error loading demandes:', error);
-        // If error is about missing column, try without type filter
-        if (error.message?.includes('type')) {
-          const fallbackQuery = supabase
-            .from('demandes')
-            .select('*')
-            .in('statut', ['en_attente', 'active'])
-            .order('created_at', { ascending: false });
-
-          if (prestataire?.profession) {
-            fallbackQuery.or(`profession.eq.${prestataire.profession},service.eq.${prestataire.profession}`);
-          }
-
-          if (urgenceFilter !== 'all') {
-            fallbackQuery.eq('urgence', urgenceFilter);
-          }
-
-          const { data: fallbackData, error: fallbackError } = await fallbackQuery;
-          if (!fallbackError) {
-            setDemandes(fallbackData || []);
-            return;
-          }
-        }
-        throw error;
-      }
-
-      // Transform data to match expected format
-      const transformedData = (data || []).map(d => ({
-        ...d,
-        title: d.titre || d.title,
-        service: d.profession || d.service,
-        location: d.localisation || d.location,
-        client_name: '',
-        client_city: '',
-        nombre_devis: 0,
-      }));
+        return {
+          ...mapped,
+          id: String(mapped.id ?? d.id),
+          titre: String(mapped.title),
+          title: String(mapped.title),
+          description: String(mapped.description ?? ''),
+          profession: String(mapped.service ?? mapped.profession_nom ?? ''),
+          service: String(mapped.service ?? mapped.profession_nom ?? ''),
+          localisation: String(mapped.location ?? ''),
+          location: String(mapped.location ?? ''),
+          budget_min: Number(mapped.budget_min ?? 0),
+          budget_max: Number(mapped.budget_max ?? 0),
+          urgence: String(mapped.urgence ?? d.urgence ?? 'normal'),
+          statut: String(mapped.statut ?? d.statut ?? ''),
+          created_at: String(mapped.created_at ?? d.created_at ?? ''),
+          client_name: clientName,
+          client_city: String(client?.ville ?? ''),
+          nombre_devis: Number(d.devis_count ?? mapped.devis_count ?? 0),
+          type: String(d.type ?? 'publique'),
+          images: Array.isArray(mapped.images) ? mapped.images : [],
+        } as Demande;
+      });
 
       setDemandes(transformedData);
+      setPage(meta.current_page || targetPage);
+      setLastPage(Math.max(1, meta.last_page || 1));
+      setTotalDemandes(meta.total ?? transformedData.length);
     } catch (error) {
-      console.error('Erreur chargement demandes:', error);
+      if (!signal?.aborted) console.error('Erreur chargement demandes:', error);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
-  const loadInvitations = async () => {
-    if (!prestataire) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('demande_invitations')
-        .select(`
-          *,
-          demande:demandes!demande_invitations_demande_id_fkey (
-            id,
-            titre,
-            title,
-            description,
-            profession,
-            service,
-            localisation,
-            location,
-            budget_min,
-            budget_max,
-            urgence,
-            deadline,
-            images,
-            created_at,
-            type
-          )
-        `)
-        .eq('prestataire_id', prestataire.id)
-        .order('invited_at', { ascending: false });
-
-      if (error) {
-        console.error('Error loading invitations:', error);
-        throw error;
-      }
-
-      console.log('Invitations loaded:', data?.length || 0, 'invitations');
-
-      // Transform data to match Invitation interface
-      const transformedInvitations = (data || []).map(inv => ({
-        ...inv,
-        demande: {
-          ...inv.demande,
-          client_name: '',
-          client_city: '',
-          nombre_devis: 0,
-        }
-      }));
-
-      setInvitations(transformedInvitations);
-    } catch (error) {
-      console.error('Erreur chargement invitations:', error);
-      setInvitations([]); // Set empty array on error
-    }
+  const markInvitationAsViewed = async (_invitationId: string) => {
+    // Invitations gérées côté API Laravel — noop côté client pour l'instant
   };
 
-  const markInvitationAsViewed = async (invitationId: string) => {
-    try {
-      await supabase.rpc('mark_invitation_viewed', { invitation_id: invitationId });
-    } catch (error) {
-      console.error('Error marking invitation as viewed:', error);
-    }
-  };
-
-  const getUrgenceBadge = (urgence: string) => {
-    const badges = {
-      normal: <Badge variant="secondary">Normal</Badge>,
-      urgent: <Badge className="bg-orange-500">Urgent</Badge>,
-      tres_urgent: <Badge variant="destructive">Très Urgent</Badge>,
-    };
-    return badges[urgence as keyof typeof badges] || badges.normal;
-  };
-
-  const formatBudget = (min: number, max: number) => {
-    return `${min.toLocaleString()} - ${max.toLocaleString()} FC`;
-  };
-
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
-  };
-
-  const filteredDemandes = demandes.filter((demande) => {
-    const searchLower = searchTerm.toLowerCase();
-    const title = demande.title || demande.titre || '';
-    const description = demande.description || '';
-    const localisation = demande.localisation || demande.location || '';
-    
-    return (
-      title.toLowerCase().includes(searchLower) ||
-      description.toLowerCase().includes(searchLower) ||
-      localisation.toLowerCase().includes(searchLower)
-    );
-  });
+  const filteredDemandes = demandes;
 
   return (
-    <DashboardLayout 
-      role="prestataire" 
-      userName={prestataire?.full_name || "Prestataire"} 
-      userRole={prestataire?.profession || "Prestataire"}
+    <PrestatairePageShell
+      embedded={embedded}
+      userName={String(prestataire?.full_name ?? 'Prestataire')}
+      userRole={professionLabelFromProfil(prestataire) || 'Prestataire'}
     >
-      <ProfileRequiredGuard>
         {loading && !prestataire ? (
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-              <p className="text-muted-foreground">Chargement...</p>
-            </div>
-          </div>
+          <AdminListSkeleton items={3} />
         ) : (
         <div className="space-y-6">
-          {/* Header */}
+          {!embedded && (
           <div>
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">Opportunités</h1>
             <p className="text-sm sm:text-base text-muted-foreground">
             Découvrez les demandes de services correspondant à votre profil
           </p>
         </div>
+          )}
 
-      {/* Filtres */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            {/* Recherche */}
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher une demande..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            {/* Filtre urgence */}
-            <div className="w-full md:w-48">
-              <Select value={urgenceFilter} onValueChange={setUrgenceFilter}>
-                <SelectTrigger>
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Urgence" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes</SelectItem>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                  <SelectItem value="tres_urgent">Très Urgent</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Stats - Mobile: Single card with horizontal layout, Desktop: Separate cards */}
-      <div className="block sm:hidden">
-        <Card>
-          <CardContent className="p-4">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-1 mb-1">
-                  <Briefcase className="h-3 w-3 text-muted-foreground" />
-                </div>
-                <p className="text-lg font-bold">{filteredDemandes.length}</p>
-                <p className="text-xs text-muted-foreground">Opportunités</p>
-              </div>
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-1 mb-1">
-                  <Users className="h-3 w-3 text-orange-500" />
-                </div>
-                <p className="text-lg font-bold">{invitations.length}</p>
-                <p className="text-xs text-muted-foreground">Invitations</p>
-              </div>
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-1 mb-1">
-                  <Clock className="h-3 w-3 text-orange-500" />
-                </div>
-                <p className="text-lg font-bold">
-                  {filteredDemandes.filter((d) => d.urgence === 'urgent' || d.urgence === 'tres_urgent').length}
-                </p>
-                <p className="text-xs text-muted-foreground">Urgentes</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          variant={showFilters ? "default" : "outline"}
+          onClick={() => setShowFilters((v) => !v)}
+          className="gap-2"
+        >
+          <Search className="h-4 w-4" />
+          {showFilters ? "Masquer les filtres" : "Afficher les filtres"}
+        </Button>
+        {(searchTerm || urgenceFilter !== "all") && !showFilters ? (
+          <Badge variant="secondary">{totalDemandes} résultat(s)</Badge>
+        ) : null}
       </div>
-      
-      <div className="hidden sm:grid sm:gap-4 sm:grid-cols-1 md:grid-cols-3">
+      {showFilters ? (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Opportunités publiques</CardTitle>
-            <Briefcase className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl lg:text-2xl font-bold">{filteredDemandes.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {prestataire?.profession || 'Votre profession'}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Invitations directes</CardTitle>
-            <Users className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl lg:text-2xl font-bold">
-              {invitations.length}
+          <CardContent className="pt-6">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Rechercher une demande..."
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setPage(1);
+                    }}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              <div className="w-full md:w-48">
+                <Select value={urgenceFilter} onValueChange={(v) => { setUrgenceFilter(v); setPage(1); }}>
+                  <SelectTrigger>
+                    <Filter className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Urgence" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Toutes</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="tres_urgent">Très Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {invitations.filter(inv => inv.status === 'pending').length > 0 
-                ? `${invitations.filter(inv => inv.status === 'pending').length} en attente`
-                : 'Total reçues'
-              }
-            </p>
+            {hasActiveFilters ? (
+              <Button variant="ghost" size="sm" className="mt-3" onClick={resetFilters}>
+                Réinitialiser les filtres
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Demandes urgentes</CardTitle>
-            <Clock className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl lg:text-2xl font-bold">
-              {filteredDemandes.filter((d) => d.urgence === 'urgent' || d.urgence === 'tres_urgent').length}
-            </div>
-            <p className="text-xs text-muted-foreground">Nécessitent une réponse rapide</p>
-          </CardContent>
-        </Card>
-      </div>
+      ) : null}
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -393,13 +231,13 @@ export default function OpportunitesPage() {
             <Briefcase className="w-3 h-3 sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Toutes</span>
             <span className="sm:hidden">Toutes</span>
-            <span className="ml-1">({filteredDemandes.length + invitations.length})</span>
+            <span className="ml-1">({totalDemandes + invitations.length})</span>
           </TabsTrigger>
           <TabsTrigger value="public" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm p-2 sm:p-3">
             <Target className="w-3 h-3 sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Publiques</span>
             <span className="sm:hidden">Public</span>
-            <span className="ml-1">({filteredDemandes.length})</span>
+            <span className="ml-1">({totalDemandes})</span>
           </TabsTrigger>
           <TabsTrigger value="invitations" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm p-2 sm:p-3">
             <Users className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -417,24 +255,18 @@ export default function OpportunitesPage() {
         {/* All Tab */}
         <TabsContent value="all" className="space-y-4">
           {loading ? (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">Chargement des opportunités...</p>
-            </div>
+            <AdminListSkeleton items={3} />
           ) : filteredDemandes.length === 0 && invitations.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Briefcase className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Aucune opportunité disponible</h3>
-                <p className="text-muted-foreground">
-                  Aucune nouvelle demande pour le moment
-                </p>
-              </CardContent>
-            </Card>
+            <PrestataireEmptyState
+              context="opportunites"
+              hasActiveFilters={hasActiveFilters}
+              onResetFilters={resetFilters}
+            />
           ) : (
             <div className="grid gap-4">
               {/* Invitations first */}
               {invitations.map((invitation) => (
-                <DemandeCard
+                <OpportuniteCard
                   key={`inv-${invitation.id}`}
                   demande={invitation.demande}
                   isInvitation={true}
@@ -448,13 +280,38 @@ export default function OpportunitesPage() {
               ))}
               {/* Then public requests */}
               {filteredDemandes.map((demande) => (
-                <DemandeCard
+                <OpportuniteCard
                   key={demande.id}
                   demande={demande}
                   isInvitation={false}
                   onView={() => navigate(`/dashboard/prestataire/demandes/${demande.id}`)}
                 />
               ))}
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-sm text-muted-foreground">
+                  Page {page} sur {lastPage} ({totalDemandes} opportunité(s))
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Précédent
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= lastPage}
+                    onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
+                  >
+                    Suivant
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </TabsContent>
@@ -462,31 +319,48 @@ export default function OpportunitesPage() {
         {/* Public Tab */}
         <TabsContent value="public" className="space-y-4">
           {loading ? (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">Chargement des opportunités...</p>
-            </div>
+            <AdminListSkeleton items={3} />
           ) : filteredDemandes.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Target className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Aucune demande publique</h3>
-                <p className="text-muted-foreground">
-                  {searchTerm
-                    ? 'Aucune demande ne correspond à votre recherche'
-                    : 'Aucune nouvelle demande publique pour le moment'}
-                </p>
-              </CardContent>
-            </Card>
+            <PrestataireEmptyState
+              context="opportunites_public"
+              hasActiveFilters={hasActiveFilters}
+              onResetFilters={resetFilters}
+            />
           ) : (
             <div className="grid gap-4">
               {filteredDemandes.map((demande) => (
-                <DemandeCard
+                <OpportuniteCard
                   key={demande.id}
                   demande={demande}
                   isInvitation={false}
                   onView={() => navigate(`/dashboard/prestataire/demandes/${demande.id}`)}
                 />
               ))}
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-sm text-muted-foreground">
+                  Page {page} sur {lastPage} ({totalDemandes} opportunité(s))
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Précédent
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= lastPage}
+                    onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
+                  >
+                    Suivant
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </TabsContent>
@@ -494,19 +368,14 @@ export default function OpportunitesPage() {
         {/* Invitations Tab */}
         <TabsContent value="invitations" className="space-y-4">
           {invitations.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Aucune invitation</h3>
-                <p className="text-muted-foreground">
-                  Vous n'avez pas encore reçu d'invitation directe
-                </p>
-              </CardContent>
-            </Card>
+            <PrestataireEmptyState
+              context="invitations"
+              hasActiveFilters={false}
+            />
           ) : (
             <div className="grid gap-4">
               {invitations.map((invitation) => (
-                <DemandeCard
+                <OpportuniteCard
                   key={invitation.id}
                   demande={invitation.demande}
                   isInvitation={true}
@@ -524,124 +393,6 @@ export default function OpportunitesPage() {
       </Tabs>
       </div>
         )}
-      </ProfileRequiredGuard>
-    </DashboardLayout>
-  );
-}
-
-// Demande Card Component
-function DemandeCard({ 
-  demande, 
-  isInvitation, 
-  invitationStatus, 
-  invitedAt,
-  onView 
-}: { 
-  demande: Demande; 
-  isInvitation: boolean;
-  invitationStatus?: string;
-  invitedAt?: string;
-  onView: () => void;
-}) {
-  const getUrgenceBadge = (urgence: string) => {
-    const badges = {
-      normal: <Badge variant="secondary">Normal</Badge>,
-      urgent: <Badge className="bg-orange-500">Urgent</Badge>,
-      tres_urgent: <Badge variant="destructive">Très Urgent</Badge>,
-    };
-    return badges[urgence as keyof typeof badges] || badges.normal;
-  };
-
-  const formatBudget = (min: number, max: number) => {
-    return `${min.toLocaleString()} - ${max.toLocaleString()} FC`;
-  };
-
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
-  };
-
-  const getInvitationStatusBadge = (status: string) => {
-    const badges = {
-      pending: <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-500/20">En attente</Badge>,
-      viewed: <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20">Vue</Badge>,
-      responded: <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">Répondu</Badge>,
-      declined: <Badge variant="outline" className="bg-gray-500/10 text-gray-600 border-gray-500/20">Refusé</Badge>,
-    };
-    return badges[status as keyof typeof badges] || badges.pending;
-  };
-
-  return (
-    <Card className={`hover:shadow-lg transition-shadow ${isInvitation ? 'border-orange-500/30' : ''}`}>
-      <CardHeader className="p-4 sm:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
-              {isInvitation && (
-                <Badge className="bg-orange-500 w-fit">
-                  <Target className="w-3 h-3 mr-1" />
-                  <span className="hidden sm:inline">INVITATION DIRECTE</span>
-                  <span className="sm:hidden">INVITATION</span>
-                </Badge>
-              )}
-              <CardTitle className="text-lg sm:text-xl truncate">
-                {demande.title || demande.titre}
-              </CardTitle>
-              <div className="flex gap-2 flex-wrap">
-                {getUrgenceBadge(demande.urgence)}
-                {isInvitation && invitationStatus && getInvitationStatusBadge(invitationStatus)}
-              </div>
-            </div>
-            <CardDescription className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs sm:text-sm">
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                <span className="truncate">{demande.localisation || demande.location}</span>
-              </span>
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                <span className="truncate">
-                  {isInvitation && invitedAt ? `Invité le ${formatDate(invitedAt)}` : formatDate(demande.created_at)}
-                </span>
-              </span>
-              {demande.deadline && (
-                <span className="flex items-center gap-1 text-orange-600">
-                  <Clock className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                  <span className="truncate">Deadline: {formatDate(demande.deadline)}</span>
-                </span>
-              )}
-            </CardDescription>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="p-4 sm:p-6 pt-0">
-        <p className="text-xs sm:text-sm text-muted-foreground mb-4 line-clamp-2">
-          {demande.description}
-        </p>
-
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex-1">
-            <p className="text-xs sm:text-sm font-medium text-muted-foreground">Budget</p>
-            <p className="text-base sm:text-lg font-bold text-primary">
-              {formatBudget(demande.budget_min, demande.budget_max)}
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:text-right gap-2">
-            {!isInvitation && demande.nombre_devis !== undefined && (
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                {demande.nombre_devis} devis soumis
-              </p>
-            )}
-            <Button onClick={onView} className="w-full sm:w-auto text-sm">
-              <span className="hidden sm:inline">Voir les détails</span>
-              <span className="sm:hidden">Détails</span>
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    </PrestatairePageShell>
   );
 }

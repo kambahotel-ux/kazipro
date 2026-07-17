@@ -7,7 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Wrench, Mail, Lock, ArrowRight, ArrowLeft, Eye, EyeOff, User, Briefcase, MapPin, Upload, FileText, CheckCircle, Building2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { authApi, uploadApi, professionsApi } from "@/lib/api";
+import { unwrapPaginated } from "@/lib/api-utils";
 import { toast } from "sonner";
 import type { TypePrestataire, FormeJuridique } from "@/types/prestataire";
 
@@ -67,14 +68,8 @@ const RegisterProviderSteps = () => {
   useEffect(() => {
     const fetchProfessions = async () => {
       try {
-        const { data, error } = await supabase
-          .from("professions")
-          .select("nom")
-          .eq("actif", true)
-          .order("nom");
-
-        if (error) throw error;
-        setProfessions(data?.map(p => p.nom) || []);
+        const data = unwrapPaginated<{ nom: string }>(await professionsApi.getAll());
+        setProfessions(data.filter(p => p.nom).map(p => p.nom));
       } catch (error) {
         console.error("Erreur chargement professions:", error);
         // Fallback sur les professions par défaut si erreur
@@ -214,141 +209,41 @@ const RegisterProviderSteps = () => {
         ? `${formData.prenom} ${formData.nom}`
         : formData.raisonSociale;
 
-      // Créer le compte
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const registerRes = await authApi.register({
         email: formData.email,
         password: formData.password,
-        options: {
-          data: {
-            role: "prestataire",
-            full_name: fullName,
-          }
-        }
+        password_confirmation: formData.confirmPassword,
+        role: 'prestataire',
+        type_personne: typePrestataire === 'physique' ? 'physique' : 'morale',
+        nom: typePrestataire === 'physique' ? formData.nom : formData.representantNom,
+        prenom: typePrestataire === 'physique' ? formData.prenom : (formData.representantPrenom || '—'),
+        raison_sociale: typePrestataire === 'morale' ? formData.raisonSociale : undefined,
+        telephone: formData.phone,
+        ville: formData.city,
       });
+      const userId = String(registerRes.user?.id ?? '');
 
-      if (authError) throw authError;
-      if (!authData.user) throw new Error("Erreur lors de la création du compte");
-
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Upload des documents vers Supabase Storage
-      let idDocumentUrl = null;
-      let qualificationUrl = null;
-
-      if (documents.idDocument) {
-        const idFileName = `${authData.user.id}/id-document-${Date.now()}.${documents.idDocument.name.split('.').pop()}`;
-        const { data: idUpload, error: idError } = await supabase.storage
-          .from('provider-documents')
-          .upload(idFileName, documents.idDocument);
-
-        if (idError) {
-          console.error("Erreur upload document d'identité:", idError);
+      if (documents.idDocument && userId) {
+        try {
+          await uploadApi.uploadDocument(documents.idDocument, 'cni', userId);
+        } catch (e) {
+          console.error("Erreur upload document d'identité:", e);
           toast.error("Erreur lors de l'upload du document d'identité");
-        } else {
-          const { data: { publicUrl } } = supabase.storage
-            .from('provider-documents')
-            .getPublicUrl(idFileName);
-          idDocumentUrl = publicUrl;
         }
       }
 
-      if (documents.qualification) {
-        const qualFileName = `${authData.user.id}/qualification-${Date.now()}.${documents.qualification.name.split('.').pop()}`;
-        const { data: qualUpload, error: qualError } = await supabase.storage
-          .from('provider-documents')
-          .upload(qualFileName, documents.qualification);
-
-        if (qualError) {
-          console.error("Erreur upload qualification:", qualError);
+      if (documents.qualification && userId) {
+        try {
+          await uploadApi.uploadDocument(documents.qualification, 'autre', userId);
+        } catch (e) {
+          console.error("Erreur upload qualification:", e);
           toast.error("Erreur lors de l'upload du document de qualification");
-        } else {
-          const { data: { publicUrl } } = supabase.storage
-            .from('provider-documents')
-            .getPublicUrl(qualFileName);
-          qualificationUrl = publicUrl;
         }
       }
 
-      // Préparer les données du profil
-      const prestataireData: any = {
-        user_id: authData.user.id,
-        type_prestataire: typePrestataire,
-        full_name: fullName,
-        profession: formData.profession,
-        bio: formData.bio || `Prestataire ${formData.profession} avec ${formData.experience} ans d'expérience à ${formData.city}`,
-        email: formData.email,
-        rating: 0,
-        verified: false,
-        documents_verified: false,
-        id_document_url: idDocumentUrl,
-        qualification_url: qualificationUrl,
-        experience_years: parseInt(formData.experience) || 0,
-      };
-
-      // Ajouter les champs spécifiques selon le type
-      if (typePrestataire === 'physique') {
-        prestataireData.nom = formData.nom;
-        prestataireData.prenom = formData.prenom;
-        prestataireData.date_naissance = formData.dateNaissance || null;
-        prestataireData.numero_cni = formData.numeroCNI || null;
-      } else {
-        prestataireData.raison_sociale = formData.raisonSociale;
-        prestataireData.forme_juridique = formData.formeJuridique || null;
-        prestataireData.numero_rccm = formData.numeroRCCM || null;
-        prestataireData.numero_impot = formData.numeroImpot || null;
-        prestataireData.numero_id_nat = formData.numeroIdNat || null;
-        prestataireData.representant_legal_nom = formData.representantNom;
-        prestataireData.representant_legal_prenom = formData.representantPrenom || null;
-        prestataireData.representant_legal_fonction = formData.representantFonction || null;
-        prestataireData.adresse_siege = formData.adresseSiege || null;
-        prestataireData.ville_siege = formData.villeSiege || null;
-        prestataireData.pays_siege = 'RDC';
-      }
-
-      // Afficher les données qui vont être envoyées (pour debug)
-      console.log("📤 Données prestataire à envoyer:", prestataireData);
-
-      // Créer le profil avec les URLs des documents
-      const { data: profileData, error: profileError } = await supabase
-        .from("prestataires")
-        .insert(prestataireData)
-        .select()
-        .single();
-
-      if (profileError) {
-        console.error("Erreur création profil:", profileError);
-        toast.error("Compte créé mais erreur lors de la création du profil");
-      }
-
-      // Créer les entrées de services multiples
-      if (profileData && selectedServices.length > 0) {
-        const servicesData = selectedServices.map(s => ({
-          prestataire_id: profileData.id,
-          service: s.service,
-          niveau_competence: s.niveau,
-          annees_experience: s.experience,
-          principal: s.service === formData.profession,
-        }));
-
-        const { error: servicesError } = await supabase
-          .from("prestataire_services")
-          .insert(servicesData);
-
-        if (servicesError) {
-          console.error("Erreur création services:", servicesError);
-          toast.error("Profil créé mais erreur lors de l'ajout des services");
-        } else {
-          toast.success(`${selectedServices.length} service(s) ajouté(s) à votre profil`);
-        }
-      }
-
-      if (idDocumentUrl && qualificationUrl) {
-        toast.success("Documents uploadés avec succès!");
-      }
-
-      toast.success("Inscription réussie ! Redirection...");
+            toast.success("Inscription réussie ! Redirection...");
       setTimeout(() => {
-        navigate("/prestataire/en-attente");
+        navigate("/dashboard/prestataire");
       }, 1500);
 
     } catch (error: any) {

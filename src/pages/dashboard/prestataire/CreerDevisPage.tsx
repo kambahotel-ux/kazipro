@@ -1,18 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
+import { devisApi, demandesApi, configPaiementApi } from '@/lib/api';
+import { getProfil, professionLabelFromProfil } from '@/lib/kazipro-profile';
 import { useAuth } from '@/contexts/AuthContext';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, Calculator, Send, AlertCircle, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Send, AlertCircle, Plus, Trash2 } from 'lucide-react';
+import { DetailPageSkeleton } from '@/components/dashboard/AdminLoadingSkeleton';
 import { useToast } from '@/hooks/use-toast';
+import {
+  computeAcompte,
+  computeDevisTotals,
+  createEmptyLigne,
+  DEVIS_LIGNE_TYPES,
+  DEVISE_OPTIONS,
+  formatMontant,
+  parseDecimalInput,
+  type DevisDevise,
+  ligneTotal,
+  TYPE_LIGNE_LABEL,
+  type DevisLigneForm,
+  type DevisLigneType,
+} from '@/lib/devis-form';
+import { demandeAccepteNouveauDevis, demandeDevisFermeRaison } from '@/lib/demande-eligibility';
 
 export default function CreerDevisPage() {
   const { demandeId } = useParams<{ demandeId: string }>();
@@ -20,38 +35,20 @@ export default function CreerDevisPage() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [demande, setDemande] = useState<any>(null);
-  const [prestataire, setPrestataire] = useState<any>(null);
+  const [demande, setDemande] = useState<Record<string, unknown> | null>(null);
+  const [prestataire, setPrestataire] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // Formulaire - Devise
-  const [devise, setDevise] = useState('CDF');
-  
-  // Formulaire - Items/Articles
-  const [items, setItems] = useState<Array<{
-    id: string;
-    designation: string;
-    quantite: number;
-    prix_unitaire: number;
-    total: number;
-  }>>([]);
-  
-  // Formulaire - Autres
-  const [titre, setTitre] = useState('');
-  const [fraisDeplacement, setFraisDeplacement] = useState('0');
-  const [tva, setTva] = useState('16');
   const [description, setDescription] = useState('');
-  const [delaiExecution, setDelaiExecution] = useState('');
-  const [delaiIntervention, setDelaiIntervention] = useState('');
-  const [garantie, setGarantie] = useState('');
-  const [validiteDevis, setValiditeDevis] = useState('30');
-  
-  // Conditions de paiement
-  const [acompteRequis, setAcompteRequis] = useState(false);
+  const [devise, setDevise] = useState<DevisDevise>('CDF');
+  const [lignes, setLignes] = useState<DevisLigneForm[]>([]);
+  const [tva, setTva] = useState('16');
+  const [dateDebut, setDateDebut] = useState('');
+  const [dureeJours, setDureeJours] = useState('2');
+  const [validiteJours, setValiditeJours] = useState('30');
+  const [acompteActif, setAcompteActif] = useState(true);
   const [pourcentageAcompte, setPourcentageAcompte] = useState('30');
-  const [modalitesPaiement, setModalitesPaiement] = useState('');
-  const [methodesAcceptees, setMethodesAcceptees] = useState<string[]>(['Mobile Money']);
 
   useEffect(() => {
     loadData();
@@ -62,34 +59,29 @@ export default function CreerDevisPage() {
 
     try {
       setLoading(true);
-
-      // Charger le prestataire
-      const { data: prestataireData } = await supabase
-        .from('prestataires')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      setPrestataire(prestataireData);
-
-      // Charger la demande
-      const { data: demandeData, error } = await supabase
-        .from('demandes')
-        .select('*')
-        .eq('id', demandeId)
-        .maybeSingle();
-
-      if (error) throw error;
+      setPrestataire(getProfil(user) as Record<string, unknown>);
+      const demandeData = (await demandesApi.getById(String(demandeId))) as Record<string, unknown>;
       setDemande(demandeData);
 
-      // Pré-remplir le titre et la description
-      const titredemande = demandeData.title || demandeData.titre;
-      setTitre(`Devis pour: ${titredemande}`);
-      setDescription(`Je propose de réaliser les travaux suivants:\n- `);
-      
-      // Ajouter un item par défaut
-      addItem();
+      const titre = String(demandeData.title ?? demandeData.titre ?? 'cette demande');
+      setDescription(
+        `Proposition pour : ${titre}\n\n` +
+          '• Diagnostic et réparation\n' +
+          '• Fournitures si nécessaire (hors main d\'œuvre)\n'
+      );
 
+      try {
+        const config = await configPaiementApi.get();
+        const pct = config?.acompte_pourcentage_defaut;
+        if (pct != null) setPourcentageAcompte(String(Math.round(Number(pct))));
+      } catch {
+        /* config optionnelle */
+      }
+
+      setLignes([
+        createEmptyLigne('main_oeuvre'),
+        createEmptyLigne('fourniture'),
+      ]);
     } catch (error) {
       console.error('Erreur chargement:', error);
       toast({
@@ -97,200 +89,126 @@ export default function CreerDevisPage() {
         description: 'Impossible de charger les informations',
         variant: 'destructive',
       });
-      navigate('/dashboard/prestataire/opportunites');
+      navigate('/dashboard/prestataire/marche/opportunites');
     } finally {
       setLoading(false);
     }
   };
 
-  // Gestion des items
-  const addItem = () => {
-    setItems([...items, {
-      id: Date.now().toString(),
-      designation: '',
-      quantite: 1,
-      prix_unitaire: 0,
-      total: 0
-    }]);
+  const totals = useMemo(
+    () => computeDevisTotals(lignes, parseFloat(tva) || 0),
+    [lignes, tva]
+  );
+
+  const acompte = useMemo(
+    () =>
+      computeAcompte(
+        totals.mainOeuvreTtc,
+        totals.montantTtc,
+        parseFloat(pourcentageAcompte) || 0,
+        acompteActif
+      ),
+    [totals, pourcentageAcompte, acompteActif]
+  );
+
+  const addLigne = (type: DevisLigneType) => {
+    setLignes((prev) => [...prev, createEmptyLigne(type)]);
   };
 
-  const removeItem = (id: string) => {
-    setItems(items.filter(item => item.id !== id));
+  const removeLigne = (id: string) => {
+    setLignes((prev) => (prev.length <= 1 ? prev : prev.filter((l) => l.id !== id)));
   };
 
-  const updateItem = (id: string, field: string, value: any) => {
-    setItems(items.map(item => {
-      if (item.id === id) {
-        const updated = { ...item, [field]: value };
-        // Recalculer le total
-        if (field === 'quantite' || field === 'prix_unitaire') {
-          updated.total = updated.quantite * updated.prix_unitaire;
-        }
-        return updated;
-      }
-      return item;
-    }));
-  };
-
-  // Calculs automatiques basés sur les items
-  const sousTotal = items.reduce((sum, item) => sum + item.total, 0);
-  const montantHT = sousTotal + parseFloat(fraisDeplacement || '0');
-  const montantTVA = montantHT * (parseFloat(tva) / 100);
-  const montantTTC = montantHT + montantTVA;
-  const montantAcompte = acompteRequis ? montantTTC * (parseFloat(pourcentageAcompte) / 100) : 0;
-  const montantSolde = montantTTC - montantAcompte;
-
-  const handleMethodeToggle = (methode: string) => {
-    setMethodesAcceptees(prev =>
-      prev.includes(methode)
-        ? prev.filter(m => m !== methode)
-        : [...prev, methode]
+  const updateLigne = (id: string, patch: Partial<DevisLigneForm>) => {
+    setLignes((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, ...patch } : l))
     );
   };
 
+  const demandeTitre =
+    demande != null ? String(demande.title ?? demande.titre ?? '') : '';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!demande || !demandeId) return;
 
-    if (!prestataire || !demande) return;
+    const lignesValides = lignes.filter(
+      (l) => l.designation.trim() && l.quantite > 0 && l.prix_unitaire > 0
+    );
 
-    // Validation
-    if (!titre.trim()) {
+    if (lignesValides.length === 0) {
       toast({
-        title: 'Erreur',
-        description: 'Veuillez saisir un titre pour le devis',
+        title: 'Lignes manquantes',
+        description: 'Ajoutez au moins une ligne avec désignation, quantité et prix.',
         variant: 'destructive',
       });
       return;
     }
 
-    if (items.length === 0 || items.every(item => !item.designation.trim())) {
+    if (acompteActif && totals.mainOeuvreHt <= 0) {
       toast({
-        title: 'Erreur',
-        description: 'Veuillez ajouter au moins un article/service',
+        title: 'Main d\'œuvre requise',
+        description:
+          "L'acompte est calculé sur la main d'œuvre : ajoutez une ligne « Main d'œuvre ».",
         variant: 'destructive',
       });
       return;
     }
 
-    if (items.some(item => item.prix_unitaire <= 0 || item.quantite <= 0)) {
+    if (!dateDebut) {
       toast({
-        title: 'Erreur',
-        description: 'Tous les articles doivent avoir un prix et une quantité valides',
+        title: 'Date de début',
+        description: 'Indiquez la date prévue de début des travaux.',
         variant: 'destructive',
       });
       return;
     }
 
-    if (!description.trim()) {
+    const duree = parseInt(dureeJours, 10);
+    if (!duree || duree < 1) {
       toast({
-        title: 'Erreur',
-        description: 'Veuillez saisir une description',
+        title: 'Durée invalide',
+        description: 'La durée en jours doit être au moins 1.',
         variant: 'destructive',
       });
       return;
     }
 
-    if (!delaiExecution || !delaiIntervention) {
-      toast({
-        title: 'Erreur',
-        description: 'Veuillez renseigner les délais',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (acompteRequis && methodesAcceptees.length === 0) {
-      toast({
-        title: 'Erreur',
-        description: 'Veuillez sélectionner au moins une méthode de paiement',
-        variant: 'destructive',
-      });
-      return;
-    }
+    const validite = new Date();
+    validite.setDate(validite.getDate() + parseInt(validiteJours, 10) || 30);
 
     try {
       setSubmitting(true);
 
-      // Préparer les conditions de paiement
-      const conditionsPaiement = {
-        acompte_requis: acompteRequis,
-        pourcentage_acompte: acompteRequis ? parseFloat(pourcentageAcompte) : 0,
-        montant_acompte: montantAcompte,
-        montant_solde: montantSolde,
-        modalites: modalitesPaiement || (acompteRequis 
-          ? `${pourcentageAcompte}% avant début des travaux, ${100 - parseFloat(pourcentageAcompte)}% après validation`
-          : 'Paiement après validation des travaux'),
-        methodes_acceptees: methodesAcceptees,
-      };
-
-      // Calculer la date d'expiration
-      const dateExpiration = new Date();
-      dateExpiration.setDate(dateExpiration.getDate() + parseInt(validiteDevis));
-
-      // Créer le devis (le numéro sera auto-généré par le trigger SQL)
-      const { data, error } = await supabase
-        .from('devis')
-        .insert({
-          demande_id: demandeId,
-          prestataire_id: prestataire.id,
-          titre: titre, // ✅ Titre du devis
-          amount: montantTTC,
-          montant_ttc: montantTTC,
-          montant_ht: montantHT,
-          tva: parseFloat(tva),
-          frais_deplacement: parseFloat(fraisDeplacement),
-          devise: devise, // ✅ Devise dynamique
-          description,
-          delai_execution: delaiExecution,
-          delai_intervention: delaiIntervention,
-          garantie: garantie || null,
-          validite_devis: dateExpiration.toISOString().split('T')[0],
-          conditions_paiement: conditionsPaiement,
-          status: 'pending',
-          statut: 'en_attente',
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Insérer les items/articles du devis
-      if (data && items.length > 0) {
-        const itemsToInsert = items
-          .filter(item => item.designation.trim()) // Filtrer les items vides
-          .map(item => ({
-            devis_id: data.id,
-            designation: item.designation,
-            quantite: item.quantite,
-            prix_unitaire: item.prix_unitaire,
-            montant: item.total,
-          }));
-
-        if (itemsToInsert.length > 0) {
-          const { error: itemsError } = await supabase
-            .from('devis_pro_items')
-            .insert(itemsToInsert);
-
-          if (itemsError) {
-            console.error('Erreur insertion items:', itemsError);
-            // Ne pas bloquer si erreur items, le devis est déjà créé
-          }
-        }
-      }
-
-      toast({
-        title: 'Devis soumis!',
-        description: 'Votre devis a été envoyé au client avec succès',
+      await devisApi.create({
+        demande_id: Number(demandeId),
+        description: description.trim() || null,
+        tva: parseFloat(tva) || 0,
+        acompte_pourcentage: acompteActif ? parseFloat(pourcentageAcompte) : 0,
+        devise,
+        date_debut: dateDebut,
+        duree_jours: duree,
+        validite: validite.toISOString().split('T')[0],
+        items: lignesValides.map((l) => ({
+          type_ligne: l.type_ligne,
+          designation: l.designation.trim(),
+          quantite: Math.round(l.quantite * 100) / 100,
+          unite: l.unite || 'forfait',
+          prix_unitaire: Math.round(l.prix_unitaire * 100) / 100,
+        })),
       });
 
-      // Rediriger vers la liste des devis
-      navigate('/dashboard/prestataire/devis');
-
-    } catch (error: any) {
-      console.error('Erreur soumission devis:', error);
+      toast({
+        title: 'Devis envoyé',
+        description: 'Le client peut maintenant consulter votre proposition.',
+      });
+      navigate('/dashboard/prestataire/marche/devis');
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Impossible de soumettre le devis';
       toast({
         title: 'Erreur',
-        description: error.message || 'Impossible de soumettre le devis',
+        description: message,
         variant: 'destructive',
       });
     } finally {
@@ -300,9 +218,9 @@ export default function CreerDevisPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-muted-foreground">Chargement...</p>
-      </div>
+      <DashboardLayout role="prestataire" userName="Prestataire" userRole="Prestataire">
+        <DetailPageSkeleton />
+      </DashboardLayout>
     );
   }
 
@@ -311,409 +229,380 @@ export default function CreerDevisPage() {
       <div className="flex flex-col items-center justify-center min-h-screen">
         <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
         <h2 className="text-2xl font-bold mb-2">Demande introuvable</h2>
-        <Button onClick={() => navigate('/dashboard/prestataire/opportunites')}>
+        <Button onClick={() => navigate('/dashboard/prestataire/marche/opportunites')}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Retour aux opportunités
+          Retour
         </Button>
       </div>
     );
   }
 
+  const demandeStatut = String(demande.statut ?? demande.status ?? '');
+  const devisFermeRaison = !demandeAccepteNouveauDevis(demandeStatut)
+    ? demandeDevisFermeRaison(demandeStatut)
+    : null;
+
+  if (devisFermeRaison) {
+    return (
+      <DashboardLayout
+        role="prestataire"
+        userName={String(prestataire?.full_name ?? 'Prestataire')}
+        userRole={professionLabelFromProfil(prestataire) || 'Prestataire'}
+      >
+        <div className="mx-auto flex max-w-lg flex-col items-center py-16 text-center">
+          <AlertCircle className="mb-4 h-12 w-12 text-amber-600" />
+          <h2 className="mb-2 text-xl font-bold">Devis fermé</h2>
+          <p className="mb-6 text-muted-foreground">{devisFermeRaison}</p>
+          <Button onClick={() => navigate(`/dashboard/prestataire/demandes/${demandeId}`)}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Retour à l&apos;opportunité
+          </Button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
-    <DashboardLayout 
-      role="prestataire" 
-      userName={prestataire?.full_name || "Prestataire"} 
-      userRole={prestataire?.profession || "Prestataire"}
+    <DashboardLayout
+      role="prestataire"
+      userName={String(prestataire?.full_name ?? 'Prestataire')}
+      userRole={professionLabelFromProfil(prestataire) || 'Prestataire'}
     >
-      <div className="space-y-6 max-w-4xl mx-auto pb-12">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+      <form onSubmit={handleSubmit} className="max-w-3xl mx-auto pb-24">
+        <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <Button
+              type="button"
               variant="ghost"
+              size="sm"
+              className="-ml-2 h-8 px-2"
               onClick={() => navigate(`/dashboard/prestataire/demandes/${demandeId}`)}
             >
-              <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft className="mr-1 h-4 w-4" />
               Retour
             </Button>
-            <h1 className="text-3xl font-bold mt-2">Créer un devis</h1>
-          <p className="text-muted-foreground">
-            Pour: {demande.title || demande.titre}
-          </p>
-        </div>
-      </div>
+            <h1 className="text-xl font-semibold tracking-tight">Créer un devis</h1>
+            <p className="text-sm text-muted-foreground">{demandeTitre}</p>
+          </div>
+        </header>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Informations générales */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Informations générales</CardTitle>
-            <CardDescription>Titre et devise du devis</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Titre */}
-            <div className="space-y-2">
-              <Label htmlFor="titre">Titre du devis *</Label>
-              <Input
-                id="titre"
-                value={titre}
-                onChange={(e) => setTitre(e.target.value)}
-                placeholder="Ex: Devis pour installation électrique"
-                required
+        <div className="space-y-4">
+          {/* Description + planning */}
+          <section className="rounded-lg border bg-card p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold">Description & planning</h2>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="devise" className="text-xs whitespace-nowrap">
+                  Devise
+                </Label>
+                <Select value={devise} onValueChange={(v) => setDevise(v as DevisDevise)}>
+                  <SelectTrigger id="devise" className="h-9 w-[180px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEVISE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="description" className="text-xs">
+                Description des travaux
+              </Label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                className="resize-y min-h-[88px] text-sm"
+                placeholder="Détaillez votre intervention…"
               />
             </div>
-
-            {/* Devise */}
-            <div className="space-y-2">
-              <Label htmlFor="devise">Devise *</Label>
-              <Select value={devise} onValueChange={setDevise}>
-                <SelectTrigger id="devise">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CDF">Franc Congolais (CDF)</SelectItem>
-                  <SelectItem value="USD">Dollar Américain (USD)</SelectItem>
-                  <SelectItem value="EUR">Euro (EUR)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Tarification */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Tarification</CardTitle>
-            <CardDescription>Définissez vos tarifs pour cette prestation</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Articles/Items */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label>Articles / Services *</Label>
-                <Button type="button" size="sm" variant="outline" onClick={addItem}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Ajouter un article
-                </Button>
-              </div>
-
-              {items.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                  <p>Aucun article ajouté</p>
-                  <p className="text-sm mt-1">Cliquez sur "Ajouter un article" pour commencer</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {items.map((item, index) => (
-                    <div key={item.id} className="border rounded-lg p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Article {index + 1}</span>
-                        {items.length > 1 && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => removeItem(item.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        )}
-                      </div>
-
-                      <div className="grid gap-3 md:grid-cols-4">
-                        <div className="md:col-span-2 space-y-2">
-                          <Label>Désignation *</Label>
-                          <Input
-                            value={item.designation}
-                            onChange={(e) => updateItem(item.id, 'designation', e.target.value)}
-                            placeholder="Ex: Main d'œuvre, Matériaux..."
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Quantité *</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            step="1"
-                            value={item.quantite}
-                            onChange={(e) => updateItem(item.id, 'quantite', parseFloat(e.target.value) || 0)}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Prix unitaire ({devise}) *</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={item.prix_unitaire}
-                            onChange={(e) => updateItem(item.id, 'prix_unitaire', parseFloat(e.target.value) || 0)}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end">
-                        <span className="text-sm font-medium">
-                          Total: {item.total.toLocaleString()} {devise}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <Separator />
-
-            {/* Frais supplémentaires */}
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="fraisDeplacement">Frais de déplacement ({devise})</Label>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="dateDebut" className="text-xs">
+                  Date de début *
+                </Label>
                 <Input
-                  id="fraisDeplacement"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={fraisDeplacement}
-                  onChange={(e) => setFraisDeplacement(e.target.value)}
-                  placeholder="0"
+                  id="dateDebut"
+                  type="date"
+                  required
+                  value={dateDebut}
+                  onChange={(e) => setDateDebut(e.target.value)}
+                  className="h-9"
                 />
               </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="duree" className="text-xs">
+                  Durée (jours) *
+                </Label>
+                <Input
+                  id="duree"
+                  type="number"
+                  min={1}
+                  required
+                  value={dureeJours}
+                  onChange={(e) => setDureeJours(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="validite" className="text-xs">
+                  Validité (jours)
+                </Label>
+                <Input
+                  id="validite"
+                  type="number"
+                  min={1}
+                  value={validiteJours}
+                  onChange={(e) => setValiditeJours(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+            </div>
+          </section>
 
-              <div className="space-y-2">
-                <Label htmlFor="tva">TVA (%)</Label>
+          {/* Lignes du devis */}
+          <section className="rounded-lg border bg-card overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5 bg-muted/40">
+              <div>
+                <h2 className="text-sm font-semibold">Lignes du devis</h2>
+                <p className="text-xs text-muted-foreground">
+                  Ventilation obligatoire (main d&apos;œuvre, fournitures, transport…)
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {(['main_oeuvre', 'fourniture', 'transport'] as const).map((type) => (
+                  <Button
+                    key={type}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => addLigne(type)}
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    {TYPE_LIGNE_LABEL[type].split(' /')[0]}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="divide-y">
+              {lignes.map((ligne, index) => (
+                <div key={ligne.id} className="px-3 py-2.5 sm:px-4">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Ligne {index + 1}
+                    </span>
+                    {lignes.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => removeLigne(ligne.id)}
+                        aria-label="Supprimer la ligne"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-12 sm:items-end">
+                    <div className="sm:col-span-3 space-y-1">
+                      <Label className="text-xs">Type</Label>
+                      <Select
+                        value={ligne.type_ligne}
+                        onValueChange={(v) =>
+                          updateLigne(ligne.id, { type_ligne: v as DevisLigneType })
+                        }
+                      >
+                        <SelectTrigger className="h-9 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DEVIS_LIGNE_TYPES.map((t) => (
+                            <SelectItem key={t} value={t} className="text-xs">
+                              {TYPE_LIGNE_LABEL[t]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="sm:col-span-4 space-y-1">
+                      <Label className="text-xs">Désignation</Label>
+                      <Input
+                        className="h-9 text-sm"
+                        value={ligne.designation}
+                        onChange={(e) =>
+                          updateLigne(ligne.id, { designation: e.target.value })
+                        }
+                        placeholder={
+                          ligne.type_ligne === 'main_oeuvre'
+                            ? "Ex. Main d'œuvre réparation"
+                            : 'Ex. Mastique, joints…'
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 sm:col-span-4">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Qté</Label>
+                        <Input
+                          type="number"
+                          min={0.01}
+                          step={0.01}
+                          className="h-9"
+                          value={ligne.quantite}
+                          onChange={(e) =>
+                            updateLigne(ligne.id, {
+                              quantite: Math.max(0.01, parseDecimalInput(e.target.value, 0.01)),
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1 col-span-2">
+                        <Label className="text-xs">Prix unit. ({devise})</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          className="h-9"
+                          value={ligne.prix_unitaire || ''}
+                          onChange={(e) =>
+                            updateLigne(ligne.id, {
+                              prix_unitaire: Math.max(0, parseDecimalInput(e.target.value, 0)),
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="sm:col-span-1 text-right text-xs font-medium tabular-nums pt-1 sm:pt-0">
+                      {formatMontant(ligneTotal(ligne), devise)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Récap + acompte */}
+          <section className="rounded-lg border bg-card p-4 space-y-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1.5 w-24">
+                <Label htmlFor="tva" className="text-xs">
+                  TVA (%)
+                </Label>
                 <Input
                   id="tva"
                   type="number"
-                  min="0"
-                  max="100"
-                  step="0.1"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  className="h-9"
                   value={tva}
                   onChange={(e) => setTva(e.target.value)}
                 />
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="validiteDevis">Validité du devis (jours)</Label>
-                <Input
-                  id="validiteDevis"
-                  type="number"
-                  min="1"
-                  value={validiteDevis}
-                  onChange={(e) => setValiditeDevis(e.target.value)}
-                />
+            <div className="rounded-md bg-muted/50 px-3 py-2 text-sm space-y-1">
+              {totals.mainOeuvreHt > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Main d&apos;œuvre HT</span>
+                  <span>{formatMontant(totals.mainOeuvreHt, devise)}</span>
+                </div>
+              )}
+              {totals.fournitureHt > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Fournitures HT</span>
+                  <span>{formatMontant(totals.fournitureHt, devise)}</span>
+                </div>
+              )}
+              {totals.transportHt > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Transport HT</span>
+                  <span>{formatMontant(totals.transportHt, devise)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Total HT</span>
+                <span>{formatMontant(totals.montantHt, devise)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">TVA</span>
+                <span>{formatMontant(totals.montantTva, devise)}</span>
+              </div>
+              <div className="flex justify-between font-semibold pt-1 border-t border-border/60">
+                <span>Total TTC</span>
+                <span className="text-primary">{formatMontant(totals.montantTtc, devise)}</span>
               </div>
             </div>
 
-            <Separator />
-
-            {/* Calculs automatiques */}
-            <div className="bg-muted p-4 rounded-lg space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Sous-total articles:</span>
-                <span className="font-medium">{sousTotal.toLocaleString()} {devise}</span>
+            <div className="border-t pt-3 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Acompte</p>
+                  <p className="text-xs text-muted-foreground">
+                    {pourcentageAcompte}% de la main d&apos;œuvre TTC uniquement
+                  </p>
+                </div>
+                <Switch checked={acompteActif} onCheckedChange={setAcompteActif} />
               </div>
-              <div className="flex justify-between text-sm">
-                <span>Frais de déplacement:</span>
-                <span className="font-medium">{parseFloat(fraisDeplacement || '0').toLocaleString()} {devise}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Montant HT:</span>
-                <span className="font-medium">{montantHT.toLocaleString()} {devise}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>TVA ({tva}%):</span>
-                <span className="font-medium">{montantTVA.toLocaleString()} {devise}</span>
-              </div>
-              <Separator />
-              <div className="flex justify-between text-lg font-bold">
-                <span>Montant TTC:</span>
-                <span className="text-primary">{montantTTC.toLocaleString()} {devise}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Description */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Description des travaux</CardTitle>
-            <CardDescription>Décrivez en détail ce que vous proposez</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Décrivez les travaux à réaliser, les matériaux utilisés, la méthodologie..."
-              rows={8}
-              required
-            />
-          </CardContent>
-        </Card>
-
-        {/* Délais et garantie */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Délais et garantie</CardTitle>
-            <CardDescription>Informations sur le planning et les garanties</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="delaiIntervention">Délai d'intervention *</Label>
-                <Input
-                  id="delaiIntervention"
-                  value={delaiIntervention}
-                  onChange={(e) => setDelaiIntervention(e.target.value)}
-                  placeholder="Ex: 2 jours, Immédiat, 1 semaine"
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  Quand pouvez-vous commencer?
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="delaiExecution">Durée des travaux *</Label>
-                <Input
-                  id="delaiExecution"
-                  value={delaiExecution}
-                  onChange={(e) => setDelaiExecution(e.target.value)}
-                  placeholder="Ex: 3 jours, 1 semaine, 2 mois"
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  Combien de temps pour terminer?
-                </p>
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="garantie">Garantie</Label>
-                <Input
-                  id="garantie"
-                  value={garantie}
-                  onChange={(e) => setGarantie(e.target.value)}
-                  placeholder="Ex: 6 mois, 1 an, 2 ans"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Durée de garantie offerte (optionnel)
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Conditions de paiement */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Conditions de paiement</CardTitle>
-            <CardDescription>Définissez vos modalités de paiement</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Acompte */}
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Acompte requis</Label>
-                <p className="text-sm text-muted-foreground">
-                  Demander un acompte avant de commencer
-                </p>
-              </div>
-              <Switch
-                checked={acompteRequis}
-                onCheckedChange={setAcompteRequis}
-              />
-            </div>
-
-            {acompteRequis && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="pourcentageAcompte">Pourcentage d'acompte (%)</Label>
+              {acompteActif && (
+                <div className="grid gap-2 sm:grid-cols-2">
                   <Select value={pourcentageAcompte} onValueChange={setPourcentageAcompte}>
-                    <SelectTrigger>
-                      <SelectValue />
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="%" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="20">20%</SelectItem>
-                      <SelectItem value="30">30%</SelectItem>
-                      <SelectItem value="40">40%</SelectItem>
-                      <SelectItem value="50">50%</SelectItem>
+                      {['20', '30', '40', '50'].map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {p}%
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                  <div className="rounded-md border border-amber-200/80 bg-amber-50/80 dark:bg-amber-950/30 px-3 py-2 text-xs space-y-0.5">
+                    <div className="flex justify-between">
+                      <span>Acompte ({pourcentageAcompte}% MO)</span>
+                      <span className="font-semibold tabular-nums">
+                        {formatMontant(acompte.montantAcompte, devise)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Solde (reste du devis)</span>
+                      <span className="font-medium tabular-nums">
+                        {formatMontant(acompte.montantSolde, devise)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-
-                <div className="bg-muted p-4 rounded-lg space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Acompte ({pourcentageAcompte}%):</span>
-                    <span className="font-medium">{montantAcompte.toLocaleString()} {devise}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Solde:</span>
-                    <span className="font-medium">{montantSolde.toLocaleString()} {devise}</span>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Modalités */}
-            <div className="space-y-2">
-              <Label htmlFor="modalitesPaiement">Modalités de paiement (optionnel)</Label>
-              <Textarea
-                id="modalitesPaiement"
-                value={modalitesPaiement}
-                onChange={(e) => setModalitesPaiement(e.target.value)}
-                placeholder={acompteRequis 
-                  ? `Ex: ${pourcentageAcompte}% avant début des travaux, ${100 - parseFloat(pourcentageAcompte)}% après validation`
-                  : 'Ex: Paiement après validation des travaux'}
-                rows={2}
-              />
+              )}
             </div>
+          </section>
+        </div>
 
-            {/* Méthodes acceptées */}
-            <div className="space-y-2">
-              <Label>Méthodes de paiement acceptées</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {['Mobile Money', 'Virement', 'Espèces', 'Chèque'].map((methode) => (
-                  <div key={methode} className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id={methode}
-                      checked={methodesAcceptees.includes(methode)}
-                      onChange={() => handleMethodeToggle(methode)}
-                      className="rounded"
-                    />
-                    <Label htmlFor={methode} className="font-normal cursor-pointer">
-                      {methode}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Actions */}
-        <div className="flex items-center justify-between">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate(`/dashboard/prestataire/demandes/${demandeId}`)}
-          >
-            Annuler
-          </Button>
-          <Button type="submit" size="lg" disabled={submitting}>
-            {submitting ? (
-              'Envoi en cours...'
-            ) : (
-              <>
-                <Send className="mr-2 h-4 w-4" />
-                Soumettre le devis
-              </>
-            )}
-          </Button>
+        <div className="fixed bottom-0 left-0 right-0 z-20 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:left-[var(--sidebar-width,16rem)]">
+          <div className="max-w-3xl mx-auto flex items-center justify-between gap-3 px-4 py-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/dashboard/prestataire/demandes/${demandeId}`)}
+            >
+              Annuler
+            </Button>
+            <Button type="submit" size="sm" disabled={submitting}>
+              <Send className="mr-2 h-4 w-4" />
+              {submitting ? 'Envoi…' : 'Soumettre le devis'}
+            </Button>
+          </div>
         </div>
       </form>
-      </div>
     </DashboardLayout>
   );
 }

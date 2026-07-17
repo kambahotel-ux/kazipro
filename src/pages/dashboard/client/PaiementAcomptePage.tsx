@@ -8,8 +8,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { supabase } from '@/lib/supabase';
+import { contratsApi, paiementsApi } from '@/lib/api';
+import { getClientDisplayName, mapDevisToUi } from '@/lib/client-helpers';
+import {
+  PAYMENTS_SIMULATION_ENABLED,
+  finalizePaiementSimulation,
+} from '@/lib/payments';
+import { reportError, trackEvent } from '@/lib/monitoring';
 import { toast } from 'sonner';
+import { DetailPageSkeleton } from '@/components/dashboard/AdminLoadingSkeleton';
+import { SlideToConfirm } from '@/components/ui/SlideToConfirm';
 import { 
   CreditCard, 
   Smartphone,
@@ -26,11 +34,12 @@ export default function PaiementAcomptePage() {
   const { contratId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const clientName = getClientDisplayName(user);
   
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
-  const [contrat, setContrat] = useState<any>(null);
-  const [devis, setDevis] = useState<any>(null);
+  const [contrat, setContrat] = useState<Record<string, unknown> | null>(null);
+  const [devis, setDevis] = useState<Record<string, unknown> | null>(null);
   const [methodePaiement, setMethodePaiement] = useState<MethodePaiement>('mpesa');
   const [numeroTelephone, setNumeroTelephone] = useState('');
   const [montantAcompte, setMontantAcompte] = useState(0);
@@ -43,72 +52,28 @@ export default function PaiementAcomptePage() {
     try {
       setLoading(true);
       
-      // Récupérer le contrat
-      const { data: contratData, error: contratError } = await supabase
-        .from('contrats')
-        .select('*')
-        .eq('id', contratId)
-        .single();
+      const contratData = await contratsApi.getById(String(contratId));
+      setContrat(contratData as Record<string, unknown>);
 
-      if (contratError) throw contratError;
-      setContrat(contratData);
+      const devisRaw =
+        (contratData as { devis?: Record<string, unknown> }).devis ??
+        null;
 
-      // Essayer d'abord dans devis_pro (nouvelle table)
-      let { data: devisData, error: devisError } = await supabase
-        .from('devis_pro')
-        .select(`
-          *,
-          prestataires (
-            full_name,
-            profession
-          )
-        `)
-        .eq('id', contratData.devis_id)
-        .maybeSingle();
-
-      // Si pas trouvé dans devis_pro, essayer dans devis (ancienne table)
-      if (!devisData) {
-        const { data: oldDevisData, error: oldDevisError } = await supabase
-          .from('devis')
-          .select(`
-            *,
-            prestataire:prestataires (
-              full_name,
-              profession
-            )
-          `)
-          .eq('id', contratData.devis_id)
-          .maybeSingle();
-
-        if (oldDevisError) throw oldDevisError;
-        
-        // Normaliser la structure pour compatibilité
-        if (oldDevisData) {
-          devisData = {
-            ...oldDevisData,
-            prestataires: Array.isArray(oldDevisData.prestataire) 
-              ? oldDevisData.prestataire[0] 
-              : oldDevisData.prestataire
-          };
-        }
-      }
-
-      if (devisError && devisError.code !== 'PGRST116') throw devisError;
-      
-      if (!devisData) {
+      if (!devisRaw) {
         toast.error('Devis introuvable');
         navigate('/dashboard/client/demandes');
         return;
       }
-      
-      setDevis(devisData);
 
-      // Calculer le montant de l'acompte
-      const pourcentageAcompte = contratData.conditions_paiement?.acompte || 30;
-      const montant = (devisData.montant_ttc * pourcentageAcompte) / 100;
+      const devisData = mapDevisToUi(devisRaw);
+      setDevis(devisData as Record<string, unknown>);
+
+      const montant =
+        Number((contratData as { acompte_montant?: number }).acompte_montant) ||
+        Math.round(Number(devisData.montant_ttc) * 0.3);
       setMontantAcompte(Math.round(montant));
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur:', error);
       toast.error('Erreur lors du chargement');
     } finally {
@@ -122,90 +87,72 @@ export default function PaiementAcomptePage() {
       return;
     }
 
+    if (!user) {
+      toast.error('Session expirée — reconnectez-vous');
+      return;
+    }
+
     try {
       setProcessing(true);
 
-      // Générer le numéro de paiement
-      const { data: numeroData, error: numeroError } = await supabase
-        .rpc('generate_paiement_numero');
-
-      if (numeroError) throw numeroError;
-
-      // Créer l'enregistrement de paiement
-      const { data: paiementData, error: paiementError } = await supabase
-        .from('paiements')
-        .insert({
-          numero: numeroData,
-          contrat_id: contratId,
-          devis_id: devis.id,
-          client_id: contrat.client_id,
-          prestataire_id: contrat.prestataire_id,
-          type_paiement: 'acompte',
-          montant_travaux: montantAcompte,
-          montant_materiel: 0,
-          montant_deplacement: 0,
-          montant_total: montantAcompte,
-          methode_paiement: methodePaiement,
-          statut: 'en_cours',
-          metadata: {
-            numero_telephone: numeroTelephone,
-            devis_id: devis.id
-          }
-        })
-        .select()
-        .single();
-
-      if (paiementError) throw paiementError;
-
-      // TODO: Intégration réelle avec M-Pesa/Airtel Money
-      // Pour l'instant, simulation d'un paiement réussi après 2 secondes
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Mettre à jour le statut du paiement
-      const { error: updateError } = await supabase
-        .from('paiements')
-        .update({
-          statut: 'valide',
-          date_paiement: new Date().toISOString(),
-          transaction_id: `SIM-${Date.now()}`, // Simulation
-          reference_paiement: `REF-${Date.now()}` // Simulation
-        })
-        .eq('id', paiementData.id);
-
-      if (updateError) {
-        console.error('Erreur mise à jour paiement:', updateError);
-        throw updateError;
+      const existing = await paiementsApi.getByContrat(String(contratId));
+      const succes = existing.find(
+        (p) =>
+          String((p as { type?: string; type_paiement?: string }).type ?? (p as { type_paiement?: string }).type_paiement) === 'acompte' &&
+          ['valide', 'complete'].includes(String((p as { statut?: string }).statut ?? '')),
+      );
+      if (succes?.id) {
+        toast.info('Ce contrat a déjà un acompte enregistré.');
+        navigate(`/dashboard/client/paiement/${succes.id}/confirmation`);
+        return;
       }
 
-      // Attendre un peu pour que le trigger se déclenche
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const enSuspens = existing.find(
+        (p) =>
+          String((p as { type?: string; type_paiement?: string }).type ?? (p as { type_paiement?: string }).type_paiement) === 'acompte' &&
+          ['en_cours', 'en_attente', 'echoue'].includes(String((p as { statut?: string }).statut ?? '')),
+      );
 
-      // Créer la mission
-      const { error: missionError } = await supabase
-        .from('missions')
-        .insert({
-          demande_id: devis.demande_id,
-          devis_id: devis.id,
-          contrat_id: contratId,
-          client_id: contrat.client_id,
-          prestataire_id: contrat.prestataire_id,
-          status: 'in_progress',
-          start_date: new Date().toISOString()
+      let paiementId: string | undefined;
+
+      if (enSuspens?.id) {
+        paiementId = String(enSuspens.id);
+      } else {
+        const created = await paiementsApi.payerAcompte({
+          contrat_id: String(contratId),
+          methode: methodePaiement,
+          reference_externe: numeroTelephone,
         });
-
-      if (missionError) {
-        console.error('Erreur création mission:', missionError);
-        // Ne pas bloquer si la mission échoue, le paiement est déjà validé
+        paiementId = String((created as { id?: string | number }).id ?? '');
+        trackEvent('payment_acompte_created', { contratId, paiementId });
       }
 
-      toast.success('Paiement effectué avec succès!');
-      
-      // Rediriger vers la page de confirmation
-      navigate(`/dashboard/client/paiement/${paiementData.id}/confirmation`);
+      if (!paiementId) {
+        throw new Error('Réponse paiement invalide');
+      }
 
-    } catch (error: any) {
-      console.error('Erreur:', error);
-      toast.error('Erreur lors du paiement');
+      if (!PAYMENTS_SIMULATION_ENABLED) {
+        toast.error('Paiement réel non activé. Contactez le support.');
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      const result = await finalizePaiementSimulation(paiementId);
+      if (result.ok) {
+        toast.success('Paiement effectué avec succès!');
+      } else {
+        toast.info(
+          'Paiement enregistré. Un administrateur doit le valider pour démarrer la mission.',
+        );
+      }
+      trackEvent('payment_acompte_validated', { contratId, paiementId });
+      navigate(`/dashboard/client/paiement/${paiementId}/confirmation`);
+
+    } catch (error: unknown) {
+      reportError('PaiementAcomptePage.handlePaiement', error, 'error', { contratId });
+      const message = error instanceof Error ? error.message : 'Erreur lors du paiement';
+      toast.error(message);
+      throw error;
     } finally {
       setProcessing(false);
     }
@@ -213,20 +160,15 @@ export default function PaiementAcomptePage() {
 
   if (loading) {
     return (
-      <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
-        <div className="flex items-center justify-center h-64 md:h-96 px-4">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-b-2 border-primary mx-auto mb-3 md:mb-4"></div>
-            <p className="text-sm md:text-base text-muted-foreground">Chargement...</p>
-          </div>
-        </div>
+      <DashboardLayout role="client" userName={clientName} userRole="Client">
+        <DetailPageSkeleton />
       </DashboardLayout>
     );
   }
 
   if (!contrat || !devis) {
     return (
-      <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
+      <DashboardLayout role="client" userName={clientName} userRole="Client">
         <div className="p-3 md:p-6">
           <Alert variant="destructive">
             <AlertCircle className="w-4 h-4 shrink-0" />
@@ -237,12 +179,16 @@ export default function PaiementAcomptePage() {
     );
   }
 
-  const pourcentageAcompte = contrat.conditions_paiement?.acompte || 30;
+  const montantTtc = Number(devis.montant_ttc ?? 0);
+  const pourcentageAcompte =
+    montantTtc > 0 ? Math.round((montantAcompte / montantTtc) * 100) : 30;
+  const prest = (devis.prestataires ?? devis.prestataire) as
+    | { full_name?: string; profession?: string }
+    | undefined;
 
   return (
-    <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
+    <DashboardLayout role="client" userName={clientName} userRole="Client">
       <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6 max-w-4xl">
-        {/* Header - Mobile Optimized */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <Button
             variant="ghost"
@@ -256,12 +202,11 @@ export default function PaiementAcomptePage() {
           <div className="flex-1 min-w-0">
             <h1 className="text-xl md:text-3xl font-bold truncate">Paiement de l'acompte</h1>
             <p className="text-sm md:text-base text-muted-foreground mt-1 truncate">
-              Contrat N° {contrat.numero}
+              Contrat N° {String(contrat.numero ?? '')}
             </p>
           </div>
         </div>
 
-        {/* Alert sécurité - Mobile Optimized */}
         <Alert className="bg-green-50 border-green-200">
           <Shield className="w-4 h-4 md:w-5 md:h-5 text-green-600 shrink-0" />
           <AlertDescription className="text-green-900 text-sm">
@@ -273,7 +218,6 @@ export default function PaiementAcomptePage() {
           </AlertDescription>
         </Alert>
 
-        {/* Résumé - Mobile Optimized */}
         <Card>
           <CardHeader className="pb-3 md:pb-6">
             <CardTitle className="text-base md:text-lg">Résumé</CardTitle>
@@ -281,15 +225,15 @@ export default function PaiementAcomptePage() {
           <CardContent className="space-y-2 md:space-y-3">
             <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
               <span className="text-sm text-muted-foreground">Prestataire</span>
-              <span className="font-medium text-sm truncate">{devis.prestataires?.full_name}</span>
+              <span className="font-medium text-sm truncate">{prest?.full_name}</span>
             </div>
             <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
               <span className="text-sm text-muted-foreground">Profession</span>
-              <span className="font-medium text-sm truncate">{devis.prestataires?.profession}</span>
+              <span className="font-medium text-sm truncate">{prest?.profession}</span>
             </div>
             <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
               <span className="text-sm text-muted-foreground">Montant total</span>
-              <span className="font-medium text-sm">{devis.montant_ttc.toLocaleString()} FC</span>
+              <span className="font-medium text-sm">{montantTtc.toLocaleString()} FC</span>
             </div>
             <div className="border-t pt-2 md:pt-3 flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0 text-base md:text-lg font-semibold text-primary">
               <span className="text-sm md:text-base">Acompte à payer ({pourcentageAcompte}%)</span>
@@ -298,7 +242,6 @@ export default function PaiementAcomptePage() {
           </CardContent>
         </Card>
 
-        {/* Méthode de paiement - Mobile Optimized */}
         <Card>
           <CardHeader className="pb-3 md:pb-6">
             <CardTitle className="flex items-center gap-2 text-base md:text-lg">
@@ -312,7 +255,6 @@ export default function PaiementAcomptePage() {
           <CardContent className="space-y-4 md:space-y-6">
             <RadioGroup value={methodePaiement} onValueChange={(value) => setMethodePaiement(value as MethodePaiement)}>
               <div className="space-y-2 md:space-y-3">
-                {/* M-Pesa - Mobile Optimized */}
                 <div className="flex items-center space-x-2 md:space-x-3 p-3 md:p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
                   <RadioGroupItem value="mpesa" id="mpesa" className="shrink-0" />
                   <Label htmlFor="mpesa" className="flex items-center gap-2 md:gap-3 cursor-pointer flex-1 min-w-0">
@@ -326,7 +268,6 @@ export default function PaiementAcomptePage() {
                   </Label>
                 </div>
 
-                {/* Airtel Money - Mobile Optimized */}
                 <div className="flex items-center space-x-2 md:space-x-3 p-3 md:p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
                   <RadioGroupItem value="airtel_money" id="airtel" className="shrink-0" />
                   <Label htmlFor="airtel" className="flex items-center gap-2 md:gap-3 cursor-pointer flex-1 min-w-0">
@@ -340,7 +281,6 @@ export default function PaiementAcomptePage() {
                   </Label>
                 </div>
 
-                {/* Orange Money - Mobile Optimized */}
                 <div className="flex items-center space-x-2 md:space-x-3 p-3 md:p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
                   <RadioGroupItem value="orange_money" id="orange" className="shrink-0" />
                   <Label htmlFor="orange" className="flex items-center gap-2 md:gap-3 cursor-pointer flex-1 min-w-0">
@@ -356,7 +296,6 @@ export default function PaiementAcomptePage() {
               </div>
             </RadioGroup>
 
-            {/* Numéro de téléphone - Mobile Optimized */}
             <div className="space-y-2">
               <Label htmlFor="phone" className="text-sm md:text-base">Numéro de téléphone</Label>
               <Input
@@ -373,32 +312,31 @@ export default function PaiementAcomptePage() {
               </p>
             </div>
 
-            {/* Bouton payer - Mobile Optimized */}
-            <Button
-              onClick={handlePaiement}
-              disabled={processing || !numeroTelephone}
-              size="lg"
-              className="w-full h-12 md:h-14 text-sm md:text-base"
-            >
-              {processing ? (
-                <>
-                  <Loader className="w-4 h-4 mr-2 animate-spin" />
-                  <span className="truncate">Traitement en cours...</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5 mr-2 shrink-0" />
-                  <span className="truncate">Payer {montantAcompte.toLocaleString()} FC</span>
-                </>
-              )}
-            </Button>
+            <SlideToConfirm
+              label={`Payer l'acompte de ${montantAcompte.toLocaleString()} FC via ${methodePaiement}`}
+              hint="Glisser pour payer"
+              variant="success"
+              disabled={!numeroTelephone || numeroTelephone.length < 10}
+              loading={processing}
+              successMessage="Paiement initié"
+              onConfirm={handlePaiement}
+            />
 
-            {/* Info - Mobile Optimized */}
-            <Alert>
+            <Alert className={PAYMENTS_SIMULATION_ENABLED ? 'border-primary/30 bg-primary/5' : undefined}>
               <AlertCircle className="w-4 h-4 shrink-0" />
               <AlertDescription className="text-xs md:text-sm">
-                <strong>Mode simulation:</strong> Le paiement est actuellement simulé. 
-                L'intégration réelle avec M-Pesa/Airtel Money sera ajoutée prochainement.
+                {PAYMENTS_SIMULATION_ENABLED ? (
+                  <>
+                    <strong>Simulation active</strong> — le paiement sera validé
+                    automatiquement (aucun débit réel).
+                  </>
+                ) : (
+                  <>
+                    <strong>Mode simulation désactivé.</strong> Ajoutez{' '}
+                    <code>VITE_PAYMENTS_SIMULATION=true</code> dans votre fichier{' '}
+                    <code>.env</code> pour les tests locaux.
+                  </>
+                )}
               </AlertDescription>
             </Alert>
           </CardContent>

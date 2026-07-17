@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Loader } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { prestatairesApi, clientsApi } from '@/lib/api';
+import { displayNameFromProfil } from '@/lib/kazipro-profile';
 import { generateDevisPDF } from '@/lib/pdf-generator';
 import { toast } from 'sonner';
 
@@ -51,45 +52,19 @@ export function GeneratePDFButton({
     try {
       setGenerating(true);
 
-      // 1. Récupérer les infos entreprise du prestataire
-      const { data: entrepriseData, error: entrepriseError } = await supabase
-        .from('entreprise_info')
-        .select('*')
-        .eq('prestataire_id', prestataireId)
-        .maybeSingle();
+      const prestataireData = await prestatairesApi.getById(prestataireId);
+      const entrepriseData = prestataireData?.entreprise_info ?? prestataireData?.entreprise ?? null;
 
-      if (entrepriseError && entrepriseError.code !== 'PGRST116') {
-        throw entrepriseError;
-      }
-
-      // 2. Récupérer les infos du prestataire (fallback si pas d'entreprise_info)
-      const { data: prestataireData } = await supabase
-        .from('prestataires')
-        .select('full_name')
-        .eq('id', prestataireId)
-        .maybeSingle();
-
-      // 3. Récupérer les infos du client
-      let clientInfo = {
-        nom: 'Client',
-        adresse: '',
-        ville: ''
-      };
-
+      let clientInfo = { nom: 'Client', adresse: '', ville: '' };
       if (clientId) {
-        const { data: clientData } = await supabase
-          .from('clients')
-          .select('full_name, address, city')
-          .eq('id', clientId)
-          .maybeSingle();
-
-        if (clientData) {
+        try {
+          const clientData = await clientsApi.getById(String(clientId));
           clientInfo = {
-            nom: clientData.full_name || 'Client',
-            adresse: clientData.address || '',
-            ville: clientData.city || ''
+            nom: displayNameFromProfil(clientData, 'Client'),
+            adresse: String(clientData.adresse ?? clientData.address ?? ''),
+            ville: String(clientData.ville ?? clientData.city ?? ''),
           };
-        }
+        } catch { /* fallback */ }
       }
 
       // 4. Préparer les données pour le PDF
@@ -97,7 +72,7 @@ export function GeneratePDFButton({
         numero: devisNumero,
         date: new Date().toLocaleDateString('fr-FR'),
         entreprise: {
-          nom_entreprise: entrepriseData?.nom_entreprise || prestataireData?.full_name || 'Prestataire',
+          nom_entreprise: entrepriseData?.nom_entreprise || displayNameFromProfil(prestataireData) || 'Prestataire',
           logo_url: entrepriseData?.logo_url,
           adresse: entrepriseData?.adresse,
           ville: entrepriseData?.ville,

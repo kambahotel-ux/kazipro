@@ -9,6 +9,13 @@ import {
   CalculMontants,
 } from '@/types/paiement';
 
+/** Libellés UI (FC, …) → code accepté par `devis.devise` / contrainte `devis_devise_check`. */
+export function deviseForDevisTable(label?: string): 'CDF' | 'USD' {
+  const t = (label ?? 'CDF').trim().toUpperCase();
+  if (t === 'USD') return 'USD';
+  return 'CDF';
+}
+
 /**
  * Calcule les frais de déplacement selon la configuration du prestataire
  */

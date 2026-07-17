@@ -1,183 +1,202 @@
-import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
 import { Link } from "react-router-dom";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Target, Eye, Heart, Users, Shield, Zap, ArrowRight } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const values = [
+const values: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}[] = [
   {
     icon: Shield,
     title: "Confiance",
-    description: "Nous bâtissons des relations de confiance entre clients et prestataires grâce à notre système de vérification et d'escrow."
+    description:
+      "Relations clients / prestataires via vérifications et engagements sur la plateforme.",
   },
   {
     icon: Zap,
     title: "Simplicité",
-    description: "Une plateforme intuitive qui facilite la vie des utilisateurs, du premier contact au paiement final."
+    description:
+      "De la première demande aux étapes administratives prévues dans l'application.",
   },
   {
     icon: Heart,
     title: "Qualité",
-    description: "Nous valorisons le travail bien fait et aidons les professionnels à développer leurs compétences."
+    description:
+      "Mettre en avant le travail réalisé et la relation de proximité en RDC.",
   },
   {
     icon: Users,
     title: "Communauté",
-    description: "Nous créons un écosystème où clients et prestataires prospèrent ensemble."
-  }
+    description:
+      "Favoriser les échanges entre clients cherchant une solution locale et artisans compétents.",
+  },
 ];
 
 const About = () => {
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <main className="pt-20">
-        {/* Hero */}
-        <section className="py-16 lg:py-24 gradient-hero relative overflow-hidden">
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute top-10 right-10 w-72 h-72 bg-secondary rounded-full blur-3xl" />
+    <PublicLayout>
+      <section className="py-8 sm:py-14 lg:py-20 gradient-hero relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-10 right-10 w-56 h-56 sm:w-72 sm:h-72 bg-secondary rounded-full blur-3xl" />
+        </div>
+
+        <div className="container mx-auto px-3 sm:px-4 lg:px-8 relative z-10">
+          <div className="max-w-3xl mx-auto text-center text-primary-foreground">
+            <h1 className="text-[1.55rem] sm:text-4xl md:text-5xl font-display font-bold mb-4 sm:mb-6 tracking-tight px-1">
+              À propos de KaziPro
+            </h1>
+            <p className="text-sm sm:text-lg md:text-xl text-primary-foreground/85 leading-relaxed max-sm:mx-auto max-sm:max-w-[22rem]">
+              Connecter avec plus de sécurité ceux qui ont un projet et ceux qui ont le métier pour le réaliser.
+            </p>
           </div>
-          
-          <div className="container mx-auto px-4 relative z-10">
-            <div className="max-w-3xl mx-auto text-center text-primary-foreground">
-              <h1 className="text-4xl md:text-5xl font-display font-bold mb-6">
-                À propos de KaziPro
-              </h1>
-              <p className="text-xl text-primary-foreground/80">
-                Nous révolutionnons la façon dont les Congolais trouvent et engagent des prestataires de services qualifiés.
+        </div>
+      </section>
+
+      <section className="py-10 sm:py-16 lg:py-20">
+        <div className="container mx-auto px-3 sm:px-4 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 lg:gap-16 items-start">
+            <div>
+              <span className="inline-block px-3 py-1.5 rounded-full bg-accent text-accent-foreground text-xs sm:text-sm font-medium mb-3 sm:mb-4">
+                Notre histoire
+              </span>
+              <h2 className="text-xl sm:text-3xl md:text-4xl font-display font-bold text-foreground mb-4 sm:mb-6">
+                Née d&apos;un constat simple
+              </h2>
+              <div className="space-y-3 sm:space-y-4 text-muted-foreground text-sm sm:text-[15px] leading-relaxed">
+                <p>
+                  En RDC, trouver un électricien fiable ou un artisan de confiance repose souvent sur le bouche-à-oreille, sans cadre commun ni sécurité de paiement évidente.
+                </p>
+                <p>
+                  KaziPro existe pour fluidifier ces échanges&nbsp;: mise en ligne des besoins, devis formalisés, contrats et
+                  parcours de paiement plus lisibles pour les deux parties.
+                </p>
+                <p className="text-xs sm:text-sm text-muted-foreground/90">
+                  L&apos;offre précise peut évoluer (escrow totale ou partielle, validations, etc.). Adaptez ce texte à votre produit définitif.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:gap-6">
+                {[
+                  ["500+", "Prestataires vérifiés"],
+                  ["2000+", "Missions réalisées"],
+                  ["4,8", "Note moyenne"],
+                  ["98%", "Clients satisfaits *"],
+                ].map(([n, label]) => (
+                  <div
+                    key={label}
+                    className="rounded-xl border border-border/60 bg-card p-3.5 text-center shadow-sm sm:rounded-2xl sm:border-border/50 sm:p-6 sm:shadow-card"
+                  >
+                    <div className="mb-1 font-display text-xl font-bold text-secondary tabular-nums sm:text-4xl">
+                      {n}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground leading-tight sm:text-sm">
+                      {label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground/90 leading-snug sm:text-xs">
+                * Chiffres indicatifs&nbsp;; adaptez-les à vos données réelles.
               </p>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* Story */}
-        <section className="py-16 lg:py-24">
-          <div className="container mx-auto px-4">
-            <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-              <div>
-                <span className="inline-block px-4 py-2 rounded-full bg-accent text-accent-foreground text-sm font-medium mb-4">
-                  Notre histoire
-                </span>
-                <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-6">
-                  Née d'un constat simple
-                </h2>
-                <div className="space-y-4 text-muted-foreground">
-                  <p>
-                    En RDC, trouver un électricien fiable, un plombier compétent ou un menuisier de confiance repose encore largement sur le bouche-à-oreille. Il n'existe pas de cadre formel, pas de garantie de qualité, et surtout pas de sécurité de paiement.
-                  </p>
-                  <p>
-                    KaziPro est né de la volonté de changer cette réalité. Notre mission : créer une plateforme numérique sécurisée où les clients trouvent des prestataires qualifiés et où les professionnels accèdent à de nouvelles opportunités.
-                  </p>
-                  <p>
-                    Grâce à notre système d'escrow, nous garantissons que les clients ne paient que pour un travail bien fait, et que les prestataires reçoivent leur dû après validation.
-                  </p>
-                </div>
+      <section className="py-10 sm:py-16 lg:py-20 bg-muted/45">
+        <div className="container mx-auto px-3 sm:px-4 lg:px-8">
+          <div className="grid md:grid-cols-2 gap-4 sm:gap-8">
+            <div className="bg-card rounded-xl sm:rounded-2xl p-5 sm:p-8 lg:p-10 shadow-card border border-border/50">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-secondary/10 flex items-center justify-center mb-5">
+                <Target className="w-6 h-6 sm:w-7 sm:h-7 text-secondary" />
               </div>
+              <h3 className="text-lg sm:text-2xl font-display font-bold text-foreground mb-3 sm:mb-4">
+                Notre mission
+              </h3>
+              <p className="text-muted-foreground text-sm sm:text-[15px] leading-relaxed">
+                Digitaliser progressivement une partie du secteur services en RDC : transparence des devis, documents partagés
+                dans l&apos;app et règles claires lorsque des litiges apparaissent.
+              </p>
+            </div>
 
-              <div className="grid grid-cols-2 gap-6">
-                <div className="bg-card rounded-2xl p-6 shadow-card border border-border/50">
-                  <div className="text-4xl font-display font-bold text-secondary mb-2">500+</div>
-                  <div className="text-muted-foreground">Prestataires vérifiés</div>
-                </div>
-                <div className="bg-card rounded-2xl p-6 shadow-card border border-border/50">
-                  <div className="text-4xl font-display font-bold text-secondary mb-2">2000+</div>
-                  <div className="text-muted-foreground">Missions réalisées</div>
-                </div>
-                <div className="bg-card rounded-2xl p-6 shadow-card border border-border/50">
-                  <div className="text-4xl font-display font-bold text-secondary mb-2">4.8</div>
-                  <div className="text-muted-foreground">Note moyenne</div>
-                </div>
-                <div className="bg-card rounded-2xl p-6 shadow-card border border-border/50">
-                  <div className="text-4xl font-display font-bold text-secondary mb-2">98%</div>
-                  <div className="text-muted-foreground">Clients satisfaits</div>
-                </div>
+            <div className="bg-card rounded-xl sm:rounded-2xl p-5 sm:p-8 lg:p-10 shadow-card border border-border/50">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-primary/10 flex items-center justify-center mb-5">
+                <Eye className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
               </div>
+              <h3 className="text-lg sm:text-2xl font-display font-bold text-foreground mb-3 sm:mb-4">
+                Notre vision
+              </h3>
+              <p className="text-muted-foreground text-sm sm:text-[15px] leading-relaxed">
+                Devenir une référence utile au quotidien pour les chantiers domestiques et petites infrastructures, en restant au
+                plus près des usages locaux et des moyens de paiement du terrain.
+              </p>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* Mission & Vision */}
-        <section className="py-16 lg:py-24 bg-muted/50">
-          <div className="container mx-auto px-4">
-            <div className="grid md:grid-cols-2 gap-8">
-              <div className="bg-card rounded-2xl p-8 lg:p-10 shadow-card border border-border/50">
-                <div className="w-14 h-14 rounded-2xl bg-secondary/10 flex items-center justify-center mb-6">
-                  <Target className="w-7 h-7 text-secondary" />
-                </div>
-                <h3 className="text-2xl font-display font-bold text-foreground mb-4">Notre Mission</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  Digitaliser et professionnaliser les services d'installation et de réparation en RDC. Nous offrons une plateforme où les paiements sont sécurisés, les devis sont transparents, et les litiges sont résolus équitablement.
-                </p>
-              </div>
-
-              <div className="bg-card rounded-2xl p-8 lg:p-10 shadow-card border border-border/50">
-                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
-                  <Eye className="w-7 h-7 text-primary" />
-                </div>
-                <h3 className="text-2xl font-display font-bold text-foreground mb-4">Notre Vision</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  Devenir la référence de confiance pour les services à domicile en Afrique centrale. Nous voulons créer un écosystème où chaque professionnel peut développer son activité et où chaque client trouve le bon expert.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Values */}
-        <section className="py-16 lg:py-24">
-          <div className="container mx-auto px-4">
-            <div className="text-center mb-12">
-              <span className="inline-block px-4 py-2 rounded-full bg-accent text-accent-foreground text-sm font-medium mb-4">
-                Nos valeurs
-              </span>
-              <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground">
-                Ce qui nous guide
-              </h2>
-            </div>
-
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {values.map((value) => (
-                <div key={value.title} className="text-center p-6 bg-card rounded-2xl border border-border/50 hover:border-secondary/30 transition-colors">
-                  <div className="w-14 h-14 rounded-2xl bg-secondary/10 flex items-center justify-center mx-auto mb-4">
-                    <value.icon className="w-7 h-7 text-secondary" />
-                  </div>
-                  <h3 className="font-semibold text-foreground mb-2">{value.title}</h3>
-                  <p className="text-sm text-muted-foreground">{value.description}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* CTA */}
-        <section className="py-16 lg:py-24 gradient-hero">
-          <div className="container mx-auto px-4 text-center">
-            <h2 className="text-3xl md:text-4xl font-display font-bold text-primary-foreground mb-6">
-              Rejoignez l'aventure KaziPro
+      <section className="py-10 sm:py-16 lg:py-20">
+        <div className="container mx-auto px-3 sm:px-4 lg:px-8">
+          <div className="text-center mb-8 sm:mb-12">
+            <span className="inline-block px-3 py-1.5 rounded-full bg-accent text-accent-foreground text-xs sm:text-sm font-medium mb-3 sm:mb-4">
+              Nos valeurs
+            </span>
+            <h2 className="text-xl sm:text-3xl md:text-4xl font-display font-bold text-foreground px-2">
+              Ce qui nous guide
             </h2>
-            <p className="text-primary-foreground/70 mb-8 max-w-xl mx-auto">
-              Que vous soyez client à la recherche d'un professionnel ou prestataire souhaitant développer votre activité, KaziPro est fait pour vous.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/inscription/client">
-                <Button variant="hero" size="lg">
-                  Je cherche un pro
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </Button>
-              </Link>
-              <Link to="/inscription/prestataire">
-                <Button variant="hero-outline" size="lg">
-                  Devenir prestataire
-                </Button>
-              </Link>
-            </div>
           </div>
-        </section>
-      </main>
 
-      <Footer />
-    </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+            {values.map((value) => (
+              <div
+                key={value.title}
+                className="rounded-xl border border-border/60 bg-card p-4 sm:p-6 text-center sm:text-left hover:border-secondary/30 transition-colors"
+              >
+                <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-secondary/10 flex items-center justify-center mx-auto sm:mx-0 mb-3 sm:mb-4">
+                  <value.icon className="w-5 h-5 sm:w-7 sm:h-7 text-secondary" />
+                </div>
+                <h3 className="font-semibold text-[15px] sm:text-lg text-foreground mb-1 sm:mb-2">
+                  {value.title}
+                </h3>
+                <p className="text-[13px] sm:text-sm text-muted-foreground leading-relaxed">
+                  {value.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="py-10 sm:py-16 lg:py-20 gradient-hero relative overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 opacity-[0.08]">
+          <div className="absolute bottom-0 left-1/4 h-48 w-48 rounded-full bg-secondary blur-3xl max-sm:hidden" />
+        </div>
+        <div className="container relative z-10 mx-auto px-3 text-center sm:px-4 lg:px-8">
+          <h2 className="mb-4 px-2 font-display text-xl font-bold tracking-tight text-primary-foreground sm:text-3xl md:text-4xl">
+            Rejoindre KaziPro
+          </h2>
+          <p className="mx-auto mb-6 max-w-xl px-2 text-primary-foreground/78 text-sm sm:mb-8 sm:text-base">
+            Besoin d&apos;un pro ou vous proposez vos services&nbsp;? Les inscriptions sont ouvertes.
+          </p>
+          <div className="mx-auto flex max-w-md flex-col justify-center gap-3 sm:max-w-none sm:flex-row sm:gap-4">
+            <Button asChild variant="hero" size="lg" className="h-12 w-full justify-center rounded-xl sm:h-11 sm:w-auto">
+              <Link to="/inscription/client">
+                Je cherche un pro
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+            </Button>
+            <Button asChild variant="hero-outline" size="lg" className="h-12 w-full justify-center rounded-xl border-primary-foreground/35 sm:h-11 sm:w-auto">
+              <Link to="/inscription/prestataire">Devenir prestataire</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+    </PublicLayout>
   );
 };
 

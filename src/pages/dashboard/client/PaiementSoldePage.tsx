@@ -8,8 +8,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { supabase } from '@/lib/supabase';
+import { contratsApi, paiementsApi } from '@/lib/api';
+import { getClientDisplayName, mapDevisToUi } from '@/lib/client-helpers';
+import {
+  PAYMENTS_SIMULATION_ENABLED,
+  finalizePaiementSimulation,
+} from '@/lib/payments';
+import { reportError, trackEvent } from '@/lib/monitoring';
 import { toast } from 'sonner';
+import { DetailPageSkeleton } from '@/components/dashboard/AdminLoadingSkeleton';
+import { SlideToConfirm } from '@/components/ui/SlideToConfirm';
 import { 
   CreditCard, 
   Smartphone,
@@ -26,11 +34,12 @@ export default function PaiementSoldePage() {
   const { contratId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const clientName = getClientDisplayName(user);
   
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
-  const [contrat, setContrat] = useState<any>(null);
-  const [devis, setDevis] = useState<any>(null);
+  const [contrat, setContrat] = useState<Record<string, unknown> | null>(null);
+  const [devis, setDevis] = useState<Record<string, unknown> | null>(null);
   const [methodePaiement, setMethodePaiement] = useState<MethodePaiement>('mpesa');
   const [numeroTelephone, setNumeroTelephone] = useState('');
   const [montantSolde, setMontantSolde] = useState(0);
@@ -44,91 +53,46 @@ export default function PaiementSoldePage() {
     try {
       setLoading(true);
       
-      // Récupérer le contrat
-      const { data: contratData, error: contratError } = await supabase
-        .from('contrats')
-        .select('*')
-        .eq('id', contratId)
-        .single();
+      const contratData = await contratsApi.getById(String(contratId));
+      setContrat(contratData as Record<string, unknown>);
 
-      if (contratError) throw contratError;
-      
-      // Vérifier que le contrat a bien un acompte payé
-      if (contratData.statut_paiement !== 'acompte_paye') {
-        toast.error('L\'acompte doit être payé avant de payer le solde');
+      const paiements = await paiementsApi.getByContrat(String(contratId));
+      const acompteValide = paiements.find(
+        (p) =>
+          String((p as { type?: string; type_paiement?: string }).type ?? (p as { type_paiement?: string }).type_paiement) === 'acompte' &&
+          String((p as { statut?: string }).statut) === 'valide',
+      );
+
+      if (!acompteValide) {
+        toast.error("L'acompte doit être payé avant de payer le solde");
         navigate('/dashboard/client');
         return;
       }
-      
-      setContrat(contratData);
 
-      // Essayer d'abord dans devis_pro (nouvelle table)
-      let { data: devisData, error: devisError } = await supabase
-        .from('devis_pro')
-        .select(`
-          *,
-          prestataires (
-            full_name,
-            profession
-          )
-        `)
-        .eq('id', contratData.devis_id)
-        .maybeSingle();
-
-      // Si pas trouvé dans devis_pro, essayer dans devis (ancienne table)
-      if (!devisData) {
-        const { data: oldDevisData, error: oldDevisError } = await supabase
-          .from('devis')
-          .select(`
-            *,
-            prestataire:prestataires (
-              full_name,
-              profession
-            )
-          `)
-          .eq('id', contratData.devis_id)
-          .maybeSingle();
-
-        if (oldDevisError) throw oldDevisError;
-        
-        // Normaliser la structure pour compatibilité
-        if (oldDevisData) {
-          devisData = {
-            ...oldDevisData,
-            prestataires: Array.isArray(oldDevisData.prestataire) 
-              ? oldDevisData.prestataire[0] 
-              : oldDevisData.prestataire
-          };
-        }
-      }
-
-      if (devisError && devisError.code !== 'PGRST116') throw devisError;
-      
-      if (!devisData) {
+      const devisRaw = (contratData as { devis?: Record<string, unknown> }).devis;
+      if (!devisRaw) {
         toast.error('Devis introuvable');
         navigate('/dashboard/client');
         return;
       }
-      
-      setDevis(devisData);
 
-      // Récupérer le montant de l'acompte déjà payé
-      const { data: acompteData } = await supabase
-        .from('paiements')
-        .select('montant_total')
-        .eq('contrat_id', contratId)
-        .eq('type_paiement', 'acompte')
-        .eq('statut', 'valide')
-        .maybeSingle();
+      const devisData = mapDevisToUi(devisRaw);
+      setDevis(devisData as Record<string, unknown>);
 
-      const acomptePaye = acompteData?.montant_total || 0;
+      const acomptePaye = Number(
+        (acompteValide as { montant?: number; montant_total?: number }).montant ??
+          (acompteValide as { montant_total?: number }).montant_total ??
+          (contratData as { acompte_montant?: number }).acompte_montant ??
+          0,
+      );
       setMontantAcomptePaye(acomptePaye);
 
-      // Calculer le montant du solde (montant total - acompte payé)
-      const montant = devisData.montant_ttc - acomptePaye;
-      setMontantSolde(Math.round(montant));
+      const soldeMontant =
+        Number((contratData as { solde_montant?: number }).solde_montant) ||
+        Number(devisData.montant_ttc) - acomptePaye;
+      setMontantSolde(Math.round(soldeMontant));
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur:', error);
       toast.error('Erreur lors du chargement');
     } finally {
@@ -145,69 +109,51 @@ export default function PaiementSoldePage() {
     try {
       setProcessing(true);
 
-      // Générer le numéro de paiement
-      const { data: numeroData, error: numeroError } = await supabase
-        .rpc('generate_paiement_numero');
-
-      if (numeroError) throw numeroError;
-
-      // Créer l'enregistrement de paiement
-      const { data: paiementData, error: paiementError } = await supabase
-        .from('paiements')
-        .insert({
-          numero: numeroData,
-          contrat_id: contratId,
-          devis_id: devis.id,
-          client_id: contrat.client_id,
-          prestataire_id: contrat.prestataire_id,
-          type_paiement: 'solde',
-          montant_travaux: montantSolde,
-          montant_materiel: 0,
-          montant_deplacement: 0,
-          montant_total: montantSolde,
-          methode_paiement: methodePaiement,
-          statut: 'en_cours',
-          metadata: {
-            numero_telephone: numeroTelephone,
-            devis_id: devis.id
-          }
-        })
-        .select()
-        .single();
-
-      if (paiementError) throw paiementError;
-
-      // TODO: Intégration réelle avec M-Pesa/Airtel Money
-      // Pour l'instant, simulation d'un paiement réussi après 2 secondes
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Mettre à jour le statut du paiement
-      const { error: updateError } = await supabase
-        .from('paiements')
-        .update({
-          statut: 'valide',
-          date_paiement: new Date().toISOString(),
-          transaction_id: `SIM-${Date.now()}`, // Simulation
-          reference_paiement: `REF-${Date.now()}` // Simulation
-        })
-        .eq('id', paiementData.id);
-
-      if (updateError) {
-        console.error('Erreur mise à jour paiement:', updateError);
-        throw updateError;
+      const existing = await paiementsApi.getByContrat(String(contratId));
+      const succes = existing.find(
+        (p) =>
+          String((p as { type?: string; type_paiement?: string }).type ?? (p as { type_paiement?: string }).type_paiement) === 'solde' &&
+          ['valide', 'complete'].includes(String((p as { statut?: string }).statut ?? '')),
+      );
+      if (succes?.id) {
+        toast.info('Le solde a déjà été payé.');
+        navigate(`/dashboard/client/paiement/${succes.id}/confirmation`);
+        return;
       }
 
-      // Attendre un peu pour que le trigger se déclenche
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const created = await paiementsApi.payerSolde({
+        contrat_id: String(contratId),
+        methode: methodePaiement,
+        reference_externe: numeroTelephone,
+      });
 
-      toast.success('Paiement du solde effectué avec succès!');
-      
-      // Rediriger vers la page de confirmation
-      navigate(`/dashboard/client/paiement/${paiementData.id}/confirmation`);
+      const paiementId = String((created as { id?: string | number }).id ?? '');
+      if (!paiementId) throw new Error('Réponse paiement invalide');
 
-    } catch (error: any) {
-      console.error('Erreur:', error);
+      trackEvent('payment_solde_created', { contratId, paiementId });
+
+      if (!PAYMENTS_SIMULATION_ENABLED) {
+        toast.error('Paiement réel non activé. Contactez le support.');
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      const result = await finalizePaiementSimulation(paiementId);
+
+      if (result.ok) {
+        toast.success('Paiement du solde effectué avec succès!');
+      } else {
+        toast.info(
+          'Paiement enregistré. Un administrateur doit le valider pour finaliser le contrat.',
+        );
+      }
+      trackEvent('payment_solde_validated', { contratId, paiementId });
+      navigate(`/dashboard/client/paiement/${paiementId}/confirmation`);
+
+    } catch (error: unknown) {
+      reportError('PaiementSoldePage.handlePaiement', error, 'error', { contratId });
       toast.error('Erreur lors du paiement');
+      throw error;
     } finally {
       setProcessing(false);
     }
@@ -215,20 +161,15 @@ export default function PaiementSoldePage() {
 
   if (loading) {
     return (
-      <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
-        <div className="flex items-center justify-center h-64 md:h-96 px-4">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-b-2 border-primary mx-auto mb-3 md:mb-4"></div>
-            <p className="text-sm md:text-base text-muted-foreground">Chargement...</p>
-          </div>
-        </div>
+      <DashboardLayout role="client" userName={clientName} userRole="Client">
+        <DetailPageSkeleton />
       </DashboardLayout>
     );
   }
 
   if (!contrat || !devis) {
     return (
-      <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
+      <DashboardLayout role="client" userName={clientName} userRole="Client">
         <div className="p-3 md:p-6">
           <Alert variant="destructive">
             <AlertCircle className="w-4 h-4 shrink-0" />
@@ -239,12 +180,16 @@ export default function PaiementSoldePage() {
     );
   }
 
-  const pourcentageSolde = contrat.conditions_paiement?.solde || 70;
+  const montantTtc = Number(devis.montant_ttc ?? 0);
+  const pourcentageSolde =
+    montantTtc > 0 ? Math.round((montantSolde / montantTtc) * 100) : 70;
+  const prest = (devis.prestataires ?? devis.prestataire) as
+    | { full_name?: string; profession?: string }
+    | undefined;
 
   return (
-    <DashboardLayout role="client" userName={user?.email || ''} userRole="Client">
+    <DashboardLayout role="client" userName={clientName} userRole="Client">
       <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6 max-w-4xl">
-        {/* Header - Mobile Optimized */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <Button
             variant="ghost"
@@ -258,12 +203,11 @@ export default function PaiementSoldePage() {
           <div className="flex-1 min-w-0">
             <h1 className="text-xl md:text-3xl font-bold truncate">Paiement du solde</h1>
             <p className="text-sm md:text-base text-muted-foreground mt-1 truncate">
-              Contrat N° {contrat.numero}
+              Contrat N° {String(contrat.numero ?? '')}
             </p>
           </div>
         </div>
 
-        {/* Alert sécurité - Mobile Optimized */}
         <Alert className="bg-green-50 border-green-200">
           <Shield className="w-4 h-4 md:w-5 md:h-5 text-green-600 shrink-0" />
           <AlertDescription className="text-green-900 text-sm">
@@ -275,7 +219,6 @@ export default function PaiementSoldePage() {
           </AlertDescription>
         </Alert>
 
-        {/* Résumé - Mobile Optimized */}
         <Card>
           <CardHeader className="pb-3 md:pb-6">
             <CardTitle className="text-base md:text-lg">Résumé</CardTitle>
@@ -283,15 +226,15 @@ export default function PaiementSoldePage() {
           <CardContent className="space-y-2 md:space-y-3">
             <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
               <span className="text-sm text-muted-foreground">Prestataire</span>
-              <span className="font-medium text-sm truncate">{devis.prestataires?.full_name}</span>
+              <span className="font-medium text-sm truncate">{prest?.full_name}</span>
             </div>
             <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
               <span className="text-sm text-muted-foreground">Profession</span>
-              <span className="font-medium text-sm truncate">{devis.prestataires?.profession}</span>
+              <span className="font-medium text-sm truncate">{prest?.profession}</span>
             </div>
             <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
               <span className="text-sm text-muted-foreground">Montant total du contrat</span>
-              <span className="font-medium text-sm">{devis.montant_ttc.toLocaleString()} FC</span>
+              <span className="font-medium text-sm">{montantTtc.toLocaleString()} FC</span>
             </div>
             <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
               <span className="text-xs md:text-sm text-muted-foreground">Acompte déjà payé</span>
@@ -304,7 +247,6 @@ export default function PaiementSoldePage() {
           </CardContent>
         </Card>
 
-        {/* Méthode de paiement - Mobile Optimized */}
         <Card>
           <CardHeader className="pb-3 md:pb-6">
             <CardTitle className="flex items-center gap-2 text-base md:text-lg">
@@ -318,7 +260,6 @@ export default function PaiementSoldePage() {
           <CardContent className="space-y-4 md:space-y-6">
             <RadioGroup value={methodePaiement} onValueChange={(value) => setMethodePaiement(value as MethodePaiement)}>
               <div className="space-y-2 md:space-y-3">
-                {/* M-Pesa - Mobile Optimized */}
                 <div className="flex items-center space-x-2 md:space-x-3 p-3 md:p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
                   <RadioGroupItem value="mpesa" id="mpesa" className="shrink-0" />
                   <Label htmlFor="mpesa" className="flex items-center gap-2 md:gap-3 cursor-pointer flex-1 min-w-0">
@@ -332,7 +273,6 @@ export default function PaiementSoldePage() {
                   </Label>
                 </div>
 
-                {/* Airtel Money - Mobile Optimized */}
                 <div className="flex items-center space-x-2 md:space-x-3 p-3 md:p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
                   <RadioGroupItem value="airtel_money" id="airtel" className="shrink-0" />
                   <Label htmlFor="airtel" className="flex items-center gap-2 md:gap-3 cursor-pointer flex-1 min-w-0">
@@ -346,7 +286,6 @@ export default function PaiementSoldePage() {
                   </Label>
                 </div>
 
-                {/* Orange Money - Mobile Optimized */}
                 <div className="flex items-center space-x-2 md:space-x-3 p-3 md:p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
                   <RadioGroupItem value="orange_money" id="orange" className="shrink-0" />
                   <Label htmlFor="orange" className="flex items-center gap-2 md:gap-3 cursor-pointer flex-1 min-w-0">
@@ -362,7 +301,6 @@ export default function PaiementSoldePage() {
               </div>
             </RadioGroup>
 
-            {/* Numéro de téléphone - Mobile Optimized */}
             <div className="space-y-2">
               <Label htmlFor="phone" className="text-sm md:text-base">Numéro de téléphone</Label>
               <Input
@@ -379,32 +317,20 @@ export default function PaiementSoldePage() {
               </p>
             </div>
 
-            {/* Bouton payer - Mobile Optimized */}
-            <Button
-              onClick={handlePaiement}
-              disabled={processing || !numeroTelephone}
-              size="lg"
-              className="w-full h-12 md:h-14 text-sm md:text-base"
-            >
-              {processing ? (
-                <>
-                  <Loader className="w-4 h-4 mr-2 animate-spin" />
-                  <span className="truncate">Traitement en cours...</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5 mr-2 shrink-0" />
-                  <span className="truncate">Payer {montantSolde.toLocaleString()} FC</span>
-                </>
-              )}
-            </Button>
+            <SlideToConfirm
+              label={`Payer le solde de ${montantSolde.toLocaleString()} FC via ${methodePaiement}`}
+              hint="Glisser pour payer"
+              variant="success"
+              disabled={!numeroTelephone || numeroTelephone.length < 10}
+              loading={processing}
+              successMessage="Paiement initié"
+              onConfirm={handlePaiement}
+            />
 
-            {/* Info - Mobile Optimized */}
             <Alert>
               <AlertCircle className="w-4 h-4 shrink-0" />
               <AlertDescription className="text-xs md:text-sm">
-                <strong>Mode simulation:</strong> Le paiement est actuellement simulé. 
-                L'intégration réelle avec M-Pesa/Airtel Money sera ajoutée prochainement.
+                <strong>Mode simulation:</strong> Activez <code>VITE_PAYMENTS_SIMULATION=true</code> uniquement en dev.
               </AlertDescription>
             </Alert>
           </CardContent>

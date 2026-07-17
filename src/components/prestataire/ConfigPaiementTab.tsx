@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { prestataireIdFromUser } from '@/lib/kazipro-profile';
 import { useConfigurationGlobale, useConfigurationPrestataire, useSaveConfigurationPrestataire, useFraisDeplacementConfig, useSaveFraisDeplacementConfig } from '@/hooks/usePaiementConfig';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,30 +39,10 @@ export function ConfigPaiementTab() {
   const { config: configFrais, loading: loadingFrais, refetch: refetchFrais } = useFraisDeplacementConfig(prestataireId || undefined);
   const { saveConfig: saveFrais, saving: savingFrais } = useSaveFraisDeplacementConfig();
 
-  // Récupérer l'ID du prestataire depuis la table prestataires
   useEffect(() => {
-    const fetchPrestataireId = async () => {
-      if (!user?.id) return;
-      
-      try {
-        const { data, error } = await supabase
-          .from('prestataires')
-          .select('id')
-          .eq('user_id', user.id)
-          .single();
-        
-        if (error) throw error;
-        setPrestataireId(data.id);
-      } catch (err) {
-        console.error('Erreur récupération prestataire_id:', err);
-        toast.error('Impossible de charger votre profil prestataire');
-      } finally {
-        setLoadingPrestataireId(false);
-      }
-    };
-    
-    fetchPrestataireId();
-  }, [user?.id]);
+    setPrestataireId(prestataireIdFromUser(user));
+    setLoadingPrestataireId(false);
+  }, [user]);
 
   // Config paiement
   const [formDataConfig, setFormDataConfig] = useState<Partial<ConfigurationPaiementPrestataire>>({

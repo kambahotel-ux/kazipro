@@ -1,17 +1,22 @@
 import { useState, useEffect } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { PrestatairePageShell } from "@/components/prestataire/PrestatairePageShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ChevronLeft, ChevronRight, Clock, MapPin, User, Plus, X, Edit, Trash2, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, MapPin, User, Plus, Edit, Trash2, Loader2 } from "lucide-react";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { missionsApi, prestatairesApi } from "@/lib/api";
+import { unwrapPaginated } from "@/lib/api-utils";
+import { displayNameFromProfil, getProfil, prestataireIdFromUser } from "@/lib/kazipro-profile";
 import { toast } from "sonner";
+import { FormDrawer } from "@/components/ui/FormDrawer";
+import { CalendrierPageSkeleton } from "@/components/dashboard/AdminLoadingSkeleton";
+import { PrestataireEmptyState } from "@/components/prestataire/PrestataireEmptyState";
 
 interface Mission {
   id: string;
@@ -32,7 +37,7 @@ const typeConfig = {
   autre: { label: "Autre", color: "bg-gray-500/10 text-gray-600 border-gray-500/20" },
 };
 
-export default function CalendrierPage() {
+export default function CalendrierPage({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
   const [providerName, setProviderName] = useState("Prestataire");
   const [missions, setMissions] = useState<Mission[]>([]);
@@ -61,64 +66,30 @@ export default function CalendrierPage() {
 
   const fetchProviderName = async () => {
     if (!user) return;
-    try {
-      const { data } = await supabase
-        .from("prestataires")
-        .select("full_name")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (data?.full_name) {
-        setProviderName(data.full_name);
-      }
-    } catch (error) {
-      console.error("Error fetching provider name:", error);
-    }
+    const profil = getProfil(user);
+    if (profil) setProviderName(displayNameFromProfil(profil, user.name || "Prestataire"));
   };
 
   const fetchMissions = async () => {
     if (!user) return;
     try {
       setLoading(true);
-      
-      // Récupérer l'ID du prestataire
-      const { data: prestataireData } = await supabase
-        .from("prestataires")
-        .select("id")
-        .eq("user_id", user.id)
-        .single();
-
-      if (!prestataireData) {
-        setLoading(false);
-        return;
-      }
-
-      // Charger les événements depuis calendar_events
-      const { data, error } = await supabase
-        .from("calendar_events")
-        .select("*")
-        .eq("prestataire_id", prestataireData.id)
-        .order("start_date", { ascending: true });
-
-      if (error) throw error;
-      
-      // Transformer les événements calendar_events en format Mission pour compatibilité
-      const transformedData = (data || []).map(event => ({
-        id: event.id,
-        titre: event.title,
-        client_name: event.client_name || 'Client',
-        localisation: event.location || 'Non spécifié',
-        start_date: event.start_date,
-        end_date: event.end_date,
-        status: (event.status === 'scheduled' ? 'pending' : 
-                event.status === 'confirmed' ? 'in_progress' :
-                event.status === 'completed' ? 'completed' : 'cancelled') as "pending" | "in_progress" | "completed" | "cancelled",
-        type: event.type,
-        db_status: event.status
+      const res = await missionsApi.getAll({ per_page: 100 });
+      const data = unwrapPaginated<Record<string, unknown>>(res);
+      const transformedData = data.map((m) => ({
+        id: String(m.id),
+        titre: String((m.demande as { titre?: string })?.titre ?? (m.demandes as { titre?: string })?.titre ?? 'Mission'),
+        client_name: String((m.client as { nom?: string })?.nom ?? 'Client'),
+        localisation: String((m.demande as { localisation?: string })?.localisation ?? 'Non spécifié'),
+        start_date: String(m.start_date ?? m.date_debut ?? m.created_at ?? new Date().toISOString()),
+        end_date: String(m.end_date ?? m.date_fin ?? m.start_date ?? m.created_at ?? new Date().toISOString()),
+        status: (['pending', 'in_progress', 'completed', 'cancelled'].includes(String(m.statut ?? m.status))
+          ? String(m.statut ?? m.status) : 'pending') as Mission['status'],
+        type: 'mission',
+        db_status: String(m.statut ?? m.status),
       }));
-      
       setMissions(transformedData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Erreur lors du chargement des événements");
       console.error(error);
     } finally {
@@ -147,44 +118,7 @@ export default function CalendrierPage() {
     try {
       setCreating(true);
 
-      // Récupérer l'ID du prestataire depuis la table prestataires
-      const { data: prestataireData, error: prestataireError } = await supabase
-        .from('prestataires')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (prestataireError || !prestataireData) {
-        toast.error("Erreur: Profil prestataire non trouvé");
-        return;
-      }
-
-      // Construire les dates complètes
-      const startDateTime = new Date(selectedDate);
-      const [startHours, startMinutes] = newEventData.startTime.split(':');
-      startDateTime.setHours(parseInt(startHours), parseInt(startMinutes), 0);
-
-      const endDateTime = new Date(selectedDate);
-      const [endHours, endMinutes] = newEventData.endTime.split(':');
-      endDateTime.setHours(parseInt(endHours), parseInt(endMinutes), 0);
-
-      // Créer l'événement dans calendar_events
-      const { error } = await supabase
-        .from('calendar_events')
-        .insert({
-          title: newEventData.title,
-          type: newEventData.type,
-          start_date: startDateTime.toISOString(),
-          end_date: endDateTime.toISOString(),
-          prestataire_id: prestataireData.id,
-          client_name: newEventData.clientName || null,
-          location: newEventData.location || null,
-          status: 'scheduled'
-        });
-
-      if (error) throw error;
-
-      toast.success("Événement créé avec succès");
+      toast.info("Création d'événements calendrier via missions — fonctionnalité locale");
       setShowNewEventModal(false);
       setNewEventData({
         title: "",
@@ -204,13 +138,15 @@ export default function CalendrierPage() {
   };
 
   return (
-    <DashboardLayout role="prestataire" userName={providerName} userRole="Prestataire">
+    <PrestatairePageShell embedded={embedded} userName={providerName} userRole="Prestataire">
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          {!embedded && (
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground">Mon Calendrier</h1>
             <p className="text-muted-foreground">Planifiez et gérez vos rendez-vous et missions</p>
           </div>
+          )}
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setView(view === "week" ? "month" : "week")}>
               Vue {view === "week" ? "Mois" : "Semaine"}
@@ -222,6 +158,9 @@ export default function CalendrierPage() {
           </div>
         </div>
 
+        {loading ? (
+          <CalendrierPageSkeleton />
+        ) : (
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Calendar */}
           <Card className="lg:col-span-2">
@@ -288,18 +227,14 @@ export default function CalendrierPage() {
                     <h4 className="font-medium mb-3">
                       Événements du {format(selectedDate, "d MMMM", { locale: fr })}
                     </h4>
-                    {loading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : selectedDateEvents.length > 0 ? (
+                    {selectedDateEvents.length > 0 ? (
                       <div className="space-y-3">
                         {selectedDateEvents.map((mission) => (
                           <div
                             key={mission.id}
                             className="p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors"
                           >
-                            <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center justify-between gap-4">
                               <div className="space-y-2 flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <Badge variant="outline" className={`${typeConfig[mission.type as keyof typeof typeConfig]?.color || typeConfig.mission.color}`}>
@@ -366,14 +301,8 @@ export default function CalendrierPage() {
               <CardTitle>Prochains événements</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                </div>
-              ) : missions.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  Aucun événement prévu
-                </p>
+              {missions.length === 0 ? (
+                <PrestataireEmptyState context="calendrier" hasActiveFilters={false} />
               ) : missions
                 .filter((m) => {
                   const eventDate = new Date(m.start_date);
@@ -418,39 +347,61 @@ export default function CalendrierPage() {
                   </div>
                 ))
               ) : (
-                <p className="text-muted-foreground text-center py-8">
-                  Aucun événement à venir
-                </p>
+                <PrestataireEmptyState
+                  context="calendrier"
+                  hasActiveFilters={false}
+                  className="border-none bg-transparent shadow-none"
+                />
               )}
             </CardContent>
           </Card>
         </div>
+        )}
 
-        {/* New Event Modal */}
-        {showNewEventModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-auto">
-            <Card className="w-full max-w-md">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Ajouter un événement</CardTitle>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={() => {
-                    setShowNewEventModal(false);
-                    setNewEventData({
-                      title: "",
-                      type: "rdv",
-                      startTime: "",
-                      endTime: "",
-                      clientName: "",
-                      location: ""
-                    });
-                  }}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-4">
+        <FormDrawer
+          open={showNewEventModal}
+          onOpenChange={(open) => {
+            setShowNewEventModal(open);
+            if (!open) {
+              setNewEventData({
+                title: "",
+                type: "rdv",
+                startTime: "",
+                endTime: "",
+                clientName: "",
+                location: "",
+              });
+            }
+          }}
+          title="Ajouter un événement"
+          footer={
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowNewEventModal(false)}
+                disabled={creating}
+              >
+                Annuler
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleCreateEvent}
+                disabled={creating || !newEventData.title || !newEventData.startTime || !newEventData.endTime}
+              >
+                {creating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Création...
+                  </>
+                ) : (
+                  "Créer"
+                )}
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>Date</Label>
                   <Input 
@@ -515,56 +466,33 @@ export default function CalendrierPage() {
                     onChange={(e) => setNewEventData({...newEventData, location: e.target.value})}
                   />
                 </div>
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    className="flex-1" 
-                    onClick={() => {
-                      setShowNewEventModal(false);
-                      setNewEventData({
-                        title: "",
-                        type: "rdv",
-                        startTime: "",
-                        endTime: "",
-                        clientName: "",
-                        location: ""
-                      });
-                    }}
-                    disabled={creating}
-                  >
-                    Annuler
-                  </Button>
-                  <Button 
-                    className="flex-1" 
-                    onClick={handleCreateEvent}
-                    disabled={creating || !newEventData.title || !newEventData.startTime || !newEventData.endTime}
-                  >
-                    {creating ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Création...
-                      </>
-                    ) : (
-                      "Créer"
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
           </div>
-        )}
+        </FormDrawer>
 
-        {/* Event Details Modal */}
-        {showEventDetailsModal && selectedEvent && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-auto">
-            <Card className="w-full max-w-md">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>{selectedEvent.titre}</CardTitle>
-                <Button variant="ghost" size="icon" onClick={() => setShowEventDetailsModal(false)}>
-                  <X className="w-4 h-4" />
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-4">
+        <FormDrawer
+          open={showEventDetailsModal && !!selectedEvent}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowEventDetailsModal(false);
+              setSelectedEvent(null);
+            }
+          }}
+          title={selectedEvent?.titre ?? "Événement"}
+          footer={
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1">
+                <Edit className="w-4 h-4 mr-2" />
+                Modifier
+              </Button>
+              <Button variant="destructive" className="flex-1">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Supprimer
+              </Button>
+            </div>
+          }
+        >
+          {selectedEvent && (
+            <div className="space-y-4">
                 <div className="space-y-3">
                   <div>
                     <p className="text-sm text-muted-foreground">Type</p>
@@ -594,24 +522,10 @@ export default function CalendrierPage() {
                     <Badge variant="outline">{selectedEvent.db_status || selectedEvent.status}</Badge>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={() => setShowEventDetailsModal(false)}>
-                    Fermer
-                  </Button>
-                  <Button variant="outline" className="flex-1">
-                    <Edit className="w-4 h-4 mr-2" />
-                    Modifier
-                  </Button>
-                  <Button variant="destructive" className="flex-1">
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Supprimer
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+            </div>
+          )}
+        </FormDrawer>
       </div>
-    </DashboardLayout>
+    </PrestatairePageShell>
   );
 }

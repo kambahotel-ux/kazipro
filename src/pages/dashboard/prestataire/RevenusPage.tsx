@@ -1,15 +1,25 @@
-import { useState, useEffect } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { useState } from "react";
+import { PrestatairePageShell } from "@/components/prestataire/PrestatairePageShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { StatsCard } from "@/components/dashboard/StatsCard";
-import { Search, Download, Eye, TrendingUp, DollarSign, CheckCircle, Clock, Loader } from "lucide-react";
+import { Search, Download, Eye, MoreHorizontal, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { useAbortableFetch } from "@/hooks/useAbortableFetch";
+import { walletApi } from "@/lib/api";
+import { parsePaginatedMeta, unwrapPaginated } from "@/lib/api-utils";
+import { displayNameFromProfil, getProfil } from "@/lib/kazipro-profile";
 import { toast } from "sonner";
+import { AdminListSkeleton } from "@/components/dashboard/AdminLoadingSkeleton";
+import { PrestataireEmptyState } from "@/components/prestataire/PrestataireEmptyState";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Paiement {
   id: string;
@@ -34,213 +44,169 @@ interface Paiement {
   };
 }
 
-export default function RevenusPage() {
+export default function RevenusPage({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
-  const [providerName, setProviderName] = useState("Prestataire");
   const [paiements, setPaiements] = useState<Paiement[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPaiement, setSelectedPaiement] = useState<Paiement | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [totalPaiements, setTotalPaiements] = useState(0);
+  const PAGE_SIZE = 20;
 
-  useEffect(() => {
-    if (user) {
-      fetchProviderName();
-      fetchPaiements();
-    }
-  }, [user]);
+  const providerDisplayName = user
+    ? displayNameFromProfil(getProfil(user) ?? {}, user.name || "Prestataire")
+    : "Prestataire";
 
-  const fetchProviderName = async () => {
-    if (!user) return;
-    try {
-      const { data } = await supabase
-        .from("prestataires")
-        .select("full_name")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (data?.full_name) {
-        setProviderName(data.full_name);
-      }
-    } catch (error) {
-      console.error("Error fetching provider name:", error);
-    }
-  };
-
-  const fetchPaiements = async () => {
-    if (!user) return;
-
-    try {
-      setLoading(true);
-
-      // Get prestataire ID
-      const { data: prestataireData } = await supabase
-        .from("prestataires")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!prestataireData) {
-        setPaiements([]);
-        return;
-      }
-
-      // Fetch paiements for this prestataire
-      const { data, error } = await supabase
-        .from("paiements")
-        .select(`
-          *,
-          clients (
-            full_name
-          ),
-          contrats (
-            numero
-          )
-        `)
-        .eq("prestataire_id", prestataireData.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setPaiements(data || []);
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors du chargement des revenus");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getStats = () => {
-    const valides = paiements.filter(p => p.statut === "valide").length;
-    const enCours = paiements.filter(p => p.statut === "en_cours").length;
-    const totalEarnings = paiements
-      .filter(p => p.statut === "valide")
-      .reduce((sum, p) => sum + (p.montant_total || 0), 0);
-    const pendingEarnings = paiements
-      .filter(p => p.statut === "en_cours")
-      .reduce((sum, p) => sum + (p.montant_total || 0), 0);
-
-    return [
-      { title: "Revenus reçus", value: `${totalEarnings.toLocaleString()} FC`, subtitle: "Validés", icon: <DollarSign className="w-5 h-5" /> },
-      { title: "En attente", value: `${pendingEarnings.toLocaleString()} FC`, subtitle: "À recevoir", icon: <Clock className="w-5 h-5" /> },
-      { title: "Transactions", value: valides.toString(), subtitle: "Complétées", icon: <CheckCircle className="w-5 h-5" /> },
-    ];
-  };
-
-  const filteredPaiements = paiements.filter(p => {
-    const matchesSearch = 
-      p.numero?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.clients?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.contrats?.numero?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === "all" || p.statut === filterStatus;
-    return matchesSearch && matchesStatus;
+  useAbortableFetch(Boolean(user), [user, page, searchTerm, filterStatus], async (signal) => {
+    if (!user || signal.aborted) return;
+    await fetchPaiements(page, signal);
   });
 
-  const monthlyRevenue = () => {
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    return paiements
-      .filter(p => {
-        const date = new Date(p.created_at);
-        return date.getMonth() === currentMonth && 
-               date.getFullYear() === currentYear &&
-               p.statut === "valide";
-      })
-      .reduce((sum, p) => sum + (p.montant_total || 0), 0);
+  const fetchPaiements = async (targetPage = 1, signal?: AbortSignal) => {
+    if (!user) return;
+    try {
+      setLoading(true);
+      const mouvements = await walletApi.mouvements({
+        page: targetPage,
+        per_page: PAGE_SIZE,
+        search: searchTerm.trim() || undefined,
+        statut: filterStatus !== "all" ? filterStatus : undefined,
+      });
+      const meta = parsePaginatedMeta(mouvements);
+      const rows = unwrapPaginated<Record<string, unknown>>(mouvements);
+      setPaiements(rows.map((p) => ({
+        id: String(p.id ?? ''),
+        numero: String(p.numero ?? p.reference ?? ''),
+        contrat_id: String(p.contrat_id ?? ''),
+        devis_id: String(p.devis_id ?? ''),
+        client_id: String(p.client_id ?? ''),
+        prestataire_id: String(p.prestataire_id ?? ''),
+        type_paiement: String(p.type_paiement ?? p.type ?? ''),
+        montant_total: Number(p.montant_total ?? p.montant ?? p.montant_net_prestataire ?? 0),
+        methode_paiement: String(p.methode_paiement ?? ''),
+        statut: String(p.statut ?? ''),
+        date_paiement: p.date_paiement ? String(p.date_paiement) : null,
+        transaction_id: p.transaction_id ? String(p.transaction_id) : null,
+        reference_paiement: p.reference_paiement ? String(p.reference_paiement) : null,
+        created_at: String(p.created_at ?? ''),
+        clients: { full_name: displayNameFromProfil(p.client as Record<string, unknown> ?? {}, 'Client') },
+        contrats: { numero: String((p.contrat as { numero?: string })?.numero ?? '') },
+      })) as Paiement[]);
+      setPage(meta.current_page || targetPage);
+      setLastPage(Math.max(1, meta.last_page || 1));
+      setTotalPaiements(meta.total ?? rows.length);
+    } catch (error: unknown) {
+      if (signal?.aborted) return;
+      toast.error(error instanceof Error ? error.message : "Erreur lors du chargement des revenus");
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
   };
 
-  return (
-    <DashboardLayout role="prestataire" userName={providerName} userRole="Prestataire">
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+  const filteredPaiements = paiements;
+  const hasActiveFilters = searchTerm.trim().length > 0 || filterStatus !== "all";
+
+  const resetFilters = () => {
+    setSearchTerm("");
+    setFilterStatus("all");
+    setPage(1);
+  };
+
+  if (loading) {
+    return (
+      <PrestatairePageShell embedded={embedded} userName={providerDisplayName} userRole="Prestataire">
+        <div className="space-y-6">
+          {!embedded && (
           <div>
             <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">Mes Revenus</h1>
             <p className="text-sm sm:text-base text-muted-foreground">Suivi de vos revenus et paiements</p>
           </div>
-          <Button variant="outline" className="text-sm">
+          )}
+          <AdminListSkeleton items={4} />
+        </div>
+      </PrestatairePageShell>
+    );
+  }
+
+  return (
+    <PrestatairePageShell embedded={embedded} userName={providerDisplayName} userRole="Prestataire">
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          {!embedded && (
+          <div>
+            <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">Mes Revenus</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">Suivi de vos revenus et paiements</p>
+          </div>
+          )}
+          <Button variant="outline" className={`text-sm ${embedded ? 'ml-auto' : ''}`}>
             <Download className="w-4 h-4 mr-2" />
             <span className="hidden sm:inline">Exporter</span>
             <span className="sm:hidden">Export</span>
           </Button>
         </div>
 
-        {/* Stats - Mobile: Single card with horizontal layout, Desktop: Separate cards */}
-        <div className="block sm:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <Button
+            variant={showFilters ? "default" : "outline"}
+            onClick={() => setShowFilters((v) => !v)}
+            className="gap-2"
+          >
+            <Search className="w-4 h-4" />
+            {showFilters ? "Masquer les filtres" : "Afficher les filtres"}
+          </Button>
+          {hasActiveFilters && !showFilters ? (
+            <Badge variant="secondary">{totalPaiements} résultat(s)</Badge>
+          ) : null}
+        </div>
+        {showFilters ? (
           <Card>
-            <CardContent className="p-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="text-center">
-                  <p className="text-lg font-bold">{getStats()[0].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[0].title}</p>
+            <CardContent className="space-y-3 p-4">
+              <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                  <Input
+                    placeholder="Rechercher une transaction..."
+                    className="pl-10 text-sm"
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setPage(1);
+                    }}
+                  />
                 </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold">{getStats()[1].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[1].title}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold">{getStats()[2].value}</p>
-                  <p className="text-xs text-muted-foreground">{getStats()[2].title}</p>
-                </div>
+                <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v); setPage(1); }}>
+                  <SelectTrigger className="w-full text-sm">
+                    <SelectValue placeholder="Statut" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous</SelectItem>
+                    <SelectItem value="valide">Validés</SelectItem>
+                    <SelectItem value="en_cours">En cours</SelectItem>
+                    <SelectItem value="echoue">Échoués</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+              {hasActiveFilters ? (
+                <Button variant="ghost" size="sm" onClick={resetFilters}>
+                  <X className="w-4 h-4 mr-2" />
+                  Réinitialiser les filtres
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
-        </div>
-        
-        <div className="hidden sm:grid sm:grid-cols-1 md:grid-cols-3 gap-4">
-          {getStats().map((stat) => (
-            <StatsCard key={stat.title} {...stat} />
-          ))}
-        </div>
+        ) : null}
 
-        {/* Monthly Revenue Card */}
-        <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-muted-foreground mb-1">Revenus ce mois</p>
-                <p className="text-2xl sm:text-3xl font-bold text-primary">{monthlyRevenue().toLocaleString()} FC</p>
-              </div>
-              <TrendingUp className="w-8 h-8 sm:w-12 sm:h-12 text-primary/20" />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input 
-              placeholder="Rechercher une transaction..." 
-              className="pl-10 text-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-full sm:w-[150px] text-sm">
-              <SelectValue placeholder="Statut" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous</SelectItem>
-              <SelectItem value="valide">Validés</SelectItem>
-              <SelectItem value="en_cours">En cours</SelectItem>
-              <SelectItem value="echoue">Échoués</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader className="w-6 h-6 animate-spin text-primary" />
-          </div>
-        ) : paiements.length === 0 ? (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <p className="text-muted-foreground">Aucun paiement trouvé</p>
-            </CardContent>
-          </Card>
+        {paiements.length === 0 ? (
+          <PrestataireEmptyState
+            context="revenus"
+            hasActiveFilters={hasActiveFilters}
+            onResetFilters={resetFilters}
+          />
         ) : (
           /* Transactions Table */
           <Card>
@@ -291,21 +257,55 @@ export default function RevenusPage() {
                           </Badge>
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            onClick={() => {
-                              setSelectedPaiement(paiement);
-                              setShowDetailsModal(true);
-                            }}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                className="gap-2"
+                                onClick={() => {
+                                  setSelectedPaiement(paiement);
+                                  setShowDetailsModal(true);
+                                }}
+                              >
+                                <Eye className="w-4 h-4" />
+                                Voir détails
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Page {page} sur {lastPage} ({totalPaiements} paiement(s))
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Précédent
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= lastPage}
+                    onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
+                  >
+                    Suivant
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -395,6 +395,6 @@ export default function RevenusPage() {
           </div>
         )}
       </div>
-    </DashboardLayout>
+    </PrestatairePageShell>
   );
 }

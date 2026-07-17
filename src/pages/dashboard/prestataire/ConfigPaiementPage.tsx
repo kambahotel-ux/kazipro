@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfigurationGlobale, useConfigurationPrestataire, useSaveConfigurationPrestataire } from '@/hooks/usePaiementConfig';
-import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
+import { PrestatairePageShell } from '@/components/prestataire/PrestatairePageShell';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -21,8 +21,9 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { ConfigurationPaiementPrestataire } from '@/types/paiement';
+import { SettingsPageSkeleton } from '@/components/dashboard/AdminLoadingSkeleton';
 
-export default function ConfigPaiementPage() {
+export default function ConfigPaiementPage({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
   const { config: configGlobale, loading: loadingGlobale } = useConfigurationGlobale();
   const { config: configPrestataire, loading: loadingPrestataire, refetch } = useConfigurationPrestataire(user?.id);
@@ -86,27 +87,22 @@ export default function ConfigPaiementPage() {
 
   if (loading) {
     return (
-      <DashboardLayout role="prestataire" userName={user?.email || ''} userRole="Prestataire">
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Chargement de la configuration...</p>
-          </div>
-        </div>
-      </DashboardLayout>
+      <PrestatairePageShell embedded={embedded} userName={user?.email || ''} userRole="Prestataire">
+        <SettingsPageSkeleton />
+      </PrestatairePageShell>
     );
   }
 
   if (!configGlobale) {
     return (
-      <DashboardLayout role="prestataire" userName={user?.email || ''} userRole="Prestataire">
+      <PrestatairePageShell embedded={embedded} userName={user?.email || ''} userRole="Prestataire">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
             Impossible de charger la configuration. Contactez l'administrateur.
           </AlertDescription>
         </Alert>
-      </DashboardLayout>
+      </PrestatairePageShell>
     );
   }
 
@@ -115,7 +111,7 @@ export default function ConfigPaiementPage() {
   const commissionDeplacement = formData.commission_deplacement ?? configGlobale.commission_deplacement;
 
   return (
-    <DashboardLayout role="prestataire" userName={user?.email || ''} userRole="Prestataire">
+    <PrestatairePageShell embedded={embedded} userName={user?.email || ''} userRole="Prestataire">
       <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-5xl">
         {/* Header */}
         <div>
@@ -406,6 +402,6 @@ export default function ConfigPaiementPage() {
           </Button>
         </div>
       </div>
-    </DashboardLayout>
+    </PrestatairePageShell>
   );
 }

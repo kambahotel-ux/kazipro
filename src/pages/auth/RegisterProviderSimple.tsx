@@ -5,13 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Wrench, Mail, Lock, ArrowRight, Eye, EyeOff, User, MapPin } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { defaultDashboardForRole } from "@/lib/user-role";
 import { toast } from "sonner";
 import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
 
 const RegisterProviderSimple = () => {
   const navigate = useNavigate();
-  // const { signUp } = useAuth(); // Plus utilisé - on utilise directement supabase.auth.signUp
+  const { signUp, refreshUser } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -45,8 +45,8 @@ const RegisterProviderSimple = () => {
       toast.error("Le mot de passe est requis");
       return false;
     }
-    if (formData.password.length < 6) {
-      toast.error("Le mot de passe doit contenir au moins 6 caractères");
+    if (formData.password.length < 8) {
+      toast.error("Le mot de passe doit contenir au moins 8 caractères");
       return false;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -64,43 +64,25 @@ const RegisterProviderSimple = () => {
     try {
       setLoading(true);
       
-      // Créer le compte Supabase
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const parts = formData.fullName.trim().split(/\s+/);
+      const prenom = parts[0] ?? "";
+      const nom = parts.slice(1).join(" ") || prenom;
+
+      await signUp({
         email: formData.email,
         password: formData.password,
-        options: {
-          data: { role: "prestataire" }
-        }
+        password_confirmation: formData.password,
+        prenom,
+        nom,
+        telephone: "",
+        ville: formData.city,
+        role: "prestataire",
+        type_personne: "physique",
       });
-      
-      if (authError) throw authError;
 
-      if (!authData.user) {
-        throw new Error("Erreur lors de la création du compte");
-      }
-
-      // Créer le profil prestataire avec profile_completed = false
-      const { error: profileError } = await supabase
-        .from("prestataires")
-        .insert([
-          {
-            user_id: authData.user.id,
-            email: formData.email,
-            full_name: formData.fullName,
-            city: formData.city || null,
-            profession: "À définir",
-            verified: false,
-            profile_completed: false,
-          }
-        ]);
-      
-      if (profileError) {
-        console.warn("Profile creation warning:", profileError);
-      }
-      
-      toast.success("Compte créé avec succès ! Redirection vers votre dashboard...");
-      // Redirection directe vers le dashboard
-      navigate("/dashboard/prestataire");
+      await refreshUser();
+      toast.success("Compte créé avec succès !");
+      navigate(defaultDashboardForRole("prestataire"));
     } catch (error: any) {
       toast.error(error.message || "Erreur lors de l'inscription");
     } finally {

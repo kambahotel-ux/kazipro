@@ -68,7 +68,7 @@ export function DevisDetailCard({ devis, montants, paiementViaKazipro = true }: 
       {/* En-tête */}
       <Card>
         <CardHeader>
-          <div className="flex items-start justify-between">
+          <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="w-5 h-5" />
@@ -169,7 +169,7 @@ export function DevisDetailCard({ devis, montants, paiementViaKazipro = true }: 
             <CardContent className="space-y-4">
               {/* Acompte */}
               <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-5 h-5 text-green-600" />
                     <span className="font-semibold text-green-900">
@@ -187,7 +187,7 @@ export function DevisDetailCard({ devis, montants, paiementViaKazipro = true }: 
 
               {/* Solde */}
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <Clock className="w-5 h-5 text-blue-600" />
                     <span className="font-semibold text-blue-900">

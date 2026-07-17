@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { prestatairesApi } from '@/lib/api';
 import { Users } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -18,13 +18,12 @@ export const OnlineProvidersCount = () => {
 
   const fetchOnlineCount = async () => {
     try {
-      const { count } = await supabase
-        .from('prestataires')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_online', true)
-        .eq('verified', true);
+      const response = (await prestatairesApi.getAll({
+        per_page: 1,
+        disponible: true,
+      })) as { total?: number };
 
-      setOnlineCount(count || 0);
+      setOnlineCount(response.total || 0);
     } catch (error) {
       console.error('Erreur lors du comptage des prestataires en ligne:', error);
     } finally {

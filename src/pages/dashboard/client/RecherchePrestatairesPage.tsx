@@ -256,7 +256,7 @@ export default function RecherchePrestatairesPage() {
               <Card
                 key={prestataire.id}
                 className="hover:shadow-lg transition-shadow cursor-pointer"
-                onClick={() => navigate(`/dashboard/client/prestataire/${prestataire.id}`)}
+                onClick={() => navigate(`/prestataires/${prestataire.id}`)}
               >
                 <CardContent className="p-3 md:p-6">
                   <div className="flex items-start gap-3 md:gap-4">

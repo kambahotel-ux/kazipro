@@ -13,13 +13,20 @@ import {
   Sparkles,
   Package,
   Briefcase,
+  Loader2,
 } from "lucide-react";
-import { prestatairesApi, materielsApi } from "@/lib/api";
+import { prestatairesApi, materielsApi, professionsApi, searchApi } from "@/lib/api";
+import { openKaziAssistant } from "@/components/assistant/AssistantHost";
+import {
+  extractCityFromQuery,
+  resolveProfessionFromQuery,
+} from "@/lib/service-routes";
 import {
   prestataireDisplayName,
   useHomePrestataires,
   type LaravelPrestataire,
 } from "@/contexts/HomePrestatairesContext";
+import { toast } from "sonner";
 
 interface FeaturedProvider {
   id: string;
@@ -34,6 +41,8 @@ const HeroSection = () => {
   const homeStats = useHomePrestataires();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchMode, setSearchMode] = useState<"services" | "location">("services");
+  const [searching, setSearching] = useState(false);
+  const [searchHint, setSearchHint] = useState<string | null>(null);
   const [featuredProvider, setFeaturedProvider] = useState<FeaturedProvider | null>(null);
   const [materielCount, setMaterielCount] = useState(0);
 
@@ -82,22 +91,134 @@ const HeroSection = () => {
     }
   };
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     const q = searchQuery.trim();
     if (searchMode === "location") {
       navigate(q ? `/location?q=${encodeURIComponent(q)}` : "/location");
       return;
     }
-    if (q) {
-      navigate(`/services?q=${encodeURIComponent(q)}`);
-    } else {
+    if (!q) {
       navigate("/services");
+      return;
+    }
+
+    setSearching(true);
+    setSearchHint(null);
+    try {
+      // 1) API intelligente (même moteur que l’assistant)
+      try {
+        const intent = await searchApi.intent({ q, mode: "services" });
+        if (intent.redirect_path) {
+          if (intent.intent === "find_prestataire" && intent.profession) {
+            const countLabel =
+              intent.providers_count > 0
+                ? ` · ${intent.providers_count} pro${intent.providers_count > 1 ? "s" : ""}`
+                : "";
+            setSearchHint(
+              `${intent.understood.replace(/\*\*/g, "")}${countLabel}`.replace(
+                /^J’ai compris :\s*/i,
+                "Direction : ",
+              ),
+            );
+            toast.success(
+              intent.ville
+                ? `${intent.profession.nom} · ${intent.ville}`
+                : String(intent.profession.nom),
+              {
+                description:
+                  intent.providers_count > 0
+                    ? `${intent.providers_count} prestataire${intent.providers_count > 1 ? "s" : ""} trouvé${intent.providers_count > 1 ? "s" : ""}`
+                    : "Ouverture de la liste des professionnels",
+              },
+            );
+          }
+          navigate(intent.redirect_path);
+          return;
+        }
+      } catch {
+        /* fallback local */
+      }
+
+      // 2) Fallback local (phrases / symptômes)
+      const professions = (await professionsApi.getAll()) as Array<{
+        id: number | string;
+        nom: string;
+      }>;
+      const match = resolveProfessionFromQuery(q, professions);
+      const ville = extractCityFromQuery(q);
+      if (match) {
+        const path = ville
+          ? `/services/${match.id}?ville=${encodeURIComponent(ville)}`
+          : `/services/${match.id}`;
+        toast.success(ville ? `${match.nom} · ${ville}` : match.nom, {
+          description: "Ouverture des prestataires correspondants",
+        });
+        navigate(path);
+        return;
+      }
+      navigate(`/services?q=${encodeURIComponent(q)}`);
+    } catch {
+      navigate(`/services?q=${encodeURIComponent(q)}`);
+    } finally {
+      setSearching(false);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") handleSearch();
+    if (e.key === "Enter") void handleSearch();
   };
+
+  // Aperçu live : ce que l’on a compris (debounce léger)
+  useEffect(() => {
+    if (searchMode !== "services") {
+      setSearchHint(null);
+      return;
+    }
+    const q = searchQuery.trim();
+    if (q.length < 4) {
+      setSearchHint(null);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      void searchApi
+        .intent({ q, mode: "services" })
+        .then((intent) => {
+          if (intent.intent === "find_prestataire" && intent.profession) {
+            const base = intent.understood.replace(/\*\*/g, "");
+            const count =
+              intent.providers_count > 0
+                ? ` · ${intent.providers_count} disponible${intent.providers_count > 1 ? "s" : ""}`
+                : "";
+            setSearchHint(base + count);
+          } else {
+            setSearchHint(null);
+          }
+        })
+        .catch(() => {
+          const local = resolveProfessionFromQuery(q, [
+            { id: 0, nom: "Électricité" },
+            { id: 0, nom: "Plomberie" },
+            { id: 0, nom: "Peinture" },
+            { id: 0, nom: "Climatisation" },
+            { id: 0, nom: "Menuiserie" },
+            { id: 0, nom: "Maçonnerie" },
+            { id: 0, nom: "Mécanique" },
+            { id: 0, nom: "Soudure" },
+          ]);
+          const ville = extractCityFromQuery(q);
+          if (local) {
+            setSearchHint(
+              ville
+                ? `Compris : ${local.nom} à ${ville}`
+                : `Compris : ${local.nom}`,
+            );
+          } else {
+            setSearchHint(null);
+          }
+        });
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [searchQuery, searchMode]);
 
   return (
     <section className="relative max-sm:min-h-0 sm:min-h-[min(100dvh,920px)] flex max-sm:items-start sm:items-center bg-gradient-to-b from-primary via-primary to-primary/95 overflow-hidden pb-10 sm:pb-0">
@@ -182,7 +303,7 @@ const HeroSection = () => {
                       placeholder={
                         searchMode === "location"
                           ? "Ex. perceuse, échafaudage…"
-                          : "Ex. électricité, peinture…"
+                          : "Ex. j’ai une fuite d’eau à Kinshasa…"
                       }
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
@@ -194,13 +315,41 @@ const HeroSection = () => {
                     variant="hero"
                     size="lg"
                     type="button"
+                    disabled={searching}
                     className="group shrink-0 bg-secondary hover:bg-secondary/90 text-secondary-foreground h-11 sm:h-12 md:h-[3.25rem] px-6 sm:px-8 font-semibold text-sm sm:text-base"
-                    onClick={handleSearch}
+                    onClick={() => void handleSearch()}
                   >
-                    Rechercher
-                    <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-0.5 transition-transform" />
+                    {searching ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Recherche…
+                      </>
+                    ) : (
+                      <>
+                        Rechercher
+                        <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-0.5 transition-transform" />
+                      </>
+                    )}
                   </Button>
                 </div>
+                {searchHint && searchMode === "services" && (
+                  <p className="text-left text-xs sm:text-sm text-emerald-100/95 px-1">
+                    <span className="font-medium text-secondary">Compris</span>
+                    {" — "}
+                    {searchHint.replace(/^J’ai compris :\s*/i, "").replace(/^Compris :\s*/i, "")}
+                  </p>
+                )}
+                {searchMode === "services" && (
+                  <button
+                    type="button"
+                    onClick={() => openKaziAssistant(searchQuery.trim() || undefined)}
+                    className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-primary-foreground/80 hover:text-secondary transition-colors mx-auto lg:mx-0"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Décrire mon problème à l&apos;assistant
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-5 sm:gap-x-8 gap-y-3 pt-1 sm:pt-2 text-primary-foreground/90 text-xs sm:text-sm max-sm:px-1">

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Header from "./Header";
 import Footer from "./Footer";
+import { AssistantHost } from "@/components/assistant/AssistantHost";
 
 interface PublicLayoutProps {
   children: ReactNode;
@@ -17,6 +18,7 @@ export function PublicLayout({ children }: PublicLayoutProps) {
         {children}
       </main>
       <Footer />
+      <AssistantHost />
     </div>
   );
 }

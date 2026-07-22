@@ -1,4 +1,4 @@
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,6 +9,7 @@ import { professionsApi, prestatairesApi } from "@/lib/api";
 import {
   isProfessionIdUuid,
   professionNomFromSlugParam,
+  resolveProfessionFromQuery,
 } from "@/lib/service-routes";
 import { mapPrestataireToUi } from "@/lib/client-helpers";
 import {
@@ -16,8 +17,6 @@ import {
   type PublicPrestataireCardData,
 } from "@/components/providers/PublicPrestataireCard";
 import { toast } from "sonner";
-import { useAuth } from "@/contexts/AuthContext";
-import { getCachedUserRole } from "@/lib/user-role";
 
 interface LaravelPrestataire {
   id: number;
@@ -60,9 +59,9 @@ function mapToPublicCard(p: Record<string, unknown>): PublicPrestataireCardData 
 
 const ServiceDetail = () => {
   const { serviceId } = useParams<{ serviceId: string }>();
+  const [searchParams] = useSearchParams();
+  const villeFilter = searchParams.get("ville")?.trim() || "";
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const isClient = Boolean(user && getCachedUserRole(String(user.id)) === "client");
   const [providers, setProviders] = useState<PublicPrestataireCardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [serviceName, setServiceName] = useState("Chargement...");
@@ -74,7 +73,7 @@ const ServiceDetail = () => {
     }
 
     fetchServiceAndProviders();
-  }, [serviceId]);
+  }, [serviceId, villeFilter]);
 
   const fetchServiceAndProviders = async () => {
     try {
@@ -85,16 +84,15 @@ const ServiceDetail = () => {
       if (isProfessionIdUuid(serviceId) || isProfessionIdNumeric(serviceId)) {
         profession = (await professionsApi.getById(serviceId!)) as Profession;
       } else {
-        const nom = professionNomFromSlugParam(serviceId);
-        if (!nom) {
-          setServiceName("Service non trouvé");
-          setProviders([]);
-          setLoading(false);
-          return;
-        }
-
         const allProfessions = (await professionsApi.getAll()) as Profession[];
-        profession = allProfessions.find((p) => p.nom === nom) ?? null;
+        profession =
+          resolveProfessionFromQuery(serviceId!, allProfessions) ??
+          (() => {
+            const nom = professionNomFromSlugParam(serviceId);
+            return nom
+              ? allProfessions.find((p) => p.nom === nom) ?? null
+              : null;
+          })();
       }
 
       if (!profession) {
@@ -107,10 +105,26 @@ const ServiceDetail = () => {
 
       const response = (await prestatairesApi.getAll({
         profession_id: profession.id,
+        ville: villeFilter || undefined,
         per_page: 20,
       })) as PaginatedPrestataires;
 
-      setProviders((response.data || []).map((p) => mapToPublicCard(p as Record<string, unknown>)));
+      let cards = (response.data || []).map((p) =>
+        mapToPublicCard(p as Record<string, unknown>),
+      );
+
+      // Filtre client de secours si l’API ignore `ville`
+      if (villeFilter) {
+        const v = villeFilter.toLowerCase();
+        const filtered = cards.filter((c) =>
+          (c.city || "").toLowerCase().includes(v),
+        );
+        if (filtered.length > 0) {
+          cards = filtered;
+        }
+      }
+
+      setProviders(cards);
     } catch (error: unknown) {
       console.error("Erreur:", error);
       toast.error("Une erreur est survenue");
@@ -148,6 +162,7 @@ const ServiceDetail = () => {
               <p className="mt-1 text-sm text-primary-foreground/80 sm:text-base">
                 {providers.length} professionnel{providers.length > 1 ? "s" : ""} vérifié
                 {providers.length > 1 ? "s" : ""} disponible{providers.length > 1 ? "s" : ""}
+                {villeFilter ? ` · ${villeFilter}` : ""}
               </p>
             </div>
           </div>
@@ -195,11 +210,7 @@ const ServiceDetail = () => {
                 <PublicPrestataireCard
                   key={provider.id}
                   provider={provider}
-                  profileHref={
-                    isClient
-                      ? `/dashboard/client/prestataire/${provider.id}`
-                      : "/connexion"
-                  }
+                  profileHref={`/prestataires/${provider.id}`}
                   contactHref="/inscription/client"
                   contactLabel="Demander un devis"
                 />

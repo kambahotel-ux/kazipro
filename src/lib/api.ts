@@ -856,6 +856,33 @@ export const professionsApi = {
   getById: async (id: string) => request<any>(`/professions/${id}`),
 };
 
+export type SearchIntentResponse = {
+  query: string;
+  mode: string;
+  intent: string;
+  profession: { id: number | string | null; nom: string; slug?: string | null } | null;
+  ville: string | null;
+  confidence: number;
+  providers_count: number;
+  redirect_path: string;
+  understood: string;
+  suggestions?: Array<{ label: string; query: string }>;
+};
+
+/** Recherche intelligente home (phrases naturelles → métier + ville). */
+export const searchApi = {
+  intent: async (params: {
+    q?: string;
+    mode?: 'services' | 'location';
+  }): Promise<SearchIntentResponse> => {
+    const qs = new URLSearchParams();
+    if (params.q) qs.set('q', params.q);
+    if (params.mode) qs.set('mode', params.mode);
+    const suffix = qs.toString() ? `?${qs}` : '';
+    return request<SearchIntentResponse>(`/search/intent${suffix}`);
+  },
+};
+
 export const adminProfessionsApi = {
   create: async (data: { nom: string; description?: string | null; actif?: boolean }) =>
     request<any>('/admin/professions', {
@@ -1603,6 +1630,7 @@ export default {
   notifications: notificationsApi,
   demandes: demandesApi,
   professions: professionsApi,
+  search: searchApi,
   adminProfessions: adminProfessionsApi,
   materielCategories: materielCategoriesApi,
   materiels: materielsApi,

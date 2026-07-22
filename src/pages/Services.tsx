@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
@@ -74,9 +74,15 @@ interface Service {
 }
 
 const Services = () => {
+  const [searchParams] = useSearchParams();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(searchParams.get("q") || "");
+
+  useEffect(() => {
+    const q = searchParams.get("q") || "";
+    setSearchTerm(q);
+  }, [searchParams]);
 
   useEffect(() => {
     fetchServices();

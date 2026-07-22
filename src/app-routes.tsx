@@ -39,7 +39,7 @@ import ClientLitigesPage from "./pages/dashboard/client/LitigesPage";
 import AvisPage from "./pages/dashboard/client/AvisPage";
 import ClientMessagesPage from "./pages/dashboard/client/MessagesPage";
 import ClientParametresPage from "./pages/dashboard/client/ParametresPage";
-import PrestataireProfilPage from "./pages/dashboard/client/PrestataireProfilPage";
+import PrestatairePublicProfil from "./pages/PrestatairePublicProfil";
 import RecherchePrestatairesPage from "./pages/dashboard/client/RecherchePrestatairesPage";
 import PrestataireDashboard from "./pages/dashboard/prestataire/PrestataireDashboard";
 import CompleterProfil from "./pages/dashboard/prestataire/CompleterProfil";
@@ -95,6 +95,7 @@ export const appRoutes: RouteObject[] = [
   { path: "/", element: <Index /> },
   { path: "/services", element: <Services /> },
   { path: "/services/:serviceId", element: <ServiceDetail /> },
+  { path: "/prestataires/:id", element: <PrestatairePublicProfil /> },
   { path: "/location", element: <Location /> },
   { path: "/location/:id", element: <LocationDetail /> },
   { path: "/comment-ca-marche", element: <HowItWorks /> },
@@ -131,7 +132,7 @@ export const appRoutes: RouteObject[] = [
   { path: "/dashboard/client/messages", element: <ProtectedRoute allowedRoles={["client"]}><ClientMessagesPage /></ProtectedRoute> },
   { path: "/dashboard/client/parametres", element: <ProtectedRoute allowedRoles={["client"]}><ClientParametresPage /></ProtectedRoute> },
   { path: "/dashboard/client/recherche", element: <ProtectedRoute allowedRoles={["client"]}><RecherchePrestatairesPage /></ProtectedRoute> },
-  { path: "/dashboard/client/prestataire/:id", element: <ProtectedRoute allowedRoles={["client"]}><PrestataireProfilPage /></ProtectedRoute> },
+  { path: "/dashboard/client/prestataire/:id", element: <PrestatairePublicProfil /> },
   { path: "/dashboard/prestataire", element: prestataireOpen(<PrestataireDashboard />) },
   { path: "/dashboard/prestataire/completer-profil", element: prestataireOpen(<CompleterProfil />) },
   { path: "/dashboard/prestataire/compte/profil", element: prestataireOpen(<ProfilPage embedded />) },

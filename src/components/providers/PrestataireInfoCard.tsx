@@ -9,12 +9,15 @@ interface PrestataireInfoCardProps {
   prestataire: Prestataire;
   showDetails?: boolean;
   showPortfolio?: boolean;
+  /** Masque téléphone / e-mail (vue publique visiteurs) */
+  hideContact?: boolean;
 }
 
 export default function PrestataireInfoCard({ 
   prestataire, 
   showDetails = false,
-  showPortfolio = false
+  showPortfolio = false,
+  hideContact = false,
 }: PrestataireInfoCardProps) {
   const displayName = getPrestataireDisplayName(prestataire);
   
@@ -57,16 +60,18 @@ export default function PrestataireInfoCard({
         )}
         
         {/* Contact - Mobile Optimized */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-xs md:text-sm">
-            <Phone className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground shrink-0" />
-            <span className="truncate">{prestataire.phone}</span>
+        {!hideContact && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs md:text-sm">
+              <Phone className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground shrink-0" />
+              <span className="truncate">{prestataire.phone}</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs md:text-sm">
+              <Mail className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground shrink-0" />
+              <span className="truncate">{prestataire.email}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2 text-xs md:text-sm">
-            <Mail className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground shrink-0" />
-            <span className="truncate">{prestataire.email}</span>
-          </div>
-        </div>
+        )}
         
         {/* Détails spécifiques selon le type - Mobile Optimized */}
         {showDetails && (
